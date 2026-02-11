@@ -1,26 +1,278 @@
 @import "tailwindcss";
 
+@theme {
+  /* Override default green palette with Luxurious Emerald */
+  --color-green-50: #ecfdf5;
+  --color-green-100: #d1fae5;
+  --color-green-200: #a7f3d0;
+  --color-green-300: #34d399;
+  /* Skipped 300 mapping in previous attempt, setting to emerald-400 equivalent for smoothness */
+  --color-green-400: #10b981;
+  --color-green-500: #059669;
+  /* emerald-600 (Primary) */
+  --color-green-600: #047857;
+  /* emerald-700 (Darker) */
+  --color-green-700: #065f46;
+  /* emerald-800 */
+  --color-green-800: #064e3b;
+  /* emerald-900 */
+  --color-green-900: #022c22;
+  /* emerald-950 */
+  --color-green-950: #022c22;
+
+  /* Add Serif Font Family */
+  --font-serif: var(--font-playfair), 'Times New Roman', serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Luxurious Emerald Palette */
+  --green-primary: #059669;
+  /* Emerald 600 - Rich, deep primary */
+  --green-dark: #064e3b;
+  /* Emerald 900 - Very dark for contrast/hover */
+  --green-light: #a7f3d0;
+  /* Emerald 200 - Soft accent */
+  --green-subtle: #ecfdf5;
+  /* Emerald 50 - Very subtle background */
+
+  /* Neutral Palette - Refined for "High-End" text */
+  --gray-50: #fafafa;
+  --gray-100: #f4f4f5;
+  --gray-200: #e4e4e7;
+  --gray-300: #d4d4d8;
+  --gray-400: #a1a1aa;
+  --gray-500: #71717a;
+  --gray-600: #52525b;
+  --gray-700: #3f3f46;
+  --gray-800: #27272a;
+  --gray-900: #18181b;
+
+  --radius: 16px;
+  /* Slightly more rounded for modern feel */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--gray-900);
+  background-color: #fafafa;
+  /* Off-white background is more premium/paper-like than pure #fff */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Luxury Typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-serif);
+  letter-spacing: -0.02em;
+  /* Tighter tracking for headings looks more editorial */
+}
+
+/* Status badges - Refined for elegance */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  /* Fully rounded pill shape is more modern */
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.badge-available {
+  background: var(--green-subtle);
+  color: var(--green-primary);
+  border: 1px solid var(--green-light);
+}
+
+.badge-booked {
+  background: #fef2f2;
+  color: #991b1b;
+  /* Darker red */
+  border: 1px solid #fecaca;
+}
+
+.badge-cleaning {
+  background: #eff6ff;
+  color: #1e40af;
+  /* Darker blue */
+  border: 1px solid #bfdbfe;
+}
+
+.badge-maintenance {
+  background: #fffbeb;
+  color: #92400e;
+  /* Darker amber */
+  border: 1px solid #fde68a;
+}
+
+.badge-held {
+  background: #faf5ff;
+  color: #6b21a8;
+  /* Darker purple */
+  border: 1px solid #e9d5ff;
+}
+
+.badge-pending {
+  background: #fff7ed;
+  color: #9a3412;
+  /* Darker orange */
+  border: 1px solid #fed7aa;
+}
+
+.badge-paid {
+  background: var(--green-subtle);
+  color: var(--green-primary);
+  border: 1px solid var(--green-light);
+}
+
+.badge-expired {
+  background: #f4f4f5;
+  color: #52525b;
+  border: 1px solid #e4e4e7;
+}
+
+.badge-cancelled {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+/* Calendar styles */
+.calendar-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.calendar-day:hover:not(.calendar-day-disabled) {
+  background: var(--green-subtle);
+  color: var(--green-dark);
+}
+
+.calendar-day-available {
+  color: var(--gray-700);
+}
+
+.calendar-day-selected {
+  background: var(--green-primary) !important;
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.4);
+  /* Colored shadow */
+}
+
+.calendar-day-in-range {
+  background: var(--green-subtle);
+  color: var(--green-dark);
+}
+
+.calendar-day-booked {
+  color: var(--gray-400);
+  background: var(--gray-50);
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.03);
+}
+
+.calendar-day-checkout-only {
+  /* User request: "grey but glowing a bit" - Refined */
+  color: var(--gray-500);
+  background: #ffffff;
+  box-shadow: 0 0 0 1px var(--gray-200);
+  /* Make sure it doesn't look purely disabled */
+  cursor: pointer !important;
+  /* Force pointer to indicate interactivity (for message) */
+  opacity: 1 !important;
+}
+
+/* When a booked day is actually ENABLED (valid checkout target), make it glow more or show pointer */
+button:not([disabled]).calendar-day-booked,
+.calendar-day-checkout-only:hover {
+  background: var(--green-subtle);
+  box-shadow: 0 0 0 1px var(--green-primary);
+  transform: translateY(-1px);
+  z-index: 10;
+}
+
+.calendar-day-disabled {
+  color: var(--gray-300);
+  cursor: not-allowed;
+}
+
+.calendar-day-today {
+  font-weight: 700;
+  border: 2px solid var(--green-primary);
+  color: var(--green-primary);
+}
+
+/* Glass card effect - Premium Frosted */
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 10px 15px -3px rgba(0, 0, 0, 0.05),
+    0 0 0 1px rgba(0, 0, 0, 0.02);
+  /* Subtle inner border */
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
+}
+
+/* Page transition */
+.page-enter {
+  animation: pageEnter 0.3s ease-out;
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Currency formatting */
+.naira::before {
+  content: '₦';
 }

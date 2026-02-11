@@ -1,0 +1,51 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+function getAdminSupabase() {
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+}
+
+// ... existing POST and GET ...
+
+// Update user (owner) details
+export async function PATCH(request: NextRequest) {
+    try {
+        const supabase = getAdminSupabase();
+        const body = await request.json();
+        const { id, owner_id, paystack_subaccount_code, action } = body;
+
+        // Handle specific actions or general updates
+        if (paystack_subaccount_code && (id || owner_id)) {
+            const targetId = id || owner_id;
+            
+            // Update owners table
+            const { error } = await supabase
+                .from('owners')
+                .update({ paystack_subaccount_code })
+                .eq('id', targetId); // Note: owners.id is NOT the auth user_id, it is the owner profile ID. 
+                                     // Wait, in schema.sql owners.id IS user_id? 
+                                     // In admin/users/route.ts POST: 
+                                     // await supabase.from('owners').insert({ user_id: userId, ... }) 
+                                     // This implies owners has a PK 'id' (auto-gen?) and 'user_id' (FK).
+                                     // Let's check the client code "owner.id" usage.
+                                     // client: key={owner.id}. 
+                                     // api GET: .from('owners').select('*')
+                                     // So owner.id is likely the serial ID or UUID of the owner record, NOT the auth user_id?
+                                     // Actually POST inserts `user_id: userId`. It doesn't specify `id`. Use whatever the PK is.
+                                     // If we use `eq('id', targetId)`, we are updating based on the owner table's ID.
+            
+            if (error) throw error;
+
+            return NextResponse.json({ success: true });
+        }
+
+        return NextResponse.json({ error: 'Invalid update request' }, { status: 400 });
+    } catch (error) {
+        console.error('User update error:', error);
+        return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
+    }
+}
