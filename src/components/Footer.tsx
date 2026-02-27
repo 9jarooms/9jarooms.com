@@ -31,10 +31,10 @@ export default function Footer() {
                     <div className="md:col-span-2">
                         <h4 className="font-serif text-lg text-gray-900 mb-6">Neighborhoods</h4>
                         <ul className="space-y-4">
-                            <li><Link href="/search?area=Maitama" className="text-gray-500 hover:text-green-800 transition-colors">Maitama</Link></li>
-                            <li><Link href="/search?area=Asokoro" className="text-gray-500 hover:text-green-800 transition-colors">Asokoro</Link></li>
-                            <li><Link href="/search?area=Wuse II" className="text-gray-500 hover:text-green-800 transition-colors">Wuse II</Link></li>
-                            <li><Link href="/search?area=Gwarinpa" className="text-gray-500 hover:text-green-800 transition-colors">Gwarinpa</Link></li>
+                            <li><span className="text-gray-500">Maitama</span></li>
+                            <li><span className="text-gray-500">Asokoro</span></li>
+                            <li><span className="text-gray-500">Wuse II</span></li>
+                            <li><span className="text-gray-500">Gwarinpa</span></li>
                         </ul>
                     </div>
 
@@ -43,15 +43,15 @@ export default function Footer() {
                         <ul className="space-y-4 text-gray-500">
                             <li>
                                 <span className="block text-gray-400 text-sm mb-1 uppercase tracking-wider">Office</span>
-                                24 Adetokunbo Ademola Crescent,<br />Wuse II, Abuja
+                                58 harper street, neighbourhood centre,<br />zone 7, wuse abuja
                             </li>
                             <li>
                                 <span className="block text-gray-400 text-sm mb-1 uppercase tracking-wider">Email</span>
-                                <a href="mailto:hello@9jarooms.com" className="hover:text-green-800 transition-colors">hello@9jarooms.com</a>
+                                <a href="mailto:team@9jarooms.com" className="hover:text-green-800 transition-colors">team@9jarooms.com</a>
                             </li>
                             <li>
                                 <span className="block text-gray-400 text-sm mb-1 uppercase tracking-wider">Phone</span>
-                                <a href="tel:+2348000000000" className="hover:text-green-800 transition-colors">+234 800 000 0000</a>
+                                <a href="tel:+2348168078712" className="hover:text-green-800 transition-colors">+234 816 807 8712</a>
                             </li>
                         </ul>
                     </div>

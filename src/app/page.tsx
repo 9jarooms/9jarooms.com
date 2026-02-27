@@ -26,13 +26,12 @@ export default async function HomePage() {
           {/* Background Image */}
           <div className="absolute inset-0 select-none overflow-hidden">
             <Image
-              src="/hero-abuja.png"
+              src="/hero-abuja.jpg"
               alt="Luxury apartment master bedroom with view of Aso Rock"
               fill
               className="object-cover"
               priority
-              quality={100}
-              unoptimized
+              quality={75}
               sizes="100vw"
             />
             {/* Dark gradient overlay */}
