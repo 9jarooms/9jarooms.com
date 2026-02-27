@@ -19,6 +19,7 @@ import {
     ChevronRight,
 } from 'lucide-react';
 import BookingCalendar from '@/components/BookingCalendar';
+import PropertyGallery from '@/components/PropertyGallery';
 import type { Property, Room, Availability } from '@/types/database';
 
 const amenityIconMap: Record<string, React.ReactNode> = {
@@ -125,18 +126,14 @@ export default function PropertyDetailClient({ property, rooms, availability }: 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Left Column - Property Details */}
                 <div className="lg:col-span-2 space-y-8">
-                    {/* Hero Image */}
-                    <div className="aspect-[16/9] bg-gradient-to-br from-green-100 to-green-50 rounded-2xl flex items-center justify-center">
-                        <div className="text-center">
-                            <div className="w-20 h-20 bg-green-200/50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="1.5">
-                                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                                </svg>
-                            </div>
-                            <p className="text-green-600 font-medium">{property.name}</p>
-                            <p className="text-green-500/60 text-sm mt-1">Photos coming soon</p>
-                        </div>
+                    {/* Hero Image / Gallery */}
+                    <div className="rounded-2xl overflow-hidden shadow-sm">
+                        {/* Determine which media to show: selectedRoom media takes precedence if available */}
+                        <PropertyGallery
+                            key={selectedRoom?.id || 'main'}
+                            thumbnail={!selectedRoom ? (property.thumbnail ?? undefined) : undefined}
+                            images={selectedRoom?.images?.length ? selectedRoom.images : property.images}
+                        />
                     </div>
 
                     {/* Title & Location */}
@@ -207,7 +204,20 @@ export default function PropertyDetailClient({ property, rooms, availability }: 
                         {/* Price Card */}
                         <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
                             <div className="flex items-baseline gap-1 mb-6">
-                                <span className="text-2xl font-bold text-gray-900">₦{formatPrice(pricePerNight)}</span>
+                                {property.type === 'Shared Apartment' && !selectedRoom && rooms.length > 0 ? (
+                                    (() => {
+                                        const prices = rooms.map(r => r.price_per_night ?? 0);
+                                        const min = Math.min(...prices);
+                                        const max = Math.max(...prices);
+                                        return (
+                                            <span className="text-2xl font-bold text-gray-900">
+                                                ₦{formatPrice(min)} - ₦{formatPrice(max)}
+                                            </span>
+                                        );
+                                    })()
+                                ) : (
+                                    <span className="text-2xl font-bold text-gray-900">₦{formatPrice(pricePerNight)}</span>
+                                )}
                                 <span className="text-gray-400">/ night</span>
                             </div>
 

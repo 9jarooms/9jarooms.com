@@ -104,7 +104,7 @@ export default function PartnerPage() {
                                 href={whatsappUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-block bg-green-600 hover:bg-green-500 text-white px-10 py-4 rounded-full font-medium transition-all"
+                                className="inline-block bg-green-500 hover:bg-green-600 text-white px-10 py-4 rounded-full font-medium transition-all"
                             >
                                 Start on WhatsApp
                             </a>

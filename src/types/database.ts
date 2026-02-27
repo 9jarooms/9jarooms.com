@@ -164,8 +164,10 @@ export interface Property {
     state: string;
     area: string | null;
     price_per_night: number;
+    type: string | null;
     amenities: string[];
     images: string[];
+    thumbnail: string | null;
     max_guests: number;
     check_in_time: string;
     check_out_time: string;
@@ -189,7 +191,7 @@ export interface Room {
     updated_at: string;
 }
 
-export type BookingStatus = 'pending' | 'paid' | 'cancelled' | 'completed' | 'expired';
+export type BookingStatus = 'pending' | 'paid' | 'cancelled' | 'completed' | 'expired' | 'confirmed';
 
 export interface Booking {
     id: string;

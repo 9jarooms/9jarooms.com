@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Helper to get Service Role client (bypasses RLS)
 function getAdminSupabase() {
     return createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,121 +10,104 @@ function getAdminSupabase() {
     );
 }
 
-// Admin: Full property CRUD with room management
+export async function GET(request: NextRequest) {
+    const supabase = getAdminSupabase();
+
+    const { data, error } = await supabase
+        .from('properties')
+        .select(`
+            *,
+            owner:owners(id, name, email),
+            caretaker:caretakers(id, name, email),
+            rooms(*)
+        `)
+        .order('created_at', { ascending: false });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data });
+}
+
 export async function POST(request: NextRequest) {
-    try {
-        const supabase = getAdminSupabase();
-        const body = await request.json();
+    const supabase = getAdminSupabase();
+    const body = await request.json();
 
-        const {
-            name, description, address, city, state, area,
-            price_per_night, amenities, images, max_guests,
-            check_in_time, check_out_time, check_in_instructions,
-            house_rules, owner_id, caretaker_id, rooms,
-        } = body;
+    // Destructure known fields to avoid passing junk
+    const {
+        name, description, address, area, city, state, price_per_night, max_guests,
+        owner_id, caretaker_id, check_in_instructions, house_rules, amenities,
+        check_in_time, check_out_time,
+        type, images, thumbnail, // New field: thumbnail
+        rooms
+    } = body;
 
-        if (!name || !owner_id || !price_per_night) {
-            return NextResponse.json({ error: 'Name, owner, and price are required' }, { status: 400 });
-        }
-
-        // 1. Create property
-        const { data: property, error: propError } = await supabase
-            .from('properties')
-            .insert({
-                name,
-                description: description || null,
-                address: address || null,
-                city: city || 'Lagos',
-                state: state || 'Lagos',
-                area: area || null,
-                price_per_night,
-                amenities: amenities || [],
-                images: images || [],
-                max_guests: max_guests || 2,
-                check_in_time: check_in_time || '2:00 PM',
-                check_out_time: check_out_time || '11:00 AM',
-                check_in_instructions: check_in_instructions || null,
-                house_rules: house_rules || null,
-                owner_id,
-                caretaker_id: caretaker_id || null,
-            })
-            .select()
-            .single();
-
-        if (propError) {
-            return NextResponse.json({ error: propError.message }, { status: 500 });
-        }
-
-        // 2. Create rooms if provided
-        if (rooms && Array.isArray(rooms) && rooms.length > 0) {
-            const roomInserts = rooms.map((room: any) => ({
-                property_id: property.id,
-                name: room.name,
-                description: room.description || null,
-                price_per_night: room.price_per_night || null,
-                max_guests: room.max_guests || 2,
-                images: room.images || [],
-            }));
-
-            await supabase.from('rooms').insert(roomInserts);
-        } else {
-            // Default: create a single "Entire Property" room
-            await supabase.from('rooms').insert({
-                property_id: property.id,
-                name: 'Entire Property',
-                description: 'The full property',
-                price_per_night: price_per_night,
-                max_guests: max_guests || 2,
-            });
-        }
-
-        return NextResponse.json({ success: true, property });
-    } catch (error) {
-        console.error('Property creation error:', error);
-        return NextResponse.json({ error: 'Failed to create property' }, { status: 500 });
+    // Validate
+    if (!name || !owner_id || !price_per_night) {
+        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
+
+    const { data: property, error } = await supabase
+        .from('properties')
+        .insert({
+            name, description, address, area, city: city || 'Lagos', state: state || 'Lagos',
+            price_per_night: Number(price_per_night),
+            max_guests: Number(max_guests) || 2,
+            owner_id, caretaker_id: caretaker_id || null,
+            check_in_instructions, house_rules, amenities,
+            check_in_time, check_out_time,
+            type: type || 'Entire Apartment',
+            images: images || [],
+            thumbnail // Insert thumbnail
+        })
+        .select()
+        .single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Handle rooms creation if provided
+    if (rooms && rooms.length > 0) {
+        const roomsToInsert = rooms.map((r: any) => ({
+            property_id: property.id,
+            name: r.name,
+            price_per_night: Number(r.price_per_night) || Number(price_per_night),
+            max_guests: Number(r.max_guests) || Number(max_guests),
+            description: r.description,
+            images: r.images || []
+        }));
+
+        const { error: roomError } = await supabase.from('rooms').insert(roomsToInsert);
+        if (roomError) console.error('Error creating rooms:', roomError);
+    } else {
+        // Default Room
+        await supabase.from('rooms').insert({
+            property_id: property.id,
+            name: 'Entire Property',
+            description: 'The full property',
+            price_per_night: Number(price_per_night),
+            max_guests: Number(max_guests) || 2,
+            images: images || [],
+        });
+    }
+
+    return NextResponse.json({ data: property });
 }
 
-// List all properties with owner + caretaker info
-export async function GET() {
-    try {
-        const supabase = getAdminSupabase();
-
-        const { data } = await supabase
-            .from('properties')
-            .select('*, owner:owners(id, name, email), caretaker:caretakers(id, name, email), rooms(id, name, price_per_night)')
-            .order('created_at', { ascending: false });
-
-        return NextResponse.json({ data });
-    } catch (error) {
-        console.error('Property list error:', error);
-        return NextResponse.json({ error: 'Failed to list properties' }, { status: 500 });
-    }
-}
-
-// Update a property
 export async function PATCH(request: NextRequest) {
-    try {
-        const supabase = getAdminSupabase();
-        const body = await request.json();
-        const { id, rooms, owner, caretaker, ...updates } = body;
+    const supabase = getAdminSupabase();
+    const body = await request.json();
 
-        if (!id) {
-            return NextResponse.json({ error: 'Property ID required' }, { status: 400 });
-        }
+    // Strip relations and ID from updates
+    const { id, rooms, owner, caretaker, ...updates } = body;
 
-        const { error } = await supabase
-            .from('properties')
-            .update(updates)
-            .eq('id', id);
+    if (!id) return NextResponse.json({ error: 'Property ID required' }, { status: 400 });
 
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
-        }
+    const { data, error } = await supabase
+        .from('properties')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
 
-        return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error('Property update error:', error);
-        return NextResponse.json({ error: 'Failed to update property' }, { status: 500 });
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({ data });
 }

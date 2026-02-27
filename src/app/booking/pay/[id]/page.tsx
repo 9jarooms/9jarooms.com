@@ -2,7 +2,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import { notFound, redirect } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { Check, Clock, CreditCard, Shield } from 'lucide-react';
+import { Clock, CreditCard, Shield, RefreshCw } from 'lucide-react';
 
 interface Props {
     params: Promise<{ id: string }>;
@@ -26,6 +26,9 @@ export default async function BookingPayPage({ params }: Props) {
 
     const formatPrice = (price: number) =>
         new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(price);
+
+    // If paystack URL is missing, try to regenerate it
+    const hasPaymentUrl = !!booking.paystack_authorization_url;
 
     return (
         <>
@@ -70,7 +73,7 @@ export default async function BookingPayPage({ params }: Props) {
                                 <p>Please complete payment within 30 minutes to secure your reservation. This link expires soon.</p>
                             </div>
 
-                            {booking.paystack_authorization_url ? (
+                            {hasPaymentUrl ? (
                                 <a
                                     href={booking.paystack_authorization_url}
                                     className="block w-full bg-green-500 hover:bg-green-600 text-white text-center font-bold py-4 rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
@@ -78,8 +81,18 @@ export default async function BookingPayPage({ params }: Props) {
                                     Pay {formatPrice(booking.total_amount)} Now
                                 </a>
                             ) : (
-                                <div className="text-center text-red-500 bg-red-50 p-4 rounded-xl">
-                                    Payment link not generated. Please contact support.
+                                <div className="space-y-3">
+                                    <div className="text-center text-red-600 bg-red-50 p-4 rounded-xl border border-red-100">
+                                        <p className="font-medium mb-1">Payment link could not be generated</p>
+                                        <p className="text-sm text-red-500">This is usually a temporary issue. Please try refreshing or contact support.</p>
+                                    </div>
+                                    <a
+                                        href={`/booking/pay/${id}`}
+                                        className="flex items-center justify-center gap-2 w-full bg-gray-900 hover:bg-gray-800 text-white text-center font-semibold py-3 rounded-xl transition-all"
+                                    >
+                                        <RefreshCw size={16} />
+                                        Retry Payment
+                                    </a>
                                 </div>
                             )}
 

@@ -1,39 +1,46 @@
 @import "tailwindcss";
 
+@layer utilities {
+
+  .no-spinner::-webkit-inner-spin-button,
+  .no-spinner::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .no-spinner {
+    -moz-appearance: textfield;
+  }
+}
+
 @theme {
-  /* Override default green palette with Luxurious Emerald */
-  --color-green-50: #ecfdf5;
-  --color-green-100: #d1fae5;
-  --color-green-200: #a7f3d0;
-  --color-green-300: #34d399;
-  /* Skipped 300 mapping in previous attempt, setting to emerald-400 equivalent for smoothness */
-  --color-green-400: #10b981;
-  --color-green-500: #059669;
-  /* emerald-600 (Primary) */
-  --color-green-600: #047857;
-  /* emerald-700 (Darker) */
-  --color-green-700: #065f46;
-  /* emerald-800 */
-  --color-green-800: #064e3b;
-  /* emerald-900 */
-  --color-green-900: #022c22;
-  /* emerald-950 */
-  --color-green-950: #022c22;
+  /* Override default green palette with Brand Green #8fd168 */
+  --color-green-50: #f4fbef;
+  --color-green-100: #e6f6db;
+  --color-green-200: #ceedba;
+  --color-green-300: #aee08e;
+  --color-green-400: #8fd168;
+  --color-green-500: #72b94a;
+  --color-green-600: #579435;
+  --color-green-700: #44722c;
+  --color-green-800: #385a27;
+  --color-green-900: #304d24;
+  --color-green-950: #172a0f;
 
   /* Add Serif Font Family */
   --font-serif: var(--font-playfair), 'Times New Roman', serif;
 }
 
 :root {
-  /* Luxurious Emerald Palette */
-  --green-primary: #059669;
-  /* Emerald 600 - Rich, deep primary */
-  --green-dark: #064e3b;
-  /* Emerald 900 - Very dark for contrast/hover */
-  --green-light: #a7f3d0;
-  /* Emerald 200 - Soft accent */
-  --green-subtle: #ecfdf5;
-  /* Emerald 50 - Very subtle background */
+  /* Brand Green Palette based on #8fd168 */
+  --green-primary: #8fd168;
+  /* Brand green - Primary */
+  --green-dark: #385a27;
+  /* Dark variant for contrast/hover */
+  --green-light: #ceedba;
+  /* Light accent */
+  --green-subtle: #f4fbef;
+  /* Very subtle background */
 
   /* Neutral Palette - Refined for "High-End" text */
   --gray-50: #fafafa;
@@ -153,11 +160,14 @@ h6 {
 /* Calendar styles */
 .calendar-day {
   aspect-ratio: 1;
+  min-height: 40px;
+  min-width: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -175,14 +185,17 @@ h6 {
 .calendar-day-selected {
   background: var(--green-primary) !important;
   color: white;
-  font-weight: 600;
-  box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.4);
+  font-weight: 700;
+  font-size: 15px;
+  box-shadow: 0 4px 8px -2px rgba(143, 209, 104, 0.5);
+  transform: scale(1.05);
   /* Colored shadow */
 }
 
 .calendar-day-in-range {
   background: var(--green-subtle);
   color: var(--green-dark);
+  font-weight: 500;
 }
 
 .calendar-day-booked {

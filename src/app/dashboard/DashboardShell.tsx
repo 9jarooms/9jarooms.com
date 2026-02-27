@@ -64,23 +64,17 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
       `}>
                 <div className="flex flex-col h-full">
                     {/* Logo */}
-                    <div className="p-6 hidden lg:block">
-                        <div className="flex items-center gap-2">
-                            <div className="w-9 h-9 bg-green-400 rounded-xl flex items-center justify-center">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                                </svg>
-                            </div>
-                            <div>
-                                <span className="font-bold text-gray-900">9ja<span className="text-green-500">Rooms</span></span>
-                                <p className="text-xs text-gray-400">Dashboard</p>
-                            </div>
+                    <div className="p-6 hidden lg:block border-b border-gray-100">
+                        <Link href="/" className="block">
+                            <img src="/logo.png" alt="9jaRooms" className="h-10 w-auto object-contain" />
+                        </Link>
+                        <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                            Caretaker Portal
                         </div>
                     </div>
 
                     {/* Nav */}
-                    <nav className="flex-1 px-3 pt-16 lg:pt-0 space-y-1">
+                    <nav className="flex-1 py-6 px-4 space-y-1">
                         {navItems.map((item) => {
                             const isActive = pathname === item.href;
                             const Icon = item.icon;
@@ -90,8 +84,8 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
                                     href={item.href}
                                     onClick={() => setSidebarOpen(false)}
                                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${isActive
-                                            ? 'bg-green-50 text-green-700 font-medium'
-                                            : 'text-gray-600 hover:bg-gray-50'
+                                        ? 'bg-green-50 text-green-700 font-medium'
+                                        : 'text-gray-600 hover:bg-gray-50'
                                         }`}
                                 >
                                     <Icon size={18} />

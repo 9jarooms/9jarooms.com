@@ -80,7 +80,7 @@ export const paymentConfirmed = inngest.createFunction(
                 html: `
                     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #374151;">
                         <div style="text-align: center; margin-bottom: 30px;">
-                            <img src="${process.env.NEXT_PUBLIC_APP_URL}/email-logo.png" alt="9jaRooms" style="height: 80px; width: auto;" />
+                            <img src="${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/public-assets/email-logo.png" alt="9jaRooms" style="height: 80px; width: auto;" />
                         </div>
                         
                         <h1 style="color: #16a34a; text-align: center; margin-bottom: 24px;">Booking Confirmed!</h1>
@@ -138,7 +138,7 @@ export const paymentConfirmed = inngest.createFunction(
                         ` : ''}
                         
                         <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; display: flex; align-items: center; gap: 16px;">
-                            <img src="${process.env.NEXT_PUBLIC_APP_URL}/email-profile.png" alt="Host" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid #e5e7eb;" />
+                            <img src="${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/public-assets/email-profile.png" alt="Host" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid #e5e7eb;" />
                             <div style="font-size: 14px; color: #4b5563;">
                                 <p style="margin: 0; font-weight: 600; color: #111827; font-size: 16px;">9jaRooms Host</p>
                                 <p style="margin: 0;">Need help? Reply to this email.</p>
@@ -222,62 +222,49 @@ export const paymentConfirmed = inngest.createFunction(
             return { success: true };
         });
 
-        // Step 7: Send WhatsApp confirmation via ManyChat (if within 24hr window)
+        // Step 7: Send WhatsApp confirmation (via Meta Cloud API)
         await step.run('send-whatsapp-confirmation', async () => {
-            if (!booking.guest_phone) return { sent: false, reason: 'No phone number' };
+            // Prioritize the WhatsApp user who made the booking (from metadata), otherwise guest phone
+            const targetPhone = event.data.metadata?.whatsapp_user_phone || booking.guest_phone;
 
-            // Check if there's a ManyChat conversation in the last 24 hours
-            const { data: conversation } = await supabase
-                .from('conversations')
-                .select('*')
-                .eq('guest_phone', booking.guest_phone)
-                .gte('last_message_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-                .order('last_message_at', { ascending: false })
-                .limit(1)
-                .single();
-
-            if (!conversation) {
-                return { sent: false, reason: 'No active ManyChat conversation in 24hr window' };
-            }
-
-            // Send via ManyChat API
-            const manychatApiKey = process.env.MANYCHAT_API_KEY;
-            if (!manychatApiKey) return { sent: false, reason: 'ManyChat API key not configured' };
+            if (!targetPhone) return { sent: false, reason: 'No phone number' };
 
             try {
+                const { WhatsAppClient } = await import('@/lib/whatsapp/client');
+                const wa = new WhatsAppClient();
+
+                // Normalize phone number to international format (WhatsApp requires it)
+                let phone = targetPhone.replace(/[\s\-\(\)]/g, '');
+                if (phone.startsWith('0')) {
+                    phone = '234' + phone.slice(1); // Convert 080... → 23480...
+                } else if (phone.startsWith('+')) {
+                    phone = phone.slice(1); // Remove leading +
+                }
+                if (!phone.startsWith('234') && phone.length === 10) {
+                    phone = '234' + phone;
+                }
+
+                console.log(`[WhatsApp Confirm] Sending to: ${phone} (original: ${targetPhone})`);
+
                 const property = (booking as any).property;
-                const message = `✅ Payment Confirmed!\n\n` +
+                const checkInDate = new Date(booking.check_in).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                const checkOutDate = new Date(booking.check_out).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+                const message = `✅ *Payment Confirmed!*\n\n` +
                     `Hi ${booking.guest_name}, your booking is confirmed!\n\n` +
-                    `🏠 ${property.name}\n` +
-                    `📅 Check-in: ${booking.check_in_date}\n` +
-                    `📅 Check-out: ${booking.check_out_date}\n` +
-                    `💰 Total: ₦${(booking.total_price || 0).toLocaleString()}\n\n` +
-                    `📍 Address: ${property.address}\n` +
-                    `🕐 Check-in time: ${property.check_in_time}\n\n` +
-                    `${property.check_in_instructions || ''}\n\n` +
+                    `🏠 *${property.name}*\n` +
+                    `📅 Check-in: ${checkInDate} (${property.check_in_time})\n` +
+                    `📅 Check-out: ${checkOutDate} (${property.check_out_time})\n` +
+                    `💰 Total Paid: ₦${(booking.total_amount || 0).toLocaleString()}\n\n` +
+                    `📍 ${property.address}\n\n` +
+                    `${property.check_in_instructions ? `🔑 *Check-in Instructions:*\n${property.check_in_instructions}\n\n` : ''}` +
+                    `📧 You will also receive a confirmation email with all the details.\n\n` +
                     `We can't wait to host you! 🎉`;
 
-                // ManyChat sendContent API
-                await fetch('https://api.manychat.com/fb/sending/sendContent', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${manychatApiKey}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        subscriber_id: conversation.external_id,
-                        data: {
-                            version: 'v2',
-                            content: {
-                                messages: [{ type: 'text', text: message }],
-                            },
-                        },
-                    }),
-                });
-
+                await wa.sendMessage(phone, message);
                 return { sent: true };
             } catch (error) {
-                console.error('Failed to send WhatsApp message:', error);
+                console.error('Failed to send WhatsApp confirmation:', error);
                 return { sent: false, error: String(error) };
             }
         });

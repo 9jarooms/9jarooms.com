@@ -23,17 +23,23 @@ export default async function BookingConfirmPage({ searchParams }: Props) {
     } else {
         try {
             // 1. Verify with Paystack
+            console.log(`[Confirm] Verifying payment reference: ${reference}`);
             const verification = await verifyPayment(reference);
+            console.log(`[Confirm] Paystack verification result:`, JSON.stringify(verification.data?.status));
 
             if (verification.status && verification.data.status === 'success') {
                 status = 'success';
 
                 // 2. Find Booking
-                const { data: existingBooking } = await supabase
+                const { data: existingBooking, error: dbError } = await supabase
                     .from('bookings')
                     .select('*, property:properties(*), room:rooms(*)')
                     .eq('paystack_reference', reference)
                     .single();
+
+                if (dbError) {
+                    console.error(`[Confirm] DB error finding booking:`, dbError);
+                }
 
                 if (existingBooking) {
                     booking = existingBooking;
@@ -50,29 +56,38 @@ export default async function BookingConfirmPage({ searchParams }: Props) {
                             .update({ status: 'booked' })
                             .eq('booking_id', existingBooking.id);
 
+                        console.log(`[Confirm] Booking ${existingBooking.id} marked as paid, dates blocked`);
+
                         // 4. Trigger Post-Payment Workflow (Emails, Notifications) via Inngest
-                        // This ensures emails are sent even if the webhook hasn't arrived yet (or in local dev)
-                        await inngest.send({
-                            name: 'payment/confirmed',
-                            data: {
-                                reference: reference,
-                                amount: verification.data.amount,
-                                paystackData: verification.data,
-                            },
-                        });
+                        // This is best-effort — if it fails, the booking is still confirmed
+                        try {
+                            await inngest.send({
+                                name: 'payment/confirmed',
+                                data: {
+                                    reference: reference,
+                                    amount: verification.data.amount,
+                                    paystackData: verification.data,
+                                },
+                            });
+                            console.log(`[Confirm] Inngest payment/confirmed event sent`);
+                        } catch (inngestErr: any) {
+                            console.error('[Confirm] Inngest event failed (non-blocking):', inngestErr?.message);
+                            // Non-blocking: booking is already confirmed, emails can be sent later
+                        }
                     }
                 } else {
                     status = 'error';
                     error = 'Booking record not found for this reference.';
                 }
             } else {
+                console.log(`[Confirm] Payment not successful. Paystack status: ${verification.data?.status}`);
                 status = 'failed';
-                error = 'Payment verification failed.';
+                error = `Payment was not completed. Status: ${verification.data?.status || 'unknown'}`;
             }
-        } catch (err) {
-            console.error(err);
+        } catch (err: any) {
+            console.error('[Confirm] Verification error:', err?.message || err);
             status = 'error';
-            error = 'Failed to verify payment. Please contact support.';
+            error = `Failed to verify payment. Please contact support. (${err?.message || 'Unknown error'})`;
         }
     }
 

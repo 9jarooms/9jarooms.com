@@ -14,6 +14,7 @@ import {
     subMonths,
     getDay,
     startOfDay,
+    addDays,
 } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Availability } from '@/types/database';
@@ -52,75 +53,93 @@ export default function BookingCalendar({
     const monthStart = startOfMonth(currentMonth);
     const monthEnd = endOfMonth(currentMonth);
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-
-    // Pad with empty days for alignment
     const startPadding = getDay(monthStart);
 
-    const isDateUnavailable = (date: Date): boolean => {
+    // Check if a date is fully booked (middle of a booking, NOT a checkout day)
+    const isDateFullyBooked = (date: Date): boolean => {
         const dateStr = format(date, 'yyyy-MM-dd');
         const status = statusMap[dateStr];
         return status === 'booked' || status === 'held' || status === 'maintenance' || status === 'cleaning';
+    };
+
+    // Check if a date is a checkout day (= the last day of someone's booking)
+    // In Airbnb model: checkout day IS available for new checkin
+    // A date is a "checkout day" if it is booked but the day BEFORE it is also booked
+    // OR more simply: it's the first booked date in a streak (the transition point)
+    // For our model: a booked date whose previous day is also booked = mid-booking
+    // A booked date whose previous day is NOT booked = checkin day of that booking
+    // We want to allow checkin on someone else's checkout day
+    // Actually the simpler approach: the checkout day is the FIRST unavailable day after available days
+    // Let's just check: is the next day available? If yes, this is a checkout day
+    const isCheckoutDay = (date: Date): boolean => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const nextDateStr = format(addDays(date, 1), 'yyyy-MM-dd');
+        // This date is booked, and the next day is either available or not in the map
+        const thisBooked = statusMap[dateStr] === 'booked' || statusMap[dateStr] === 'held';
+        const nextAvailable = !statusMap[nextDateStr] || statusMap[nextDateStr] === 'available';
+        return thisBooked && nextAvailable;
+    };
+
+    // Check if this is the start of a booking block (first booked day in a streak)
+    const isCheckinDay = (date: Date): boolean => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const prevDateStr = format(addDays(date, -1), 'yyyy-MM-dd');
+        const thisBooked = statusMap[dateStr] === 'booked' || statusMap[dateStr] === 'held';
+        const prevAvailable = !statusMap[prevDateStr] || statusMap[prevDateStr] === 'available';
+        return thisBooked && prevAvailable;
     };
 
     const isDatePast = (date: Date): boolean => {
         return isBefore(date, today);
     };
 
-    // Helper to find the next unavailable date after the selected check-in
+    // Find the next unavailable date that would block checkout selection
     const getNextUnavailableDate = (startDate: Date): Date | null => {
+        // Find the next date that's the START of a booking (checkin day)
+        // because that's where the guest can check out (on that day, since
+        // the other guest checks in later)
         const sortedDates = Object.keys(statusMap)
             .sort()
-            .map(d => new Date(d))
-            .filter(d => isAfter(d, startDate) && statusMap[format(d, 'yyyy-MM-dd')] === 'booked');
+            .map(d => new Date(d + 'T00:00:00'))
+            .filter(d => isAfter(d, startDate) && isDateFullyBooked(d));
 
-        return sortedDates.length > 0 ? sortedDates[0] : null;
-    };
+        if (sortedDates.length === 0) return null;
 
-    // A date is "checkout only" if it is the check-in date of another booking
-    // For simplicity, we treat any booked date as potentially a checkout date 
-    // IF the user has a valid check-in selected before it.
-    // Visual requirements: "grey but glowing a bit", "not crossed out at first".
-    const isCheckoutTarget = (date: Date): boolean => {
-        // Is this date booked?
-        const dateStr = format(date, 'yyyy-MM-dd');
-        return statusMap[dateStr] === 'booked';
+        // The first booked date after check-in is the barrier
+        // But the user CAN check out on this date (same-day checkout/checkin allowed)
+        return sortedDates[0];
     };
 
     const isDateDisabled = (date: Date): boolean => {
         if (isDatePast(date)) return true;
 
-        // If check-in is selected...
+        const fullyBooked = isDateFullyBooked(date);
+
+        // Selecting CHECK-OUT date
         if (checkIn && !checkOut) {
-            // Block dates before check-in
+            // Can't go before check-in
             if (isBefore(date, checkIn)) return true;
+            // Same as check-in = cancel
+            if (isSameDay(date, checkIn)) return false;
 
-            // Block dates AFTER the next unavailable date (barrier)
             const nextUnavailable = getNextUnavailableDate(checkIn);
-            if (nextUnavailable && isAfter(date, nextUnavailable)) {
-                return true;
+
+            if (nextUnavailable) {
+                // Allow checking out ON the booked date (same-day transition)
+                if (isSameDay(date, nextUnavailable)) return false;
+                // Block anything AFTER the barrier
+                if (isAfter(date, nextUnavailable)) return true;
             }
 
-            // The barrier date itself is allowed (valid checkout)
-            if (nextUnavailable && isSameDay(date, nextUnavailable)) {
-                return false;
-            }
+            // Available dates between check-in and barrier are all valid
+            return false;
         }
 
-        // If no check-in is selected, user is picking a Start Date.
-        // Start Date cannot be a booked date (even if it's checkout-only for someone else, it's not a valid check-in for me).
-        if (!checkIn && isCheckoutTarget(date)) {
-            return true;
-        }
-
-        // Standard unavailable check
-        if (isDateUnavailable(date)) {
-            // Exception: If we are picking checkout, and this is the barrier, allow it.
-            if (checkIn && !checkOut) {
-                const nextUnavailable = getNextUnavailableDate(checkIn);
-                if (nextUnavailable && isSameDay(date, nextUnavailable)) {
-                    return false;
-                }
-            }
+        // Selecting CHECK-IN date
+        if (fullyBooked) {
+            // If this is a checkout day (end of someone's booking), 
+            // it's valid for new check-in (Airbnb model)
+            if (isCheckoutDay(date)) return false;
             return true;
         }
 
@@ -131,11 +150,10 @@ export default function BookingCalendar({
         setFeedback(null);
 
         if (isDateDisabled(date)) {
-            // User visual requirement: "shows check out only" when clicked
-            if (isCheckoutTarget(date)) {
+            if (isDateFullyBooked(date)) {
                 setFeedback({
                     date: date.toISOString(),
-                    message: "Check-out Only"
+                    message: "This date is booked"
                 });
                 setTimeout(() => setFeedback(null), 2000);
             }
@@ -144,8 +162,7 @@ export default function BookingCalendar({
 
         if (!checkIn || (checkIn && checkOut)) {
             // Starting a new selection
-            // Cannot start on a booked date
-            if (isDateUnavailable(date)) return;
+            if (isDateFullyBooked(date) && !isCheckoutDay(date)) return;
 
             setCheckIn(date);
             setCheckOut(null);
@@ -153,7 +170,7 @@ export default function BookingCalendar({
         } else {
             // Selecting check-out
             if (isSameDay(date, checkIn)) {
-                // Same day — clear
+                // Same day — clear selection
                 setCheckIn(null);
                 setCheckOut(null);
                 onDateSelect?.(null as any, null as any);
@@ -179,36 +196,28 @@ export default function BookingCalendar({
         }
 
         if (isDateDisabled(date)) {
-            // Distinguish between purely disabled and "booked but maybe checkout"
-            // But if disabled, just disabled style
             classes.push('calendar-day-disabled');
-            // If it was disabled because it's booked, add booked style too for visibility?
-            if (isDateUnavailable(date)) classes.push('calendar-day-booked');
+            if (isDateFullyBooked(date)) classes.push('calendar-day-booked');
             return classes.join(' ');
         }
-
-        // If not disabled...
-        const isUnavailable = isDateUnavailable(date);
-        const isTarget = isCheckoutTarget(date);
 
         if (isSameDay(date, today)) {
             classes.push('calendar-day-today');
         }
 
-        if ((checkIn && isSameDay(date, checkIn))) {
+        if (checkIn && isSameDay(date, checkIn)) {
             classes.push('calendar-day-selected');
             classes.push('calendar-day-start');
-        } else if ((checkOut && isSameDay(date, checkOut))) {
+        } else if (checkOut && isSameDay(date, checkOut)) {
             classes.push('calendar-day-selected');
             classes.push('calendar-day-end');
         } else if (isInRange(date)) {
             classes.push('calendar-day-in-range');
-        } else if (isUnavailable && isTarget) { // It is booked/unavailable AND it's a checkout target.
-            // User wants: "not crossed at first", "grey but glowing a bit".
-            // We apply a special class for purely booked dates to handle this visual.
+        } else if (isDateFullyBooked(date) && isCheckoutDay(date)) {
+            // Checkout day — available for new checkin, show with special style
             classes.push('calendar-day-checkout-only');
-        } else if (isUnavailable) { // It is unavailable but not a checkout target (e.g., held, maintenance)
-            classes.push('calendar-day-booked'); // Using 'booked' for general unavailable dates that are not checkout-only
+        } else if (isDateFullyBooked(date)) {
+            classes.push('calendar-day-booked');
         } else {
             classes.push('calendar-day-available');
         }
@@ -238,38 +247,34 @@ export default function BookingCalendar({
             </div>
 
             {/* Day headers */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
+            <div className="grid grid-cols-7 gap-1.5 mb-2">
                 {DAYS.map((day) => (
-                    <div key={day} className="text-center text-xs font-medium text-gray-400 py-2">
+                    <div key={day} className="text-center text-xs font-semibold text-gray-400 py-2">
                         {day}
                     </div>
                 ))}
             </div>
 
             {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-1.5">
                 {/* Padding */}
                 {Array.from({ length: startPadding }).map((_, i) => (
-                    <div key={`pad-${i}`} className="calendar-day" />
+                    <div key={`pad-${i}`} className="calendar-day min-h-[40px]" />
                 ))}
 
                 {days.map((day) => {
-                    const isDisabled = isDateDisabled(day);
-                    const isBooked = isCheckoutTarget(day);
+                    const disabled = isDateDisabled(day);
+                    const booked = isDateFullyBooked(day);
+                    const checkoutDay = isCheckoutDay(day);
 
-                    // We allow clicking if it's a checkout target (to show the message), 
-                    // even if strictly disabled for *selection* as a start date.
-                    const isButtonDisabled = isDisabled && !isBooked;
+                    // Allow clicking checkout days even if booked (they're valid for check-in)
+                    const isButtonDisabled = disabled && !(booked && checkoutDay);
 
                     let title = format(day, 'MMM d, yyyy');
-                    if (isBooked) {
-                        if (checkIn && !checkOut && !isDisabled) {
-                            title = 'Check-out Only';
-                        } else {
-                            title = 'Booked';
-                        }
-                    } else if (isDateUnavailable(day)) {
-                        title = 'Unavailable';
+                    if (booked && checkoutDay && !disabled) {
+                        title = 'Available for check-in (same-day transition)';
+                    } else if (booked) {
+                        title = 'Booked';
                     }
 
                     const isFeedbackTarget = feedback?.date === day.toISOString();
