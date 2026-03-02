@@ -58,6 +58,13 @@
   /* Slightly more rounded for modern feel */
 }
 
+/* Prevent iOS Safari auto-zoom on inputs */
+input,
+textarea,
+select {
+  font-size: 16px !important;
+}
+
 * {
   box-sizing: border-box;
 }

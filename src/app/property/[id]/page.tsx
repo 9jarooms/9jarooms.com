@@ -1,7 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import PropertyDetailClient from './PropertyDetailClient';
 
 interface Props {
@@ -45,7 +44,6 @@ export default async function PropertyPage({ params }: Props) {
                     availability={availability || []}
                 />
             </main>
-            <Footer />
         </>
     );
 }

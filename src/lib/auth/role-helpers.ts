@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { redirect } from 'next/navigation';
 
-export type UserRole = 'admin' | 'owner' | 'caretaker';
+export type UserRole = 'admin' | 'owner' | 'caretaker' | 'call_operator';
 
 // Get the role for the currently authenticated user
 export async function getUserRole(userId: string): Promise<UserRole | null> {
@@ -50,6 +50,7 @@ export function getDashboardPath(role: UserRole | null): string {
         case 'admin': return '/admin';
         case 'owner': return '/owner';
         case 'caretaker': return '/dashboard';
+        case 'call_operator': return '/operator';
         default: return '/login';
     }
 }

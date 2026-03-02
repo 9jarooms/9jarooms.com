@@ -21,6 +21,7 @@ interface Property {
     images: string[];
     thumbnail: string;
     is_active: boolean;
+    is_featured: boolean;
     owner_id: string;
     caretaker_id: string;
     owner: { id: string; name: string; email: string } | null;
@@ -53,6 +54,7 @@ export default function AdminPropertiesPage() {
         amenities: 'WiFi,AC,Smart TV,Kitchen,Security,Power Backup',
         thumbnail: '',
         images: [] as string[],
+        is_featured: false,
         rooms: [{ name: 'Entire Property', price_per_night: '', max_guests: '2', description: '', images: [] as string[] }],
     };
 
@@ -107,6 +109,7 @@ export default function AdminPropertiesPage() {
             amenities: (property.amenities || []).join(','),
             thumbnail: property.thumbnail || (property.images && property.images.length > 0 ? property.images[0] : ''),
             images: property.images || [],
+            is_featured: property.is_featured || false,
             rooms: property.rooms.length > 0 ? property.rooms.map(r => ({
                 name: r.name,
                 price_per_night: r.price_per_night?.toString() || '',
@@ -137,9 +140,7 @@ export default function AdminPropertiesPage() {
             area: form.area,
             city: form.city,
             type: form.type,
-            price_per_night: form.type === 'Shared Apartment' && form.rooms.length > 0
-                ? Math.min(...form.rooms.map(r => Number(r.price_per_night) || 0))
-                : Number(form.price_per_night),
+            price_per_night: Number(form.price_per_night),
             max_guests: Number(form.max_guests),
             owner_id: form.owner_id,
             caretaker_id: form.caretaker_id || null,
@@ -148,13 +149,8 @@ export default function AdminPropertiesPage() {
             amenities: form.amenities.split(',').map(a => a.trim()).filter(Boolean),
             thumbnail: form.thumbnail,
             images: form.images,
-            rooms: form.rooms.map(r => ({
-                name: r.name,
-                price_per_night: Number(r.price_per_night) || Number(form.price_per_night),
-                max_guests: Number(r.max_guests),
-                description: r.description,
-                images: r.images,
-            })),
+            is_featured: form.is_featured,
+            rooms: [], // 1-to-1 mapping enforced. API will auto-create default room.
         };
 
         let res;
@@ -188,6 +184,15 @@ export default function AdminPropertiesPage() {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id, is_active: !current }),
+        });
+        fetchAll();
+    }
+
+    async function toggleFeatured(id: string, current: boolean) {
+        await fetch('/api/admin/properties', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, is_featured: !current }),
         });
         fetchAll();
     }
@@ -293,14 +298,8 @@ export default function AdminPropertiesPage() {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Price per Night (₦) *</label>
-                                    {form.type === 'Shared Apartment' ? (
-                                        <div className="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-500">
-                                            Calculated from rooms
-                                        </div>
-                                    ) : (
-                                        <input type="number" required value={form.price_per_night} onChange={e => setForm({ ...form, price_per_night: e.target.value })}
-                                            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
-                                    )}
+                                    <input type="number" required value={form.price_per_night} onChange={e => setForm({ ...form, price_per_night: e.target.value })}
+                                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Max Guests</label>
@@ -346,37 +345,20 @@ export default function AdminPropertiesPage() {
                                     className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
                             </div>
 
-                            {/* Rooms */}
-                            <div className="border-t pt-4">
-                                <div className="flex items-center justify-between mb-3">
-                                    <label className="text-sm font-medium text-gray-700">Rooms</label>
-                                    <button type="button" onClick={addRoom} className="text-xs text-red-500 hover:text-red-600 font-medium">+ Add Room</button>
-                                </div>
-                                {form.rooms.map((room, i) => (
-                                    <div key={i} className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                                        <div className="flex gap-2 items-start mb-2">
-                                            <input placeholder="Room name" value={room.name} onChange={e => updateRoom(i, 'name', e.target.value)}
-                                                className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm" />
-                                            <input placeholder="Price/night" type="number" value={room.price_per_night} onChange={e => updateRoom(i, 'price_per_night', e.target.value)}
-                                                className="w-28 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm" />
-                                            <input placeholder="Guests" type="number" value={room.max_guests} onChange={e => updateRoom(i, 'max_guests', e.target.value)}
-                                                className="w-20 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm" />
-                                            {form.rooms.length > 1 && (
-                                                <button type="button" onClick={() => removeRoom(i)} className="text-gray-400 hover:text-red-500 p-2"><X size={14} /></button>
-                                            )}
-                                        </div>
-                                        <div className="mt-2">
-                                            <label className="text-xs font-medium text-gray-500 mb-1 block">Room Images</label>
-                                            <MediaUploader
-                                                folder="rooms"
-                                                accept={{ 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] }}
-                                                existingUrls={room.images}
-                                                onUpload={(urls) => updateRoom(i, 'images', urls)}
-                                            />
-                                        </div>
-                                    </div>
-                                ))}
+                            <div className="flex items-center gap-3 p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
+                                <input
+                                    type="checkbox"
+                                    id="is_featured"
+                                    checked={form.is_featured}
+                                    onChange={e => setForm({ ...form, is_featured: e.target.checked })}
+                                    className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                />
+                                <label htmlFor="is_featured" className="text-sm font-medium text-blue-900 cursor-pointer select-none">
+                                    Show on Homepage (Featured Property)
+                                </label>
                             </div>
+
+                            {/* Rooms UI Removed to enforce 1-to-1 Property:Room mapping */}
 
                             <button type="submit" disabled={creating}
                                 className="w-full py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-medium disabled:opacity-50">
@@ -395,39 +377,42 @@ export default function AdminPropertiesPage() {
                             <img src={prop.thumbnail || prop.images[0]} alt={prop.name} className="w-full h-40 object-cover rounded-lg mb-3" />
                         ) : null}
                         <div className="flex items-start justify-between mb-3">
-                            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
-                                <Building2 size={20} />
+                            <div className="flex items-center gap-2">
+                                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
+                                    <Building2 size={20} />
+                                </div>
+                                {prop.is_featured && (
+                                    <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                        ★ Featured
+                                    </span>
+                                )}
                             </div>
                             <div className="flex gap-1">
-                                <button onClick={() => handleEdit(prop)}
-                                    className="p-1 px-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">
-                                    <Pencil size={14} />
+                                <button onClick={() => toggleFeatured(prop.id, prop.is_featured)}
+                                    title="Toggle show on Homepage"
+                                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${prop.is_featured ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : 'bg-gray-50 text-gray-500 border-transparent hover:bg-gray-100'}`}>
+                                    {prop.is_featured ? 'On Homepage' : 'Add to Homepage'}
                                 </button>
                                 <button onClick={() => toggleActive(prop.id, prop.is_active)}
                                     className={`px-2.5 py-1 rounded-full text-xs font-medium ${prop.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                                     {prop.is_active ? 'Active' : 'Inactive'}
+                                </button>
+                                <button onClick={() => handleEdit(prop)}
+                                    className="p-1 px-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">
+                                    <Pencil size={14} />
                                 </button>
                             </div>
                         </div>
                         <h3 className="font-semibold text-gray-900 mb-1">{prop.name}</h3>
                         <p className="text-sm text-gray-500 mb-3">{prop.type} • {prop.area}, {prop.city}</p>
                         <p className="text-lg font-bold text-gray-900 mb-3">
-                            {prop.type === 'Shared Apartment' && prop.rooms.length > 0 ? (
-                                <span>
-                                    ₦{formatPrice(Math.min(...prop.rooms.map(r => r.price_per_night)))}
-                                    <span className="text-sm font-normal text-gray-500"> - </span>
-                                    ₦{formatPrice(Math.max(...prop.rooms.map(r => r.price_per_night)))}
-                                </span>
-                            ) : (
-                                <span>₦{formatPrice(prop.price_per_night)}</span>
-                            )}
+                            <span>₦{formatPrice(prop.price_per_night)}</span>
                             <span className="text-xs font-normal text-gray-400">/night</span>
                         </p>
 
                         <div className="space-y-1.5 text-xs text-gray-500">
                             <p>👤 Owner: <span className="text-gray-700">{prop.owner?.name || 'Not assigned'}</span></p>
                             <p>🏠 Caretaker: <span className="text-gray-700">{prop.caretaker?.name || 'Not assigned'}</span></p>
-                            <p>🚪 {prop.rooms.length} room{prop.rooms.length !== 1 ? 's' : ''}</p>
                         </div>
                     </div>
                 ))}

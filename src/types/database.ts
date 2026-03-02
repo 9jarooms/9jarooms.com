@@ -125,7 +125,7 @@ export type Database = {
 // Table Types
 // ============================================
 
-export type UserRole = 'admin' | 'owner' | 'caretaker';
+export type UserRole = 'admin' | 'owner' | 'caretaker' | 'call_operator';
 
 export interface UserRoleRecord {
     id: string;
@@ -174,6 +174,7 @@ export interface Property {
     check_in_instructions: string | null;
     house_rules: string | null;
     is_active: boolean;
+    is_featured: boolean;
     created_at: string;
     updated_at: string;
 }

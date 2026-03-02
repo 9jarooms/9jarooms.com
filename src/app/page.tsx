@@ -14,6 +14,7 @@ export default async function HomePage() {
     .from('properties')
     .select('*')
     .eq('is_active', true)
+    .eq('is_featured', true)
     .order('created_at', { ascending: false });
 
   return (
@@ -39,14 +40,14 @@ export default async function HomePage() {
           </div>
 
           {/* Hero Content */}
-          <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 pb-8 md:pb-12">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif text-white leading-tight mb-8 md:mb-10 max-w-lg italic">
-              Find your perfect<br />
-              stay in Abuja.
+          <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 pb-8 md:pb-12 text-center flex flex-col items-center">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif text-white leading-tight mb-8 md:mb-10 max-w-2xl italic mx-auto">
+              Find your perfect stay<br />
+              in the heart of Abuja.
             </h1>
 
             {/* Search Bar overlaid on the hero */}
-            <div className="max-w-4xl">
+            <div className="max-w-4xl w-full mx-auto">
               <HomeSearch />
             </div>
           </div>
@@ -54,13 +55,13 @@ export default async function HomePage() {
 
         {/* Properties Grid - Roomlisting */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-24 md:pb-32 pt-12 md:pt-16">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 md:mb-14 gap-4">
-            <div>
-              <h2 className="text-2xl md:text-3xl font-semibold text-gray-900 mb-2">
-                🏠 Roomlisting
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 md:mb-14 gap-4 text-center md:text-left">
+            <div className="mx-auto md:mx-0">
+              <h2 className="text-2xl md:text-3xl font-serif font-semibold text-gray-900 mb-2">
+                Our Collection
               </h2>
               <p className="text-gray-500 text-base">
-                Discover our hand-picked collection of premium apartments.
+                Discover our hand-picked selection of premium, fully-serviced apartments.
               </p>
             </div>
             <Link href="/properties" className="text-green-700 font-medium hover:text-green-800 transition-colors text-sm">
@@ -69,7 +70,7 @@ export default async function HomePage() {
           </div>
 
           {properties && properties.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 md:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
               {properties.slice(0, 4).map((property) => (
                 <PropertyCard key={property.id} property={property} />
               ))}
@@ -107,7 +108,7 @@ export default async function HomePage() {
             {/* Optional visual element or statistic */}
             <div className="hidden md:block">
               <div className="p-8 border border-white/10 rounded-2xl bg-white/5 backdrop-blur-sm max-w-sm">
-                <div className="text-4xl font-serif text-white mb-2">90%+</div>
+                <div className="text-4xl font-serif text-white mb-2">80%+</div>
                 <div className="text-gray-400 font-light">Average occupancy rate for our managed properties.</div>
               </div>
             </div>

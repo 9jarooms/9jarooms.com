@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        if (!['admin', 'owner', 'caretaker'].includes(role)) {
+        if (!['admin', 'owner', 'caretaker', 'call_operator'].includes(role)) {
             return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
         }
 
@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
             email,
             password,
             email_confirm: true,
+            user_metadata: { name, phone },
         });
 
         if (authError) {
@@ -89,6 +90,34 @@ export async function GET(request: NextRequest) {
                 .select('*')
                 .order('created_at', { ascending: false });
             return NextResponse.json({ data });
+        }
+
+        if (role === 'call_operator' || role === 'admin') {
+            const { data: roles } = await supabase
+                .from('user_roles')
+                .select('*')
+                .eq('role', role);
+
+            const targetIds = roles?.map(r => r.user_id) || [];
+
+            if (targetIds.length === 0) {
+                return NextResponse.json({ data: [] });
+            }
+
+            const { data: authUsers, error } = await supabase.auth.admin.listUsers();
+            if (error) throw error;
+
+            const users = authUsers.users
+                .filter(u => targetIds.includes(u.id))
+                .map(u => ({
+                    id: u.id,
+                    name: u.user_metadata?.name || u.email?.split('@')[0] || 'Unknown',
+                    email: u.email,
+                    phone: u.user_metadata?.phone || u.phone || null,
+                    created_at: u.created_at
+                }));
+
+            return NextResponse.json({ data: users });
         }
 
         // All roles

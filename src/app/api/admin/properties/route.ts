@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
         owner_id, caretaker_id, check_in_instructions, house_rules, amenities,
         check_in_time, check_out_time,
         type, images, thumbnail, // New field: thumbnail
+        is_featured,
         rooms
     } = body;
 
@@ -56,7 +57,8 @@ export async function POST(request: NextRequest) {
             check_in_time, check_out_time,
             type: type || 'Entire Apartment',
             images: images || [],
-            thumbnail // Insert thumbnail
+            thumbnail, // Insert thumbnail
+            is_featured: Boolean(is_featured),
         })
         .select()
         .single();

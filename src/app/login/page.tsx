@@ -77,6 +77,11 @@ export default function LoginPage() {
                     router.refresh();
                     router.push('/dashboard');
                     break;
+                case 'call_operator':
+                    console.log('Login Debug - Redirecting to /operator');
+                    router.refresh();
+                    router.push('/operator');
+                    break;
                 default:
                     console.log('Login Debug - No role matched, redirecting to /dashboard');
                     router.push('/dashboard');

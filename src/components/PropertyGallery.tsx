@@ -73,9 +73,10 @@ export default function PropertyGallery({ images = [], thumbnail }: PropertyGall
                 <MediaItem media={displayMedia[0]} className="w-full h-full object-cover" />
                 <button
                     onClick={() => setShowModal(true)}
-                    className="absolute bottom-4 right-4 bg-black/70 text-white px-3 py-1 rounded-md text-xs backdrop-blur-md"
+                    className="absolute bottom-4 right-4 bg-white/90 text-gray-900 px-4 py-2 rounded-xl text-sm font-semibold shadow-sm border border-gray-200 backdrop-blur-md flex items-center gap-2"
                 >
-                    1 / {allMedia.length}
+                    <ImageIcon size={16} />
+                    View all {allMedia.length} photos
                 </button>
             </div>
 

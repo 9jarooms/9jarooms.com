@@ -17,21 +17,24 @@ import {
     Zap,
     Check,
     ChevronRight,
+    Share2,
+    Copy,
+    CheckCircle,
 } from 'lucide-react';
 import BookingCalendar from '@/components/BookingCalendar';
 import PropertyGallery from '@/components/PropertyGallery';
 import type { Property, Room, Availability } from '@/types/database';
 
 const amenityIconMap: Record<string, React.ReactNode> = {
-    'WiFi': <Wifi size={18} />,
-    'AC': <Wind size={18} />,
-    'Smart TV': <Tv size={18} />,
-    'TV': <Tv size={18} />,
-    'Parking': <Car size={18} />,
-    'Security': <Shield size={18} />,
-    'Gym': <Dumbbell size={18} />,
-    'Pool': <Waves size={18} />,
-    'Power Backup': <Zap size={18} />,
+    'WiFi': <Wifi size={20} strokeWidth={1.5} />,
+    'AC': <Wind size={20} strokeWidth={1.5} />,
+    'Smart TV': <Tv size={20} strokeWidth={1.5} />,
+    'TV': <Tv size={20} strokeWidth={1.5} />,
+    'Parking': <Car size={20} strokeWidth={1.5} />,
+    'Security': <Shield size={20} strokeWidth={1.5} />,
+    'Gym': <Dumbbell size={20} strokeWidth={1.5} />,
+    'Pool': <Waves size={20} strokeWidth={1.5} />,
+    'Power Backup': <Zap size={20} strokeWidth={1.5} />,
 };
 
 interface Props {
@@ -51,6 +54,7 @@ export default function PropertyDetailClient({ property, rooms, availability }: 
     const [isBooking, setIsBooking] = useState(false);
     const [showBookingForm, setShowBookingForm] = useState(false);
     const [error, setError] = useState('');
+    const [copied, setCopied] = useState(false);
 
     const pricePerNight = selectedRoom?.price_per_night || property.price_per_night;
     const nights = checkIn && checkOut
@@ -137,11 +141,28 @@ export default function PropertyDetailClient({ property, rooms, availability }: 
                     </div>
 
                     {/* Title & Location */}
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">{property.name}</h1>
-                        <div className="flex items-center gap-2 mt-2 text-gray-500">
+                    <div className="flex flex-col items-center text-center pb-4 border-b border-gray-100">
+                        <h1 className="text-3xl md:text-4xl font-serif font-bold text-gray-900">{property.name}</h1>
+                        <div className="flex items-center justify-center gap-2 mt-3 text-gray-500">
                             <MapPin size={16} />
                             <span>{property.address}, {property.area}, {property.city}</span>
+                        </div>
+                        <div className="mt-5">
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        await navigator.clipboard.writeText(window.location.href);
+                                        setCopied(true);
+                                        setTimeout(() => setCopied(false), 2000);
+                                    } catch (err) {
+                                        console.error('Failed to copy', err);
+                                    }
+                                }}
+                                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-50 text-gray-700 rounded-full transition-colors border border-gray-200 shadow-sm"
+                            >
+                                {copied ? <CheckCircle size={16} strokeWidth={2} className="text-green-500" /> : <Copy size={16} strokeWidth={2} />}
+                                <span className="font-medium text-sm">{copied ? 'Link Copied!' : 'Copy Link to Page'}</span>
+                            </button>
                         </div>
                     </div>
 
@@ -163,9 +184,9 @@ export default function PropertyDetailClient({ property, rooms, availability }: 
 
                     {/* Description */}
                     {property.description && (
-                        <div>
-                            <h2 className="text-lg font-semibold text-gray-900 mb-3">About this place</h2>
-                            <p className="text-gray-600 leading-relaxed">{property.description}</p>
+                        <div className="text-center md:text-left">
+                            <h2 className="text-xl font-serif font-semibold text-gray-900 mb-4">About this place</h2>
+                            <p className="text-gray-600 leading-relaxed text-lg font-light">{property.description}</p>
                         </div>
                     )}
 
@@ -191,9 +212,9 @@ export default function PropertyDetailClient({ property, rooms, availability }: 
 
                     {/* House Rules */}
                     {property.house_rules && (
-                        <div>
-                            <h2 className="text-lg font-semibold text-gray-900 mb-3">House Rules</h2>
-                            <p className="text-gray-600 leading-relaxed">{property.house_rules}</p>
+                        <div className="text-center md:text-left">
+                            <h2 className="text-xl font-serif font-semibold text-gray-900 mb-4">House Rules</h2>
+                            <p className="text-gray-600 leading-relaxed font-light">{property.house_rules}</p>
                         </div>
                     )}
                 </div>

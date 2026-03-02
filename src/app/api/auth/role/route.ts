@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
     if (roleList.includes('admin')) finalRole = 'admin';
     else if (roleList.includes('owner')) finalRole = 'owner';
     else if (roleList.includes('caretaker')) finalRole = 'caretaker';
+    else if (roleList.includes('call_operator')) finalRole = 'call_operator';
 
     return NextResponse.json({ role: finalRole, roles: roleList });
 }
