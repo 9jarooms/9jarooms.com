@@ -9,9 +9,10 @@ export default function Footer() {
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-12 md:gap-8">
                     {/* Brand / Mission */}
                     <div className="md:col-span-4">
-                        <Link href="/" className="inline-block mb-6">
+                        <Link href="/" className="inline-block mb-3">
                             <span className="font-serif text-2xl font-bold text-gray-900 tracking-tight">9jaRooms</span>
                         </Link>
+                        <p className="text-gray-900 font-serif italic mb-4">The Right Room, Every Time.</p>
                         <p className="text-gray-500 font-light leading-relaxed max-w-sm">
                             Redefining short-let living in Abuja. Experience the perfect blend of luxury, comfort, and Nigerian hospitality in our curated collection of serviced apartments.
                         </p>

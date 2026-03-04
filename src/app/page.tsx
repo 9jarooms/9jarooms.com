@@ -41,10 +41,13 @@ export default async function HomePage() {
 
           {/* Hero Content */}
           <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 pb-8 md:pb-12 text-center flex flex-col items-center">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif text-white leading-tight mb-8 md:mb-10 max-w-2xl italic mx-auto">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif text-white leading-tight mb-4 max-w-2xl italic mx-auto">
               Find your perfect stay<br />
               in the heart of Abuja.
             </h1>
+            <p className="text-white/90 text-xl md:text-2xl font-serif italic mb-8 md:mb-10 text-center">
+              The Right Room, Every Time.
+            </p>
 
             {/* Search Bar overlaid on the hero */}
             <div className="max-w-4xl w-full mx-auto">

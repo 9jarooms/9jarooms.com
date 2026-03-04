@@ -14,11 +14,11 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "9jaRooms — Serviced Apartments in Abuja",
-  description: "Book clean, comfortable serviced apartments in Abuja. Short-let stays in Maitama, Wuse II, Asokoro, and more.",
+  title: "9jaRooms — The Right Room, Every Time",
+  description: "9jaRooms: The Right Room, Every Time. Book clean, comfortable serviced apartments in Abuja. Short-let stays in Maitama, Wuse II, Asokoro, and more.",
   keywords: ["Abuja apartments", "short-let Abuja", "serviced apartments Nigeria", "9jaRooms", "Maitama apartments", "Wuse II"],
   openGraph: {
-    title: "9jaRooms — Serviced Apartments in Abuja",
+    title: "9jaRooms — The Right Room, Every Time",
     description: "Book clean, comfortable serviced apartments in Abuja.",
     type: "website",
   },
