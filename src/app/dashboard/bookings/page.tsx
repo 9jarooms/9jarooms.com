@@ -31,20 +31,20 @@ export default async function BookingsPage() {
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 {/* Table */}
                 <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full min-w-[600px]">
                         <thead>
                             <tr className="border-b border-gray-100">
-                                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Guest</th>
-                                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Property</th>
-                                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Dates</th>
-                                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Status</th>
+                                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3 whitespace-nowrap">Guest</th>
+                                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3 whitespace-nowrap">Property</th>
+                                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3 whitespace-nowrap">Dates</th>
+                                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3 whitespace-nowrap">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {bookings && bookings.length > 0 ? (
                                 bookings.map((booking) => (
                                     <tr key={booking.id} className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="px-5 py-4">
+                                        <td className="px-5 py-4 whitespace-nowrap">
                                             <div>
                                                 <p className="text-sm font-medium text-gray-900">{booking.guest_name}</p>
                                                 <p className="text-xs text-gray-400">{booking.guest_email}</p>
@@ -53,15 +53,15 @@ export default async function BookingsPage() {
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-5 py-4">
+                                        <td className="px-5 py-4 whitespace-nowrap">
                                             <p className="text-sm text-gray-900">{(booking as any).property?.name}</p>
                                             <p className="text-xs text-gray-400">{(booking as any).room?.name}</p>
                                         </td>
-                                        <td className="px-5 py-4">
+                                        <td className="px-5 py-4 whitespace-nowrap">
                                             <p className="text-sm text-gray-900">{booking.check_in}</p>
                                             <p className="text-xs text-gray-400">→ {booking.check_out} ({booking.nights} nights)</p>
                                         </td>
-                                        <td className="px-5 py-4">
+                                        <td className="px-5 py-4 whitespace-nowrap">
                                             <span className={`badge badge-${booking.status}`}>{booking.status}</span>
                                         </td>
                                     </tr>

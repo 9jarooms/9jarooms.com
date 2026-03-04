@@ -121,19 +121,19 @@ export default function CaretakersPage() {
             {/* Caretakers Table */}
             <div className="bg-white rounded-xl border border-gray-100">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[500px]">
                         <thead>
                             <tr className="text-left text-gray-500 border-b border-gray-100">
-                                <th className="px-5 py-3 font-medium">Name</th>
-                                <th className="px-5 py-3 font-medium">Email</th>
-                                <th className="px-5 py-3 font-medium">Phone</th>
-                                <th className="px-5 py-3 font-medium">Joined</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Name</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Email</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Phone</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Joined</th>
                             </tr>
                         </thead>
                         <tbody>
                             {caretakers.map(ct => (
                                 <tr key={ct.id} className="border-b border-gray-50 last:border-0">
-                                    <td className="px-5 py-3">
+                                    <td className="px-5 py-3 whitespace-nowrap">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 text-sm font-bold">
                                                 {ct.name[0]}
@@ -141,9 +141,9 @@ export default function CaretakersPage() {
                                             <span className="font-medium text-gray-900">{ct.name}</span>
                                         </div>
                                     </td>
-                                    <td className="px-5 py-3 text-gray-600">{ct.email}</td>
-                                    <td className="px-5 py-3 text-gray-600">{ct.phone || '—'}</td>
-                                    <td className="px-5 py-3 text-gray-400 text-xs">
+                                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{ct.email}</td>
+                                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{ct.phone || '—'}</td>
+                                    <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">
                                         {new Date(ct.created_at).toLocaleDateString()}
                                     </td>
                                 </tr>

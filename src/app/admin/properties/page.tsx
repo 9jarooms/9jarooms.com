@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, X, Building2, Pencil } from 'lucide-react';
+import { Plus, X, Building2, Pencil, User, Home, Star } from 'lucide-react';
 import MediaUploader from '@/components/MediaUploader';
 
 interface Property {
@@ -232,14 +232,14 @@ export default function AdminPropertiesPage() {
                             <button onClick={handleCloseModal}><X size={20} className="text-gray-400" /></button>
                         </div>
                         <form onSubmit={handleSave} className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="col-span-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="col-span-1 sm:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Property Name *</label>
                                     <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
                                         className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                                         placeholder="e.g. Lekki Luxury Studio" />
                                 </div>
-                                <div className="col-span-2">
+                                <div className="col-span-1 sm:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                                     <textarea rows={2} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
                                         className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
@@ -256,7 +256,7 @@ export default function AdminPropertiesPage() {
                                     <p className="text-xs text-gray-400 mt-1">Main image displayed in search results.</p>
                                 </div>
 
-                                <div className="col-span-2">
+                                <div className="col-span-1 sm:col-span-2">
                                     <h3 className="font-medium text-gray-900 mb-2">Property Media (Gallery)</h3>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Images</label>
@@ -308,7 +308,7 @@ export default function AdminPropertiesPage() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Owner *</label>
                                     <select required value={form.owner_id} onChange={e => setForm({ ...form, owner_id: e.target.value })}
@@ -382,8 +382,8 @@ export default function AdminPropertiesPage() {
                                     <Building2 size={20} />
                                 </div>
                                 {prop.is_featured && (
-                                    <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                        ★ Featured
+                                    <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                        <Star size={10} className="fill-amber-500 text-amber-500" /> Featured
                                     </span>
                                 )}
                             </div>
@@ -411,8 +411,8 @@ export default function AdminPropertiesPage() {
                         </p>
 
                         <div className="space-y-1.5 text-xs text-gray-500">
-                            <p>👤 Owner: <span className="text-gray-700">{prop.owner?.name || 'Not assigned'}</span></p>
-                            <p>🏠 Caretaker: <span className="text-gray-700">{prop.caretaker?.name || 'Not assigned'}</span></p>
+                            <p className="flex items-center gap-1.5"><User size={12} className="text-green-600" /> Owner: <span className="text-gray-700">{prop.owner?.name || 'Not assigned'}</span></p>
+                            <p className="flex items-center gap-1.5"><Home size={12} className="text-green-600" /> Caretaker: <span className="text-gray-700">{prop.caretaker?.name || 'Not assigned'}</span></p>
                         </div>
                     </div>
                 ))}

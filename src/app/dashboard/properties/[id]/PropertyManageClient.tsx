@@ -198,6 +198,7 @@ export default function PropertyManageClient({ property, rooms, availability, bo
                     checkOut: checkOutVal,
                     isManualBooking: true,
                     bookingType,
+                    bookingSource: bookingType === 'maintenance' ? 'maintenance' : 'caretaker',
                     notes: bookingForm.notes
                 }),
             });

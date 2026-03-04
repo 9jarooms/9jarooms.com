@@ -4,10 +4,9 @@ import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import PropertyCard from '@/components/PropertyCard';
 import SearchDatePicker from '@/components/SearchDatePicker';
-import { Search, MapPin, BedDouble } from 'lucide-react';
+import { Search, MapPin, BedDouble, SlidersHorizontal, X } from 'lucide-react';
 import { Property } from '@/types/database';
 import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 
 function PropertiesContent() {
     const searchParams = useSearchParams();
@@ -108,7 +107,6 @@ function PropertiesContent() {
         if (area) params.set('area', area);
         if (checkIn) params.set('check_in', checkIn);
         if (checkOut) params.set('check_out', checkOut);
-        if (type) params.set('type', type);
         if (bedrooms) params.set('bedrooms', bedrooms);
         if (minPrice) params.set('min_price', minPrice);
         if (maxPrice) params.set('max_price', maxPrice);
@@ -120,7 +118,6 @@ function PropertiesContent() {
 
     function clearFilters() {
         setArea('');
-        setType('');
         setBedrooms('');
         setMinPrice('');
         setMaxPrice('');
@@ -137,7 +134,6 @@ function PropertiesContent() {
         params.set('check_in', ci);
         params.set('check_out', co);
         if (guests) params.set('guests', guests);
-        if (type) params.set('type', type);
         if (bedrooms) params.set('bedrooms', bedrooms);
         router.push(`/properties?${params.toString()}`);
     }
@@ -187,17 +183,18 @@ function PropertiesContent() {
     const emptyState = getEmptyStateContent();
 
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-[#f7f7f7]">
             <Header />
 
-            <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
-                {/* Search & Filters Bar */}
-                <div className="sticky top-16 md:top-20 z-40 bg-white pt-4 pb-4 mb-6 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
-                    <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-0 lg:gap-4 p-0 lg:p-4 border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow relative bg-white overflow-visible">
+            <main className="pt-20 pb-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
+                {/* Search & Filters */}
+                <div className="lg:sticky lg:top-16 z-40 bg-[#f7f7f7] pt-3 pb-2 mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
 
+                    {/* Desktop: Horizontal search bar */}
+                    <div className="hidden lg:flex items-center gap-3 p-2 border border-gray-200 rounded-full shadow-sm hover:shadow-lg transition-all duration-300 bg-white">
                         {/* Location */}
-                        <div className="flex-1 w-full lg:w-auto px-4 py-3 lg:py-0 border-b lg:border-b-0 lg:border-r border-gray-200 relative">
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-0.5 ml-1">Where</label>
+                        <div className="flex-1 pl-5 pr-3 py-1.5 border-r border-gray-200 relative">
+                            <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Where</label>
                             <input
                                 type="text"
                                 placeholder="Anywhere in Abuja"
@@ -205,109 +202,175 @@ function PropertiesContent() {
                                 onChange={handleAreaChange}
                                 onFocus={() => setShowSuggestions(true)}
                                 onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                                className="w-full bg-transparent border-none text-base text-gray-900 font-medium placeholder-gray-400 p-0 focus:ring-0 truncate ml-1"
+                                className="w-full bg-transparent border-none text-sm text-gray-900 font-medium placeholder-gray-400 p-0 focus:ring-0"
                             />
-                            {/* Autocomplete Dropdown */}
                             {showSuggestions && filteredLocations.length > 0 && (
-                                <div className="absolute top-full left-0 w-full lg:w-[300px] mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-[60] max-h-[250px] overflow-y-auto">
-                                    <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Suggested Locations</div>
+                                <div className="absolute top-full left-0 w-[300px] mt-3 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-[60] max-h-[250px] overflow-y-auto">
+                                    <div className="px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Locations</div>
                                     {filteredLocations.map((loc) => (
                                         <button
                                             key={loc}
-                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center gap-3 transition-colors"
-                                            onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                selectLocation(loc);
-                                            }}
+                                            className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center gap-3 transition-colors"
+                                            onMouseDown={(e) => { e.preventDefault(); selectLocation(loc); }}
                                         >
-                                            <div className="p-2 bg-gray-100 rounded-lg text-gray-500">
-                                                <Search size={14} />
-                                            </div>
+                                            <MapPin size={14} className="text-green-500" />
                                             {loc}
                                         </button>
                                     ))}
                                 </div>
                             )}
                         </div>
-
                         {/* Date Picker */}
-                        <div className="w-full lg:w-auto border-b lg:border-b-0 lg:border-r border-gray-200 px-2 py-2 lg:py-0">
+                        <div className="border-r border-gray-200 pr-3">
                             <SearchDatePicker
                                 checkIn={checkIn}
                                 checkOut={checkOut}
                                 onChange={(start, end) => { setCheckIn(start); setCheckOut(end); }}
                             />
                         </div>
-
-                        {/* Bedrooms */}
-                        <div className="flex-1 w-full lg:w-auto px-4 py-3 lg:py-0 border-b lg:border-b-0 lg:border-r border-gray-200">
-                            <div className="flex items-center gap-2">
-                                <div className="p-1.5 bg-gray-100 rounded-lg text-gray-500">
-                                    <BedDouble size={16} />
-                                </div>
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-0.5">Bedrooms</label>
-                                    <select
-                                        value={bedrooms}
-                                        onChange={(e) => setBedrooms(e.target.value)}
-                                        className="w-full bg-transparent border-none text-sm text-gray-900 font-medium focus:ring-0 p-0 cursor-pointer -ml-1"
-                                    >
-                                        <option value="">Any</option>
-                                        {availableBedrooms.map((count) => (
-                                            <option key={count} value={count.toString()}>
-                                                {count} {count === 1 ? 'Bedroom' : 'Bedrooms'}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Type */}
-                        <div className="flex-1 w-full lg:w-auto px-4 py-3 lg:py-0 border-b lg:border-b-0 lg:border-r border-gray-200">
-                            <div className="flex items-center gap-2">
-                                <div className="p-1.5 bg-gray-100 rounded-lg text-gray-500">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                                    </svg>
-                                </div>
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-0.5">Type</label>
-                                    <select
-                                        value={type}
-                                        onChange={(e) => setType(e.target.value)}
-                                        className="w-full bg-transparent border-none text-sm text-gray-900 font-medium focus:ring-0 p-0 cursor-pointer -ml-1"
-                                    >
-                                        <option value="">All homes</option>
-                                        <option value="Entire Apartment">Entire Apartment</option>
-                                        <option value="Shared Apartment">Shared Apartment</option>
-                                        <option value="Studio">Studio</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Search Button */}
-                        <div className="p-2 lg:p-0 flex justify-end lg:justify-center w-full lg:w-auto">
-                            <button
-                                onClick={applyFilters}
-                                className="bg-green-500 hover:bg-green-600 text-white w-full lg:w-auto p-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-md"
+                        {/* Rooms */}
+                        <div className="px-3 py-1.5">
+                            <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Rooms</label>
+                            <select
+                                value={bedrooms}
+                                onChange={(e) => setBedrooms(e.target.value)}
+                                className="bg-transparent border-none text-sm text-gray-900 font-medium focus:ring-0 p-0 cursor-pointer"
                             >
-                                <Search size={20} className="text-white" />
-                                <span className="lg:hidden font-semibold">Search</span>
-                            </button>
+                                <option value="">Any</option>
+                                <option value="studio">Studio</option>
+                                {availableBedrooms.map((count) => (
+                                    <option key={count} value={count.toString()}>
+                                        {count} {count === 1 ? 'Bed' : 'Beds'}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        {/* Search Button */}
+                        <button
+                            onClick={applyFilters}
+                            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white p-3.5 rounded-full flex items-center justify-center transition-all shadow-md hover:shadow-lg hover:scale-105 shrink-0"
+                        >
+                            <Search size={18} />
+                        </button>
+                    </div>
+
+                    {/* Mobile: Elevated search card */}
+                    <div className="lg:hidden">
+                        <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-3">
+                            {/* Search input row */}
+                            <div className="flex items-center gap-2.5">
+                                <div className="flex-1 flex items-center gap-2.5 bg-gray-50 rounded-xl px-3 py-2.5">
+                                    <Search size={16} className="text-gray-400 shrink-0" />
+                                    <input
+                                        id="mobile-search-input"
+                                        type="text"
+                                        placeholder="Search area, city..."
+                                        value={area}
+                                        onChange={handleAreaChange}
+                                        onFocus={() => setShowSuggestions(true)}
+                                        onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                                        className="w-full bg-transparent border-none text-sm text-gray-900 placeholder-gray-400 p-0 focus:ring-0"
+                                    />
+                                </div>
+                                <button
+                                    onClick={applyFilters}
+                                    className="bg-gradient-to-r from-green-500 to-green-600 text-white p-2.5 rounded-xl shrink-0 shadow-sm hover:shadow-md transition-all"
+                                >
+                                    <Search size={16} />
+                                </button>
+                            </div>
+
+                            {/* Mobile autocomplete dropdown */}
+                            {showSuggestions && filteredLocations.length > 0 && (
+                                <div className="mt-2 bg-white rounded-xl border border-gray-100 py-1 max-h-[180px] overflow-y-auto">
+                                    {filteredLocations.map((loc) => (
+                                        <button
+                                            key={loc}
+                                            className="w-full text-left px-3 py-2 hover:bg-green-50 text-sm text-gray-700 font-medium flex items-center gap-2.5 transition-colors"
+                                            onMouseDown={(e) => { e.preventDefault(); selectLocation(loc); }}
+                                        >
+                                            <MapPin size={13} className="text-green-500" />
+                                            {loc}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Filter chips inside card */}
+                            <div className="flex items-center gap-1.5 mt-2.5 overflow-x-auto scrollbar-hide">
+                                <div className="shrink-0">
+                                    <SearchDatePicker
+                                        checkIn={checkIn}
+                                        checkOut={checkOut}
+                                        onChange={(start, end) => { setCheckIn(start); setCheckOut(end); }}
+                                    />
+                                </div>
+                                <select
+                                    value={bedrooms}
+                                    onChange={(e) => { setBedrooms(e.target.value); setTimeout(applyFilters, 100); }}
+                                    className={`shrink-0 px-3 py-2 rounded-xl text-xs font-medium focus:ring-0 cursor-pointer appearance-none border transition-colors ${bedrooms ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-600'
+                                        }`}
+                                >
+                                    <option value="">Rooms</option>
+                                    <option value="studio">Studio</option>
+                                    {availableBedrooms.map((count) => (
+                                        <option key={count} value={count.toString()}>{count} Bed{count !== 1 ? 's' : ''}</option>
+                                    ))}
+                                </select>
+                                {/* Sort by price chip */}
+                                <button
+                                    onClick={() => {
+                                        const newSort = sort === 'price_asc' ? 'price_desc' : 'price_asc';
+                                        setSort(newSort);
+                                        setTimeout(applyFilters, 100);
+                                    }}
+                                    className={`shrink-0 px-3 py-2 rounded-xl text-xs font-medium border transition-colors flex items-center gap-1 ${sort.startsWith('price_') ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-600'
+                                        }`}
+                                >
+                                    ₦ {sort === 'price_asc' ? 'Low → High' : sort === 'price_desc' ? 'High → Low' : 'Price'}
+                                </button>
+                                {/* Price range chip */}
+                                <div className="relative group shrink-0">
+                                    <button className={`px-3 py-2 rounded-xl text-xs font-medium border transition-colors flex items-center gap-1 ${(minPrice || maxPrice) ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-600'
+                                        }`}>
+                                        ₦ Range
+                                        {(minPrice || maxPrice) && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
+                                    </button>
+                                    <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 p-3 z-50 hidden group-hover:block hover:block">
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative flex-1">
+                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₦</span>
+                                                <input type="number" placeholder="Min" value={minPrice}
+                                                    onChange={(e) => setMinPrice(e.target.value)}
+                                                    className="w-full pl-5 pr-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-green-400 no-spinner"
+                                                />
+                                            </div>
+                                            <span className="text-gray-300 text-xs">–</span>
+                                            <div className="relative flex-1">
+                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₦</span>
+                                                <input type="number" placeholder="Max" value={maxPrice}
+                                                    onChange={(e) => setMaxPrice(e.target.value)}
+                                                    className="w-full pl-5 pr-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-green-400 no-spinner"
+                                                />
+                                            </div>
+                                        </div>
+                                        <button onClick={applyFilters}
+                                            className="w-full mt-2 text-xs font-medium text-white bg-green-500 px-3 py-1.5 rounded-lg hover:bg-green-600"
+                                        >Apply</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Filter Tags / SortRow */}
-                    <div className="flex items-center justify-between mt-6 relative">
-                        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                    {/* Sort row + count — desktop only */}
+                    <div className="hidden lg:flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
                             {/* Price Filter Dropdown */}
                             <div className="relative group">
-                                <button className="whitespace-nowrap px-4 py-2 border border-gray-200 rounded-full text-sm font-medium hover:border-black transition-colors flex items-center gap-2">
+                                <button className="whitespace-nowrap px-3 py-1.5 border border-gray-200 rounded-full text-xs font-medium hover:border-gray-900 transition-colors flex items-center gap-1.5 bg-white">
                                     Price
-                                    {(minPrice || maxPrice) && <span className="w-2 h-2 bg-green-500 rounded-full"></span>}
+                                    {(minPrice || maxPrice) && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
                                 </button>
                                 <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 z-50 hidden group-hover:block hover:block">
                                     <h3 className="text-sm font-semibold text-gray-900 mb-3">Price range (nightly)</h3>
@@ -319,10 +382,10 @@ function PropertiesContent() {
                                                 placeholder="Min"
                                                 value={minPrice}
                                                 onChange={(e) => setMinPrice(e.target.value)}
-                                                className="w-full pl-6 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-black transition-colors no-spinner"
+                                                className="w-full pl-6 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 transition-colors no-spinner"
                                             />
                                         </div>
-                                        <span className="text-gray-300">-</span>
+                                        <span className="text-gray-300">–</span>
                                         <div className="relative w-full">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">₦</span>
                                             <input
@@ -330,14 +393,14 @@ function PropertiesContent() {
                                                 placeholder="Max"
                                                 value={maxPrice}
                                                 onChange={(e) => setMaxPrice(e.target.value)}
-                                                className="w-full pl-6 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-black transition-colors no-spinner"
+                                                className="w-full pl-6 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 transition-colors no-spinner"
                                             />
                                         </div>
                                     </div>
                                     <div className="mt-4 flex justify-end">
                                         <button
                                             onClick={applyFilters}
-                                            className="text-sm font-medium text-white bg-black px-4 py-2 rounded-lg hover:bg-gray-800"
+                                            className="text-sm font-medium text-white bg-green-500 px-4 py-2 rounded-lg hover:bg-green-600"
                                         >
                                             Apply
                                         </button>
@@ -345,28 +408,51 @@ function PropertiesContent() {
                                 </div>
                             </div>
 
-                            <button onClick={clearFilters} className="whitespace-nowrap px-4 py-2 border border-gray-200 rounded-full text-sm font-medium hover:border-black transition-colors">
-                                Clear filters
+                            <button onClick={clearFilters} className="whitespace-nowrap px-3 py-1.5 border border-gray-200 rounded-full text-xs font-medium hover:border-gray-900 transition-colors bg-white">
+                                Clear
                             </button>
                             <select
                                 value={sort}
                                 onChange={(e) => { setSort(e.target.value); setTimeout(applyFilters, 100); }}
-                                className="whitespace-nowrap px-4 py-2 border border-gray-200 rounded-full text-sm font-medium hover:border-black transition-colors bg-white cursor-pointer appearance-none"
+                                className="whitespace-nowrap px-3 py-1.5 border border-gray-200 rounded-full text-xs font-medium hover:border-gray-900 transition-colors bg-white cursor-pointer appearance-none"
                             >
                                 <option value="newest">Newest</option>
-                                <option value="price_asc">Price: Low to High</option>
-                                <option value="price_desc">Price: High to Low</option>
+                                <option value="price_asc">Price ↑</option>
+                                <option value="price_desc">Price ↓</option>
                             </select>
                         </div>
-                        <div className="text-sm text-gray-500 hidden sm:block">
-                            {properties.length} {properties.length === 1 ? 'stay' : 'stays'} found
+                        <div className="text-xs text-gray-400 shrink-0 pl-3">
+                            {properties.length} {properties.length === 1 ? 'stay' : 'stays'}
                         </div>
+                    </div>
+
+                    {/* Mobile sort row */}
+                    <div className="lg:hidden flex items-center justify-between mt-3">
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={sort}
+                                onChange={(e) => { setSort(e.target.value); setTimeout(applyFilters, 100); }}
+                                className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-600 focus:ring-0 cursor-pointer appearance-none"
+                            >
+                                <option value="newest">Newest first</option>
+                                <option value="price_asc">Price: Low → High</option>
+                                <option value="price_desc">Price: High → Low</option>
+                            </select>
+                            {(area || checkIn || bedrooms || type || minPrice || maxPrice) && (
+                                <button onClick={clearFilters} className="text-xs text-green-600 font-medium underline">
+                                    Clear all
+                                </button>
+                            )}
+                        </div>
+                        <span className="text-xs text-gray-400">
+                            {properties.length} {properties.length === 1 ? 'stay' : 'stays'}
+                        </span>
                     </div>
                 </div>
 
                 {/* Results Grid */}
                 {loading ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-6">
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
                             <div key={i} className="animate-pulse">
                                 <div className="aspect-square bg-gray-200 rounded-xl mb-3"></div>
@@ -376,7 +462,7 @@ function PropertiesContent() {
                         ))}
                     </div>
                 ) : properties.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-6">
                         {properties.map((property) => (
                             <PropertyCard key={property.id} property={property} />
                         ))}
@@ -429,7 +515,7 @@ function PropertiesContent() {
                         {suggestions.length > 0 && (
                             <div className="mt-16 text-left">
                                 <h4 className="text-xl font-bold text-gray-900 mb-6">{emptyState.suggestionsTitle}</h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10">
+                                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-6">
                                     {suggestions.map((property) => (
                                         <PropertyCard key={property.id} property={property} />
                                     ))}
@@ -439,7 +525,6 @@ function PropertiesContent() {
                     </div>
                 )}
             </main>
-            <Footer />
         </div>
     );
 }

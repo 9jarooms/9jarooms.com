@@ -131,82 +131,80 @@ export default function SearchDatePicker({ checkIn: initialCheckIn, checkOut: in
         <div className="relative" ref={containerRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50 rounded-xl border border-gray-200 transition-colors"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors border ${checkInDate ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-600 hover:bg-gray-100'
+                    }`}
             >
-                <div className="p-1.5 bg-gray-100 rounded-lg text-gray-500">
-                    <CalendarIcon size={16} />
-                </div>
-                <div className="text-left">
-                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">When</div>
-                    <div className="text-sm font-medium text-gray-900">
-                        {checkInDate ? (
-                            <>
-                                {format(checkInDate, 'MMM d')}
-                                {checkOutDate ? ` - ${format(checkOutDate, 'MMM d')}` : ' - Add dates'}
-                            </>
-                        ) : (
-                            'Add dates'
-                        )}
-                    </div>
-                </div>
+                <CalendarIcon size={13} className="shrink-0" />
+                <span className="whitespace-nowrap">
+                    {checkInDate ? (
+                        <>
+                            {format(checkInDate, 'MMM d')}
+                            {checkOutDate ? ` – ${format(checkOutDate, 'MMM d')}` : '...'}
+                        </>
+                    ) : (
+                        'Dates'
+                    )}
+                </span>
             </button>
 
             {isOpen && (
-                <div className="absolute top-full left-0 mt-2 w-[320px] bg-white rounded-2xl shadow-xl border border-gray-100 p-4 z-50">
-                    {/* Header */}
-                    <div className="flex items-center justify-between mb-4">
-                        <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1 hover:bg-gray-100 rounded-full">
-                            <ChevronLeft size={20} />
-                        </button>
-                        <span className="font-semibold text-gray-900">{format(currentMonth, 'MMMM yyyy')}</span>
-                        <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1 hover:bg-gray-100 rounded-full">
-                            <ChevronRight size={20} />
-                        </button>
-                    </div>
+                <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 sm:pt-0 sm:block sm:relative sm:inset-auto" onClick={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}>
+                    <div className="w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-[100] sm:absolute sm:top-full sm:left-0 sm:mt-2 sm:shadow-xl">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-4">
+                            <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1 hover:bg-gray-100 rounded-full">
+                                <ChevronLeft size={20} />
+                            </button>
+                            <span className="font-semibold text-gray-900">{format(currentMonth, 'MMMM yyyy')}</span>
+                            <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1 hover:bg-gray-100 rounded-full">
+                                <ChevronRight size={20} />
+                            </button>
+                        </div>
 
-                    {/* Days Header */}
-                    <div className="grid grid-cols-7 mb-2">
-                        {DAYS.map(day => (
-                            <div key={day} className="text-center text-xs font-medium text-gray-400">
-                                {day.substr(0, 2)}
-                            </div>
-                        ))}
-                    </div>
+                        {/* Days Header */}
+                        <div className="grid grid-cols-7 mb-2">
+                            {DAYS.map(day => (
+                                <div key={day} className="text-center text-xs font-medium text-gray-400">
+                                    {day.substr(0, 2)}
+                                </div>
+                            ))}
+                        </div>
 
-                    {/* Calendar Grid */}
-                    <div className="grid grid-cols-7 gap-y-1">
-                        {Array.from({ length: startPadding }).map((_, i) => (
-                            <div key={`pad-${i}`} />
-                        ))}
-                        {days.map(day => (
-                            <div key={day.toISOString()} className="flex justify-center">
-                                <button
-                                    onClick={() => handleDateClick(day)}
-                                    className={getDayClass(day)}
-                                >
-                                    {format(day, 'd')}
-                                </button>
-                            </div>
-                        ))}
-                    </div>
+                        {/* Calendar Grid */}
+                        <div className="grid grid-cols-7 gap-y-1">
+                            {Array.from({ length: startPadding }).map((_, i) => (
+                                <div key={`pad-${i}`} />
+                            ))}
+                            {days.map(day => (
+                                <div key={day.toISOString()} className="flex justify-center">
+                                    <button
+                                        onClick={() => handleDateClick(day)}
+                                        className={getDayClass(day)}
+                                    >
+                                        {format(day, 'd')}
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
 
-                    <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between">
-                        <button
-                            onClick={() => {
-                                setCheckInDate(null);
-                                setCheckOutDate(null);
-                                onChange('', '');
-                            }}
-                            className="text-xs font-medium text-gray-500 hover:text-black underline"
-                        >
-                            Clear dates
-                        </button>
-                        <button
-                            onClick={() => setIsOpen(false)}
-                            className="text-xs font-medium text-white bg-black px-3 py-1.5 rounded-lg"
-                        >
-                            Close
-                        </button>
+                        <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between">
+                            <button
+                                onClick={() => {
+                                    setCheckInDate(null);
+                                    setCheckOutDate(null);
+                                    onChange('', '');
+                                }}
+                                className="text-xs font-medium text-gray-500 hover:text-black underline"
+                            >
+                                Clear dates
+                            </button>
+                            <button
+                                onClick={() => setIsOpen(false)}
+                                className="text-xs font-medium text-white bg-black px-3 py-1.5 rounded-lg"
+                            >
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

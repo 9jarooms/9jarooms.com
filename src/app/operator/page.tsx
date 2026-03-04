@@ -21,7 +21,7 @@ export default async function OperatorPage() {
         <div className="page-enter">
             <div className="mb-8">
                 <h1 className="text-2xl font-bold text-gray-900">Call Operator Dashboard</h1>
-                <p className="text-gray-500 mt-1">Select a room and dates to generate a payment link.</p>
+                <p className="text-gray-500 mt-1">Search properties, check availability, and generate payment links for customers.</p>
             </div>
 
             <OperatorDashboardClient

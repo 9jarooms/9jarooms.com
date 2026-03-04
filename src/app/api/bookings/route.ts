@@ -7,7 +7,7 @@ import { addDays, format } from 'date-fns';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { roomId, propertyId, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking } = body;
+        const { roomId, propertyId, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
 
         // Validate required fields
         if (!roomId || !propertyId || !guestName || !checkIn || !checkOut) {
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // 1. Check availability
+        // 1. Generate date array (check-in to day before check-out)
         const checkInDate = new Date(checkIn);
         const checkOutDate = new Date(checkOut);
         const dates: string[] = [];
@@ -89,12 +89,14 @@ export async function POST(request: NextRequest) {
             current = addDays(current, 1);
         }
 
+        // Quick pre-check: fast-fail if dates are obviously unavailable
+        // (This is just an optimization — the real protection is below)
         const { data: unavailable } = await supabase
             .from('availability')
             .select('date')
             .eq('room_id', roomId)
             .in('date', dates)
-            .neq('status', 'available');
+            .not('status', 'eq', 'available');
 
         if (unavailable && unavailable.length > 0) {
             return NextResponse.json(
@@ -113,12 +115,12 @@ export async function POST(request: NextRequest) {
         if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
 
         const property = (room as any).property;
-        const owner = property?.owner; // Not strictly needed for internal booking payment, but good for record
+        const owner = property?.owner;
         const pricePerNight = room.price_per_night || property.price_per_night;
         const nightCount = dates.length;
 
         // Handle Maintenance vs Guest Booking type
-        const bookingType = body.bookingType || 'guest'; // 'guest' or 'maintenance'
+        const bookingType = body.bookingType || 'guest';
 
         let totalAmount = pricePerNight * nightCount;
         if (bookingType === 'maintenance') {
@@ -136,12 +138,18 @@ export async function POST(request: NextRequest) {
         }
 
         // 3. Create Booking
-        // Status: 'confirmed' if internal, 'pending' if guest
         const initialStatus = isInternalBooking ? 'confirmed' : 'pending';
         const reference = generateReference();
         const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 mins
 
-        // Handle Maintenance vs Guest Booking type (Defined above)
+        // Determine booking source for CRM tracking
+        let source = bookingSource || 'website';
+        if (!bookingSource) {
+            if (isInternalBooking && bookingType === 'maintenance') source = 'maintenance';
+            else if (isInternalBooking) source = 'caretaker';
+            else if (whatsappUserPhone) source = 'whatsapp';
+        }
+
         const bookingNotes = body.notes || (isInternalBooking
             ? (bookingType === 'maintenance' ? 'Blocked for Maintenance' : 'Manual Booking (Caretaker/Agent)')
             : null);
@@ -156,27 +164,27 @@ export async function POST(request: NextRequest) {
                 guest_name: guestName,
                 guest_email: finalGuestEmail,
                 guest_phone: guestPhone || null,
-                user_id: user?.id || null, // Track who made the booking
+                user_id: user?.id || null,
                 check_in: checkIn,
                 check_out: checkOut,
                 nights: nightCount,
                 price_per_night: pricePerNight,
                 total_amount: totalAmount,
                 status: initialStatus,
-                paystack_reference: reference, // Still generate reference for uniqueness/tracking
-                expires_at: initialStatus === 'pending' ? expiresAt.toISOString() : null, // No expiry if confirmed
-                notes: bookingNotes
+                paystack_reference: reference,
+                expires_at: initialStatus === 'pending' ? expiresAt.toISOString() : null,
+                notes: bookingNotes,
+                booking_source: source
             })
             .select()
             .single();
 
         if (bookingError) throw new Error(bookingError.message);
 
-        // 4. Hold/Book Dates
-        // Status: 'booked' / 'maintenance' if internal, 'held' if guest pending
+        // 4. Atomic date reservation with race-condition protection
+        // Strategy: INSERT availability rows. If a row already exists for a date
+        // with a non-available status, upsert will overwrite — so we verify after.
         let availabilityStatus = isInternalBooking ? 'booked' : 'held';
-
-        // User requested maintenance should just show as "booked" on the platform
         if (isInternalBooking && bookingType === 'maintenance') {
             availabilityStatus = 'booked';
         }
@@ -192,7 +200,43 @@ export async function POST(request: NextRequest) {
             .from('availability')
             .upsert(availabilityRows, { onConflict: 'room_id,date' });
 
-        // 5. Initialize Paystack (ONLY if NOT internal)
+        // 5. VERIFY: Check that ALL dates now belong to OUR booking
+        // This catches the race condition: if another booking snuck in
+        // between our check and our upsert, some dates will have a
+        // different booking_id
+        const { data: verifyRows } = await supabase
+            .from('availability')
+            .select('date, booking_id, status')
+            .eq('room_id', roomId)
+            .in('date', dates);
+
+        const conflictDates = (verifyRows || []).filter(
+            row => row.booking_id !== booking.id && row.status !== 'available'
+        );
+
+        if (conflictDates.length > 0) {
+            // RACE LOST: Another booking claimed some dates first
+            // Roll back: delete our availability rows and cancel booking
+            console.warn(`[Race Condition] Booking ${booking.id} lost race for dates: ${conflictDates.map(d => d.date).join(', ')}`);
+
+            await supabase
+                .from('availability')
+                .delete()
+                .eq('room_id', roomId)
+                .eq('booking_id', booking.id);
+
+            await supabase
+                .from('bookings')
+                .update({ status: 'cancelled', notes: 'Auto-cancelled: dates taken by another booking' })
+                .eq('id', booking.id);
+
+            return NextResponse.json(
+                { error: 'Sorry, those dates were just booked by someone else. Please try different dates.' },
+                { status: 409 }
+            );
+        }
+
+        // 6. Initialize Paystack (ONLY if NOT internal)
         if (!isInternalBooking) {
             try {
                 const payment = await initializePayment({

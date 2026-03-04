@@ -189,23 +189,23 @@ export default function OwnersPage() {
             {/* Owners Table */}
             <div className="bg-white rounded-xl border border-gray-100">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[600px]">
                         <thead>
                             <tr className="text-left text-gray-500 border-b border-gray-100">
-                                <th className="px-5 py-3 font-medium">Name</th>
-                                <th className="px-5 py-3 font-medium">Email</th>
-                                <th className="px-5 py-3 font-medium">Phone</th>
-                                <th className="px-5 py-3 font-medium">Paystack</th>
-                                <th className="px-5 py-3 font-medium">Actions</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Name</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Email</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Phone</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Paystack</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {owners.map(owner => (
                                 <tr key={owner.id} className="border-b border-gray-50 last:border-0">
-                                    <td className="px-5 py-3 font-medium text-gray-900">{owner.name}</td>
-                                    <td className="px-5 py-3 text-gray-600">{owner.email}</td>
-                                    <td className="px-5 py-3 text-gray-600">{owner.phone || '—'}</td>
-                                    <td className="px-5 py-3">
+                                    <td className="px-5 py-3 font-medium text-gray-900 whitespace-nowrap">{owner.name}</td>
+                                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{owner.email}</td>
+                                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{owner.phone || '—'}</td>
+                                    <td className="px-5 py-3 whitespace-nowrap">
                                         {owner.paystack_subaccount_code ? (
                                             <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700">
                                                 {owner.paystack_subaccount_code}
@@ -216,7 +216,7 @@ export default function OwnersPage() {
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-5 py-3">
+                                    <td className="px-5 py-3 whitespace-nowrap">
                                         {!owner.paystack_subaccount_code && (
                                             <button onClick={() => openPaystack(owner)}
                                                 className="text-xs text-red-500 hover:text-red-600 font-medium">

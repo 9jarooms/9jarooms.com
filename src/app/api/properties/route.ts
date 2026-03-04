@@ -73,25 +73,31 @@ export async function GET(request: NextRequest) {
 
         // Helper function to check availability
         // Same-day checkout/checkin is allowed (checkout 12pm, checkin 3pm)
-        // So we use: new booking overlaps if start < bEnd AND end > bStart
-        // But same-day transitions are OK: if start === bEnd (new checkin = old checkout) → allowed
+        // We compare date strings (YYYY-MM-DD) to avoid timezone issues
+        const toDateStr = (d: Date | string): string => {
+            if (typeof d === 'string') return d.split('T')[0];
+            return d.toISOString().split('T')[0];
+        };
+
         const isPropertyAvailable = (property: any, start: Date, end: Date) => {
             const rooms = property.rooms || [];
+            const startStr = toDateStr(start);
+            const endStr = toDateStr(end);
+
             return rooms.some((room: any) => {
                 const bookings = room.bookings || [];
                 const hasOverlap = bookings.some((booking: any) => {
                     if (booking.status === 'cancelled') return false;
-                    const bStart = new Date(booking.check_in);
-                    const bEnd = new Date(booking.check_out);
-                    // Allow same-day: checkin on checkout day is OK
-                    // Overlap = new start is BEFORE existing end AND new end is AFTER existing start
-                    // But NOT when they only touch (start === bEnd or end === bStart)
-                    const startTime = start.getTime();
-                    const endTime = end.getTime();
-                    const bStartTime = bStart.getTime();
-                    const bEndTime = bEnd.getTime();
-                    const overlaps = (startTime < bEndTime && endTime > bStartTime)
-                        && !(startTime === bEndTime || endTime === bStartTime);
+                    const bStartStr = toDateStr(booking.check_in);
+                    const bEndStr = toDateStr(booking.check_out);
+
+                    // Same-day transitions are allowed:
+                    // New checkin ON existing checkout day → OK (startStr === bEndStr)
+                    // New checkout ON existing checkin day → OK (endStr === bStartStr)
+                    if (startStr === bEndStr || endStr === bStartStr) return false;
+
+                    // Standard overlap: start < bEnd AND end > bStart
+                    const overlaps = startStr < bEndStr && endStr > bStartStr;
                     if (overlaps) {
                         console.log(`  [Collision] Property ${property.name} (Room ${room.id}) overlaps with booking ${booking.check_in} to ${booking.check_out}`);
                     }

@@ -109,7 +109,7 @@ export default function AdminShell({ children, userName }: { children: React.Rea
             </aside>
 
             {/* Main content */}
-            <div className="flex-1 flex flex-col min-h-screen">
+            <div className="flex-1 flex flex-col min-h-screen min-w-0 overflow-x-hidden">
                 {/* Top bar */}
                 <header className="bg-white border-b border-gray-100 px-4 py-3 lg:hidden">
                     <button onClick={() => setSidebarOpen(true)} className="text-gray-600">
@@ -118,7 +118,7 @@ export default function AdminShell({ children, userName }: { children: React.Rea
                 </header>
 
                 {/* Content */}
-                <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+                <main className="flex-1 p-4 sm:p-6 lg:p-8 w-full max-w-full">{children}</main>
             </div>
         </div>
     );

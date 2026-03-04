@@ -62,22 +62,19 @@ export default function BookingCalendar({
         return status === 'booked' || status === 'held' || status === 'maintenance' || status === 'cleaning';
     };
 
-    // Check if a date is a checkout day (= the last day of someone's booking)
-    // In Airbnb model: checkout day IS available for new checkin
-    // A date is a "checkout day" if it is booked but the day BEFORE it is also booked
-    // OR more simply: it's the first booked date in a streak (the transition point)
-    // For our model: a booked date whose previous day is also booked = mid-booking
-    // A booked date whose previous day is NOT booked = checkin day of that booking
-    // We want to allow checkin on someone else's checkout day
-    // Actually the simpler approach: the checkout day is the FIRST unavailable day after available days
-    // Let's just check: is the next day available? If yes, this is a checkout day
+    // Check if a date is a checkout day = the first day AFTER a booking block.
+    // In our system: a booking from Mar 17-24 marks dates 17-23 as 'booked'.
+    // The checkout day (Mar 24) is NOT in the availability table, so it's already
+    // shown as available. We don't need to special-case booked dates.
+    // 
+    // However, we DO need to identify checkout days for visual styling:
+    // A date where the PREVIOUS day is booked but THIS day is available = checkout day.
     const isCheckoutDay = (date: Date): boolean => {
         const dateStr = format(date, 'yyyy-MM-dd');
-        const nextDateStr = format(addDays(date, 1), 'yyyy-MM-dd');
-        // This date is booked, and the next day is either available or not in the map
-        const thisBooked = statusMap[dateStr] === 'booked' || statusMap[dateStr] === 'held';
-        const nextAvailable = !statusMap[nextDateStr] || statusMap[nextDateStr] === 'available';
-        return thisBooked && nextAvailable;
+        const prevDateStr = format(addDays(date, -1), 'yyyy-MM-dd');
+        const thisAvailable = !statusMap[dateStr] || statusMap[dateStr] === 'available';
+        const prevBooked = statusMap[prevDateStr] === 'booked' || statusMap[prevDateStr] === 'held';
+        return thisAvailable && prevBooked;
     };
 
     // Check if this is the start of a booking block (first booked day in a streak)
@@ -122,26 +119,24 @@ export default function BookingCalendar({
             // Same as check-in = cancel
             if (isSameDay(date, checkIn)) return false;
 
+            // If this date is booked, it's not a valid checkout
+            if (fullyBooked) return true;
+
             const nextUnavailable = getNextUnavailableDate(checkIn);
 
             if (nextUnavailable) {
-                // Allow checking out ON the booked date (same-day transition)
-                if (isSameDay(date, nextUnavailable)) return false;
-                // Block anything AFTER the barrier
-                if (isAfter(date, nextUnavailable)) return true;
+                // Block anything ON or AFTER the next booked date
+                // (The checkout day is the day BEFORE the next booking starts,
+                // or the booked date itself is not valid for checkout)
+                if (isSameDay(date, nextUnavailable) || isAfter(date, nextUnavailable)) return true;
             }
 
             // Available dates between check-in and barrier are all valid
             return false;
         }
 
-        // Selecting CHECK-IN date
-        if (fullyBooked) {
-            // If this is a checkout day (end of someone's booking), 
-            // it's valid for new check-in (Airbnb model)
-            if (isCheckoutDay(date)) return false;
-            return true;
-        }
+        // Selecting CHECK-IN date: booked dates are always disabled
+        if (fullyBooked) return true;
 
         return false;
     };
