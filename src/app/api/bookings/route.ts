@@ -266,12 +266,13 @@ export async function POST(request: NextRequest) {
         // 6. Initialize Paystack (ONLY if NOT internal and NOT operator)
         if (!isInternalBooking && bookingSource !== 'operator') {
             try {
+                const origin = request.nextUrl.origin;
                 const payment = await initializePayment({
                     email: guestEmail,
                     amount: totalAmount * 100, // kobo
                     reference: reference,
                     subaccount: subaccount,
-                    callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/booking/confirm`, // Verifies payment
+                    callbackUrl: `${origin}/booking/confirm`, // Verifies payment
                     metadata: {
                         booking_id: booking.id,
                         property_name: property.name,
