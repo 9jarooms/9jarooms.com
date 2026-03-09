@@ -10,7 +10,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { roomId, propertyId, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource, contactPreference, isStayRequest } = body;
+        const { roomId, propertyId, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
 
         // Validate required fields
         if (!roomId || !propertyId || !guestName || !checkIn || !checkOut) {
@@ -152,9 +152,9 @@ export async function POST(request: NextRequest) {
             totalAmount = 0;
         }
 
-        // Get owner's Paystack subaccount from the database (skip for stay requests)
+        // Get owner's Paystack subaccount from the database
         const subaccount = (owner as any)?.paystack_subaccount_code;
-        if (!isInternalBooking && !isStayRequest && !subaccount) {
+        if (!isInternalBooking && !subaccount) {
             console.error(`[Booking API] Owner has no Paystack subaccount for property ${propertyId}`);
             return NextResponse.json(
                 { error: 'Property not configured for online payments. Please contact support.' },
@@ -177,9 +177,7 @@ export async function POST(request: NextRequest) {
 
         const bookingNotes = body.notes || (isInternalBooking
             ? (bookingType === 'maintenance' ? 'Blocked for Maintenance' : 'Manual Booking (Caretaker/Agent)')
-            : isStayRequest
-                ? `Stay Request — Contact via ${contactPreference || 'whatsapp'}`
-                : null);
+            : null);
 
         // If it's a manual booking from an operator, we WANT to use the guestEmail they entered
         // Only fallback to user.email if it's a maintenance block or caretaker booking themselves
@@ -265,8 +263,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 6. Initialize Paystack (ONLY if NOT internal, NOT stay request, and NOT operator)
-        if (!isInternalBooking && !isStayRequest && bookingSource !== 'operator') {
+        // 6. Initialize Paystack (ONLY if NOT internal and NOT operator)
+        if (!isInternalBooking && bookingSource !== 'operator') {
             try {
                 const payment = await initializePayment({
                     email: guestEmail,
@@ -307,36 +305,6 @@ export async function POST(request: NextRequest) {
                     warning: payError?.message || 'Payment initialization failed. Please retry from booking page.',
                 });
             }
-        } else if (isStayRequest) {
-            // Send email to the team to notify them of the request
-            try {
-                await resend.emails.send({
-                    from: '9jaRooms <9jarooms@thewoodlandswuye.com>',
-                    to: ['9jarooms@thewoodlandswuye.com'], // Team email
-                    subject: `New Stay Request from ${guestName}`,
-                    html: `
-                        <h2>New Stay Request Received!</h2>
-                        <p><strong>Customer Name:</strong> ${guestName}</p>
-                        <p><strong>Contact Info:</strong> ${guestPhone || ''} | ${guestEmail || ''} ${whatsappUserPhone ? `| WhatsApp: ${whatsappUserPhone}` : ''}</p>
-                        <p><strong>Property:</strong> ${property.name}</p>
-                        <p><strong>Room:</strong> ${room.name}</p>
-                        <p><strong>Dates:</strong> ${checkIn} to ${checkOut} (${nightCount} nights)</p>
-                        <p><strong>Total Estimate:</strong> ₦${totalAmount.toLocaleString()}</p>
-                        <p><strong>Contact Preference:</strong> ${contactPreference || 'Unknown'}</p>
-                        <p><em>Please follow up with this customer to confirm their booking and arrange payment. Once payment is received, use the Operator Dashboard to manually confirm the booking.</em></p>
-                    `
-                });
-                console.log('[Booking API] Stay Request Team Email sent successfully');
-            } catch (emailError) {
-                console.error('[Booking API] Failed to send Stay Request Team Email', emailError);
-            }
-
-            // Return success for stay request (team will follow up)
-            return NextResponse.json({
-                success: true,
-                bookingId: booking.id,
-                message: 'Stay request submitted. Our team will contact you shortly.',
-            });
         } else if (bookingSource === 'operator') {
             // Operator dashboard manual booking (Pending payment)
             return NextResponse.json({

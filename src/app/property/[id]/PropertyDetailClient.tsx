@@ -78,7 +78,6 @@ export default function PropertyDetailClient({ property, rooms, availability, co
     const [guestName, setGuestName] = useState('');
     const [guestEmail, setGuestEmail] = useState('');
     const [guestPhone, setGuestPhone] = useState('');
-    const [contactPreference, setContactPreference] = useState<'call' | 'whatsapp'>('whatsapp');
     const [isBooking, setIsBooking] = useState(false);
     const [showBookingForm, setShowBookingForm] = useState(false);
     const [error, setError] = useState('');
@@ -145,18 +144,21 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                     guestPhone,
                     checkIn: format(checkIn, 'yyyy-MM-dd'),
                     checkOut: format(checkOut, 'yyyy-MM-dd'),
-                    contactPreference,
-                    isStayRequest: true,
                 }),
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to submit request');
+                throw new Error(data.error || 'Failed to initialize payment');
             }
 
-            setBookingSuccess(true);
+            // Redirect to Paystack
+            if (data.paystackUrl) {
+                window.location.href = data.paystackUrl;
+            } else {
+                throw new Error('No payment URL returned');
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong');
         } finally {
@@ -423,18 +425,18 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                                 </div>
                             )}
 
-                            {/* Request a Stay Button */}
-                            {checkIn && checkOut && !showBookingForm && !bookingSuccess && (
+                            {/* Book Now Button */}
+                            {checkIn && checkOut && !showBookingForm && (
                                 <button
                                     onClick={() => setShowBookingForm(true)}
                                     className="w-full mt-6 bg-green-500 hover:bg-green-600 text-white py-3.5 rounded-xl font-semibold transition-colors"
                                 >
-                                    Request a Stay
+                                    Book Now
                                 </button>
                             )}
 
-                            {/* Booking Request Form */}
-                            {showBookingForm && !bookingSuccess && (
+                            {/* Booking Form */}
+                            {showBookingForm && (
                                 <div className="mt-6 space-y-4">
                                     <div>
                                         <label className="text-sm font-medium text-gray-700 mb-1 block">Full Name *</label>
@@ -469,41 +471,10 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                                         />
                                     </div>
 
-                                    {/* Contact Preference */}
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-700 mb-2 block">How should we reach you?</label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setContactPreference('call')}
-                                                className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-sm font-medium transition-all ${
-                                                    contactPreference === 'call'
-                                                        ? 'border-green-400 bg-green-50 text-green-700'
-                                                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                                                }`}
-                                            >
-                                                <Phone size={16} />
-                                                Call Me
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setContactPreference('whatsapp')}
-                                                className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-sm font-medium transition-all ${
-                                                    contactPreference === 'whatsapp'
-                                                        ? 'border-green-400 bg-green-50 text-green-700'
-                                                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                                                }`}
-                                            >
-                                                <MessageCircle size={16} />
-                                                WhatsApp Me
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Coming soon notice */}
-                                    <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
-                                        <p className="font-semibold mb-1">🚀 Online payment coming soon!</p>
-                                        <p>For now, submit your request and we&apos;ll contact you to confirm your booking and arrange payment.</p>
+                                    {/* Secure Payment Notice */}
+                                    <div className="p-3 bg-green-50 border border-green-100 rounded-xl text-xs text-green-700 flex items-start gap-2">
+                                        <CheckCircle size={14} className="mt-0.5 shrink-0" />
+                                        <p>Payments are securely processed via <strong>Paystack</strong>. You will be redirected to complete your booking.</p>
                                     </div>
 
                                     {error && (
@@ -515,28 +486,14 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                                     <button
                                         onClick={handleBooking}
                                         disabled={isBooking}
-                                        className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white py-3.5 rounded-xl font-semibold transition-colors"
+                                        className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white py-3.5 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
                                     >
-                                        {isBooking ? 'Submitting...' : 'Submit Stay Request'}
+                                        {isBooking ? (
+                                            <>Processing...</>
+                                        ) : (
+                                            <>Pay ₦{formatPrice(totalAmount)}</>
+                                        )}
                                     </button>
-                                </div>
-                            )}
-
-                            {/* Success State */}
-                            {bookingSuccess && (
-                                <div className="mt-6 p-5 bg-green-50 border border-green-200 rounded-xl text-center space-y-3">
-                                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                                        <CheckCircle size={24} className="text-green-600" />
-                                    </div>
-                                    <h3 className="font-semibold text-green-800 text-lg">Request Submitted!</h3>
-                                    <p className="text-sm text-green-700">
-                                        We&apos;ve received your stay request. Our team will {contactPreference === 'call' ? 'call' : 'WhatsApp'} you shortly to confirm your booking.
-                                    </p>
-                                    <div className="text-xs text-green-600 pt-2 border-t border-green-200 space-y-1">
-                                        <p><strong>Check-in:</strong> {checkIn && format(checkIn, 'MMM d, yyyy')}</p>
-                                        <p><strong>Check-out:</strong> {checkOut && format(checkOut, 'MMM d, yyyy')}</p>
-                                        <p><strong>{nights} nights</strong> • ₦{formatPrice(totalAmount)}</p>
-                                    </div>
                                 </div>
                             )}
                         </div>
