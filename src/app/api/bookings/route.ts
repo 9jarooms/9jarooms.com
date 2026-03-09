@@ -266,7 +266,13 @@ export async function POST(request: NextRequest) {
         // 6. Initialize Paystack (ONLY if NOT internal and NOT operator)
         if (!isInternalBooking && bookingSource !== 'operator') {
             try {
-                const origin = request.nextUrl.origin;
+                // Secure the origin against Host Header Injection
+                let origin = request.nextUrl.origin;
+                const allowedOrigins = ['https://9jarooms.com', 'https://www.9jarooms.com', 'http://localhost:3000'];
+                if (!allowedOrigins.includes(origin) && !origin.endsWith('.vercel.app')) {
+                    origin = process.env.NEXT_PUBLIC_APP_URL || 'https://9jarooms.com';
+                }
+
                 const payment = await initializePayment({
                     email: guestEmail,
                     amount: totalAmount * 100, // kobo
