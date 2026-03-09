@@ -97,16 +97,16 @@ function BookingConfirmContent() {
 
                     {status === 'success' && booking && (
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in zoom-in duration-500">
-                            <div className="bg-green-600 p-6 sm:p-8 md:p-10 text-center text-white relative overflow-hidden">
+                            <div className="bg-green-600 p-5 sm:p-6 md:p-10 text-center text-white relative overflow-hidden">
                                 <div className="absolute inset-0 bg-[url('/pattern.svg')] opacity-10"></div>
-                                <div className="w-16 h-16 md:w-20 md:h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6 backdrop-blur-sm relative z-10">
-                                    <CheckCircle className="w-8 h-8 md:w-10 md:h-10 text-white" />
+                                <div className="w-12 h-12 md:w-20 md:h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 md:mb-6 backdrop-blur-sm relative z-10">
+                                    <CheckCircle className="w-6 h-6 md:w-10 md:h-10 text-white" />
                                 </div>
-                                <h1 className="text-2xl sm:text-3xl font-bold relative z-10">Booking Confirmed!</h1>
-                                <p className="text-sm sm:text-base text-green-100 mt-1 sm:mt-2 relative z-10">Your payment was successful</p>
+                                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold relative z-10">Booking Confirmed!</h1>
+                                <p className="text-xs sm:text-sm md:text-base text-green-100 mt-1 md:mt-2 relative z-10">Your payment was successful</p>
                             </div>
 
-                            <div className="p-5 sm:p-6 md:p-8 space-y-6 md:space-y-8">
+                            <div className="p-4 sm:p-5 md:p-8 space-y-5 md:space-y-8">
                                 <div>
                                     <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 sm:mb-4">What's Next?</h2>
                                     <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-4">
@@ -120,8 +120,8 @@ function BookingConfirmContent() {
                                     </div>
                                 </div>
 
-                                <div className="border-t border-gray-100 pt-6 sm:pt-8">
-                                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 sm:mb-4">Reservation Details</h3>
+                                <div className="border-t border-gray-100 pt-5 sm:pt-6 md:pt-8">
+                                    <h3 className="text-sm md:text-base font-semibold text-gray-900 mb-3 md:mb-4">Reservation Details</h3>
                                     <div className="space-y-3 sm:space-y-4">
                                         <div className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl bg-gray-50 border border-gray-100">
                                             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white flex items-center justify-center shadow-sm shrink-0">
@@ -150,11 +150,11 @@ function BookingConfirmContent() {
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-1 sm:pt-2">
-                                    <Link href="/" className="flex-1 bg-gray-900 hover:bg-gray-800 text-white text-center py-3 sm:py-3.5 rounded-xl text-sm sm:text-base font-medium transition-colors">
+                                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 pt-1">
+                                    <Link href="/" className="flex-1 bg-gray-900 hover:bg-gray-800 text-white text-center py-2.5 sm:py-3.5 rounded-xl text-xs sm:text-base font-medium transition-colors">
                                         Return Home
                                     </Link>
-                                    <Link href="/properties" className="flex-1 bg-white hover:bg-gray-50 border border-gray-200 text-gray-900 text-center py-3 sm:py-3.5 rounded-xl text-sm sm:text-base font-medium transition-colors">
+                                    <Link href="/properties" className="flex-1 bg-white hover:bg-gray-50 border border-gray-200 text-gray-900 text-center py-2.5 sm:py-3.5 rounded-xl text-xs sm:text-base font-medium transition-colors">
                                         Book Another
                                     </Link>
                                 </div>
