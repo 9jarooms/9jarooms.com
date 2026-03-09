@@ -16,25 +16,27 @@ const CATEGORIES = [
 export default async function HomePage() {
   const supabase = await createServerClient();
 
-  // Fetch featured properties per category + category thumbnail settings
-  const [budgetRes, standardRes, luxuryRes, settingsRes] = await Promise.all([
-    supabase.from('properties').select('*').eq('is_active', true).eq('is_featured', true).eq('category', 'budget').order('created_at', { ascending: false }).limit(4),
-    supabase.from('properties').select('*').eq('is_active', true).eq('is_featured', true).eq('category', 'standard').order('created_at', { ascending: false }).limit(4),
-    supabase.from('properties').select('*').eq('is_active', true).eq('is_featured', true).eq('category', 'luxury').order('created_at', { ascending: false }).limit(4),
+  // Fetch all active properties with their booking counts to find the most booked
+  const [propertiesRes, settingsRes] = await Promise.all([
+    supabase.from('properties').select('*, bookings(count)').eq('is_active', true),
     supabase.from('site_settings').select('value').eq('key', 'category_thumbnails').maybeSingle(),
   ]);
 
-  // Fallback to any active properties if no featured ones exist per category
-  const [fbBudget, fbStandard, fbLuxury] = await Promise.all([
-    !budgetRes.data?.length ? supabase.from('properties').select('*').eq('is_active', true).eq('category', 'budget').order('created_at', { ascending: false }).limit(4) : { data: null },
-    !standardRes.data?.length ? supabase.from('properties').select('*').eq('is_active', true).eq('category', 'standard').order('created_at', { ascending: false }).limit(4) : { data: null },
-    !luxuryRes.data?.length ? supabase.from('properties').select('*').eq('is_active', true).eq('category', 'luxury').order('created_at', { ascending: false }).limit(4) : { data: null },
-  ]);
+  // Sort by booking count descending, then take top 4
+  const allProperties = propertiesRes.data || [];
+  const top4Properties = allProperties
+    .sort((a: any, b: any) => {
+      const aCount = a.bookings?.[0]?.count || 0;
+      const bCount = b.bookings?.[0]?.count || 0;
+      return bCount - aCount;
+    })
+    .slice(0, 4);
 
-  const categoryData: Record<string, any[]> = {
-    budget: budgetRes.data?.length ? budgetRes.data : (fbBudget.data || []),
-    standard: standardRes.data?.length ? standardRes.data : (fbStandard.data || []),
-    luxury: luxuryRes.data?.length ? luxuryRes.data : (fbLuxury.data || []),
+  // Group by category just to extract thumbnails for the mobile category tiles
+  const categoryData = {
+    budget: allProperties.filter((p) => p.category === 'budget'),
+    standard: allProperties.filter((p) => p.category === 'standard'),
+    luxury: allProperties.filter((p) => p.category === 'luxury'),
   };
 
   // Category thumbnails — admin-set images take priority, then fall back to first property image
@@ -45,7 +47,7 @@ export default async function HomePage() {
     luxury: savedThumbs.luxury || categoryData.luxury[0]?.thumbnail || categoryData.luxury[0]?.images?.[0] || '',
   };
 
-  const hasAnyProperties = Object.values(categoryData).some(arr => arr.length > 0);
+  const hasAnyProperties = top4Properties.length > 0;
 
   return (
     <>
@@ -82,36 +84,30 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* ─── DESKTOP: Category Sections ────────────────── */}
+        {/* ─── DESKTOP: Most Booked Properties ──────────── */}
         {hasAnyProperties ? (
           <div className="hidden md:block max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-20">
-            {CATEGORIES.map((cat) => {
-              const props = categoryData[cat.key];
-              if (!props.length) return null;
-              return (
-                <section key={cat.key}>
-                  {/* Section header — clean, minimal */}
-                  <div className="flex items-center justify-between mb-8">
-                    <h2 className="text-2xl font-serif font-semibold text-gray-900">
-                      {cat.label}
-                    </h2>
-                    <Link
-                      href={`/properties?category=${cat.key}`}
-                      className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
-                    >
-                      View all →
-                    </Link>
-                  </div>
+            <section>
+              {/* Section header — clean, minimal */}
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-2xl font-serif font-semibold text-gray-900">
+                  Most Booked Properties
+                </h2>
+                <Link
+                  href="/properties"
+                  className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+                >
+                  View all →
+                </Link>
+              </div>
 
-                  {/* 4-column grid-lock */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {props.slice(0, 4).map((property: any) => (
-                      <PropertyCard key={property.id} property={property} />
-                    ))}
-                  </div>
-                </section>
-              );
-            })}
+              {/* 4-column grid-lock */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {top4Properties.map((property: any) => (
+                  <PropertyCard key={property.id} property={property} />
+                ))}
+              </div>
+            </section>
           </div>
         ) : (
           <div className="hidden md:flex max-w-7xl mx-auto px-4 sm:px-6 py-24 flex-col items-center text-center">
@@ -123,7 +119,7 @@ export default async function HomePage() {
           </div>
         )}
 
-        {/* ─── MOBILE: Category Tiles + Owner section ──── */}
+        {/* ─── MOBILE: Category Tiles + Most Booked ──── */}
         <div className="md:hidden">
           {/* Category tiles (image cards) */}
           <div className="px-4 pt-6 pb-4">
@@ -154,28 +150,22 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Mobile properties: quick horizontal scroll per category */}
+          {/* Mobile properties: Most Booked Properties */}
           {hasAnyProperties && (
             <div className="py-6 space-y-8">
-              {CATEGORIES.map((cat) => {
-                const props = categoryData[cat.key];
-                if (!props.length) return null;
-                return (
-                  <div key={cat.key}>
-                    <div className="flex items-center justify-between px-4 mb-3">
-                      <h3 className="text-base font-semibold text-gray-900">{cat.label}</h3>
-                      <Link href={`/properties?category=${cat.key}`} className="text-xs text-gray-400">View all →</Link>
+              <div>
+                <div className="flex items-center justify-between px-4 mb-3">
+                  <h3 className="text-base font-semibold text-gray-900">Most Booked</h3>
+                  <Link href="/properties" className="text-xs text-gray-400">View all →</Link>
+                </div>
+                <div className="-mx-0 px-4 flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+                  {top4Properties.map((property: any) => (
+                    <div key={property.id} className="shrink-0 w-[200px]">
+                      <PropertyCard property={property} />
                     </div>
-                    <div className="-mx-0 px-4 flex gap-3 overflow-x-auto scrollbar-hide pb-1">
-                      {props.map((property: any) => (
-                        <div key={property.id} className="shrink-0 w-[200px]">
-                          <PropertyCard property={property} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
