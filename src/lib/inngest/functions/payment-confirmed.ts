@@ -83,13 +83,13 @@ export const paymentConfirmed = inngest.createFunction(
             const checkOutDate = new Date(booking.check_out).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
             const { error } = await resend.emails.send({
-                from: '9jaRooms <9jarooms@thewoodlandswuye.com>',
+                from: '9jaRooms <team@9jarooms.com>',
                 to: [booking.guest_email],
                 subject: 'Booking Confirmed - 9jaRooms',
                 html: `
                     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #374151;">
                         <div style="text-align: center; margin-bottom: 30px;">
-                            <img src="${process.env.NEXT_PUBLIC_APP_URL}/icon.png" alt="9jaRooms" style="height: 60px; width: auto;" />
+                            <img src="https://www.9jarooms.com/icon.png" alt="9jaRooms" style="height: 60px; width: auto;" />
                         </div>
                         
                         <h1 style="color: #16a34a; text-align: center; margin-bottom: 24px;">Booking Confirmed!</h1>
@@ -189,7 +189,7 @@ export const paymentConfirmed = inngest.createFunction(
             const checkOutDate = new Date(booking.check_out).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
             const { error } = await resend.emails.send({
-                from: '9jaRooms <9jarooms@thewoodlandswuye.com>',
+                from: '9jaRooms <team@9jarooms.com>',
                 to: [caretakerEmail],
                 subject: `New Booking: ${property.name}`,
                 html: `
