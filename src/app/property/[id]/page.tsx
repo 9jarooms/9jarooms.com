@@ -26,13 +26,25 @@ export default async function PropertyPage({ params }: Props) {
         .eq('property_id', id)
         .eq('is_active', true);
 
-    // Get availability for all rooms (next 90 days)
+    // Get availability for all rooms (next 90 days), joining bookings to check expiration
     const roomIds = rooms?.map((r) => r.id) || [];
-    const { data: availability } = await supabase
+    const { data: rawAvailability } = await supabase
         .from('availability')
-        .select('*')
+        .select('*, booking:bookings(expires_at)')
         .in('room_id', roomIds)
         .gte('date', new Date().toISOString().split('T')[0]);
+
+    // Filter out expired holds dynamically so the UI treats them as available immediately
+    const now = new Date();
+    const availability = (rawAvailability || []).filter((slot: any) => {
+        if (slot.status === 'held' && slot.booking?.expires_at) {
+            const expiresAt = new Date(slot.booking.expires_at);
+            if (expiresAt < now) {
+                return false; // Ignore this expired hold
+            }
+        }
+        return true; // Keep active holds and 'booked' slots
+    });
 
     // Fetch site settings (contact numbers)
     const { data: settingsData } = await supabase

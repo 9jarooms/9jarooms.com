@@ -2,16 +2,14 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { CheckCircle, MapPin, Calendar, XCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function BookingConfirmPage() {
     return (
         <Suspense fallback={
-            <main className="min-h-screen bg-gray-50 pt-24 pb-12 px-4 flex items-center justify-center">
-                <div className="bg-white rounded-3xl p-12 text-center shadow-lg border border-gray-100 flex flex-col items-center justify-center min-h-[400px]">
+            <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4 md:p-8">
+                <div className="bg-white rounded-3xl p-12 text-center shadow-lg border border-gray-100 flex flex-col items-center justify-center min-h-[400px] w-full max-w-xl">
                     <Loader2 size={36} className="text-green-600 animate-spin" />
                 </div>
             </main>
@@ -77,10 +75,13 @@ function BookingConfirmContent() {
     }, [reference]);
 
     return (
-        <>
-            <Header />
-            <main className="min-h-screen bg-gray-50 pt-24 pb-12 px-4 flex items-center justify-center">
-                <div className="max-w-xl w-full mx-auto">
+        <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 md:p-8">
+            <div className="mb-8 relative z-10">
+                <Link href="/">
+                    <img src="/logo.png" alt="9jaRooms" className="h-10 w-auto" />
+                </Link>
+            </div>
+            <div className="max-w-xl w-full mx-auto">
                     {status === 'loading' && (
                         <div className="bg-white rounded-3xl p-12 text-center shadow-lg border border-gray-100 flex flex-col items-center justify-center min-h-[400px]">
                             <div className="relative mb-8">
@@ -175,9 +176,7 @@ function BookingConfirmContent() {
                             </Link>
                         </div>
                     )}
-                </div>
-            </main>
-            <Footer />
-        </>
+            </div>
+        </main>
     );
 }
