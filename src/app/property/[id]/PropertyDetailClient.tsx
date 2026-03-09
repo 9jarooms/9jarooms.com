@@ -76,6 +76,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
     const [checkIn, setCheckIn] = useState<Date | null>(null);
     const [checkOut, setCheckOut] = useState<Date | null>(null);
     const [guestName, setGuestName] = useState('');
+    const [guestEmail, setGuestEmail] = useState('');
     const [guestPhone, setGuestPhone] = useState('');
     const [contactPreference, setContactPreference] = useState<'call' | 'whatsapp'>('whatsapp');
     const [isBooking, setIsBooking] = useState(false);
@@ -118,7 +119,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
     };
 
     const handleBooking = async () => {
-        if (!selectedRoom || !checkIn || !checkOut || !guestName || !guestPhone) {
+        if (!selectedRoom || !checkIn || !checkOut || !guestName || !guestEmail || !guestPhone) {
             setError('Please fill in all required fields');
             return;
         }
@@ -140,7 +141,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                     roomId: selectedRoom.id,
                     propertyId: property.id,
                     guestName,
-                    guestEmail: `${guestPhone.replace(/\D/g, '')}@guest.9jarooms.com`, // placeholder email
+                    guestEmail, 
                     guestPhone,
                     checkIn: format(checkIn, 'yyyy-MM-dd'),
                     checkOut: format(checkOut, 'yyyy-MM-dd'),
@@ -442,6 +443,17 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                                             value={guestName}
                                             onChange={(e) => setGuestName(e.target.value)}
                                             placeholder="John Doe"
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-700 mb-1 block">Email Address *</label>
+                                        <input
+                                            type="email"
+                                            value={guestEmail}
+                                            onChange={(e) => setGuestEmail(e.target.value)}
+                                            placeholder="john@example.com"
                                             className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
                                         />
                                     </div>
