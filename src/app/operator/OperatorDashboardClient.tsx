@@ -361,20 +361,20 @@ export default function OperatorDashboardClient({ properties, availability, pend
             </div>
 
             {activeTab === 'pending' && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col w-full max-w-full">
                     <div className="p-4 sm:p-6 border-b border-gray-100">
                         <h2 className="text-lg font-semibold text-gray-900">Pending Stay Requests</h2>
                         <p className="text-sm text-gray-500 mt-1">Pending bookings requested via the website or WhatsApp.</p>
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                    <div className="overflow-x-auto w-full">
+                        <table className="w-full min-w-[800px] text-sm text-left">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="text-left font-medium text-gray-500 px-6 py-3">Guest Details</th>
-                                    <th className="text-left font-medium text-gray-500 px-6 py-3">Property & Room</th>
-                                    <th className="text-left font-medium text-gray-500 px-6 py-3">Stay Dates</th>
-                                    <th className="text-left font-medium text-gray-500 px-6 py-3">Price</th>
-                                    <th className="text-right font-medium text-gray-500 px-6 py-3">Action</th>
+                                    <th className="font-medium text-gray-500 px-4 sm:px-6 py-3 whitespace-nowrap">Guest Details</th>
+                                    <th className="font-medium text-gray-500 px-4 sm:px-6 py-3 whitespace-nowrap">Property & Room</th>
+                                    <th className="font-medium text-gray-500 px-4 sm:px-6 py-3 whitespace-nowrap">Stay Dates</th>
+                                    <th className="font-medium text-gray-500 px-4 sm:px-6 py-3 whitespace-nowrap">Price</th>
+                                    <th className="text-right font-medium text-gray-500 px-4 sm:px-6 py-3 whitespace-nowrap">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">

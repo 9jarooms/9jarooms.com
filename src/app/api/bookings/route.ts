@@ -181,7 +181,9 @@ export async function POST(request: NextRequest) {
                 ? `Stay Request — Contact via ${contactPreference || 'whatsapp'}`
                 : null);
 
-        const finalGuestEmail = isInternalBooking && user?.email ? user.email : guestEmail;
+        // If it's a manual booking from an operator, we WANT to use the guestEmail they entered
+        // Only fallback to user.email if it's a maintenance block or caretaker booking themselves
+        const finalGuestEmail = guestEmail || (isInternalBooking && user?.email ? user.email : null);
 
         const { data: booking, error: bookingError } = await supabase
             .from('bookings')
