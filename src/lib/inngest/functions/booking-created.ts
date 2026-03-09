@@ -1,5 +1,5 @@
 import { inngest } from '../client';
-import { createServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { initializePayment, generateReference } from '@/lib/paystack';
 import { addDays, differenceInCalendarDays, format } from 'date-fns';
 
@@ -10,7 +10,7 @@ export const bookingCreated = inngest.createFunction(
     async ({ event, step }) => {
         const { roomId, propertyId, guestName, guestEmail, guestPhone, checkIn, checkOut, userId } = event.data;
 
-        const supabase = createServerClient();
+        const supabase = createAdminClient();
 
         // Step 1: Validate room availability
         const availability = await step.run('check-availability', async () => {

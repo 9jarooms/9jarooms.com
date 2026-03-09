@@ -1,109 +1,108 @@
-import { createServerClient } from '@/lib/supabase/server';
-import { verifyPayment } from '@/lib/paystack';
-import { inngest } from '@/lib/inngest/client';
+'use client';
+
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { CheckCircle, MapPin, Calendar, Users, XCircle } from 'lucide-react';
+import { CheckCircle, MapPin, Calendar, XCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
-interface Props {
-    searchParams: Promise<{ reference?: string }>;
+export default function BookingConfirmPage() {
+    return (
+        <Suspense fallback={
+            <main className="min-h-screen bg-gray-50 pt-24 pb-12 px-4 flex items-center justify-center">
+                <div className="bg-white rounded-3xl p-12 text-center shadow-lg border border-gray-100 flex flex-col items-center justify-center min-h-[400px]">
+                    <Loader2 size={36} className="text-green-600 animate-spin" />
+                </div>
+            </main>
+        }>
+            <BookingConfirmContent />
+        </Suspense>
+    );
 }
 
-export default async function BookingConfirmPage({ searchParams }: Props) {
-    const { reference } = await searchParams;
-    const supabase = createServerClient();
-    let status = 'loading';
-    let booking = null;
-    let error = '';
+function BookingConfirmContent() {
+    const searchParams = useSearchParams();
+    const reference = searchParams.get('reference');
 
-    if (!reference) {
-        status = 'error';
-        error = 'No payment reference provided';
-    } else {
-        try {
-            // 1. Verify with Paystack
-            console.log(`[Confirm] Verifying payment reference: ${reference}`);
-            const verification = await verifyPayment(reference);
-            console.log(`[Confirm] Paystack verification result:`, JSON.stringify(verification.data?.status));
+    const [status, setStatus] = useState<'loading' | 'success' | 'failed' | 'error'>('loading');
+    const [booking, setBooking] = useState<any>(null);
+    const [errorMsg, setErrorMsg] = useState('');
 
-            if (verification.status && verification.data.status === 'success') {
-                status = 'success';
+    useEffect(() => {
+        if (!reference) {
+            setStatus('error');
+            setErrorMsg('No payment reference provided');
+            return;
+        }
 
-                // 2. Find Booking
-                const { data: existingBooking, error: dbError } = await supabase
-                    .from('bookings')
-                    .select('*, property:properties(*), room:rooms(*)')
-                    .eq('paystack_reference', reference)
-                    .single();
+        let isMounted = true;
+        let pollCount = 0;
+        const maxPolls = 10;
 
-                if (dbError) {
-                    console.error(`[Confirm] DB error finding booking:`, dbError);
-                }
+        const verifyBooking = async () => {
+            try {
+                const res = await fetch(`/api/bookings/verify?reference=${reference}`);
+                const result = await res.json();
 
-                if (existingBooking) {
-                    booking = existingBooking;
+                if (!isMounted) return;
 
-                    // 3. Update DB if not already paid
-                    if (existingBooking.status !== 'paid') {
-                        await supabase
-                            .from('bookings')
-                            .update({ status: 'paid', expires_at: null })
-                            .eq('id', existingBooking.id);
-
-                        await supabase
-                            .from('availability')
-                            .update({ status: 'booked' })
-                            .eq('booking_id', existingBooking.id);
-
-                        console.log(`[Confirm] Booking ${existingBooking.id} marked as paid, dates blocked`);
-
-                        // 4. Trigger Post-Payment Workflow (Emails, Notifications) via Inngest
-                        // This is best-effort — if it fails, the booking is still confirmed
-                        try {
-                            await inngest.send({
-                                name: 'payment/confirmed',
-                                data: {
-                                    reference: reference,
-                                    amount: verification.data.amount,
-                                    paystackData: verification.data,
-                                },
-                            });
-                            console.log(`[Confirm] Inngest payment/confirmed event sent`);
-                        } catch (inngestErr: any) {
-                            console.error('[Confirm] Inngest event failed (non-blocking):', inngestErr?.message);
-                            // Non-blocking: booking is already confirmed, emails can be sent later
-                        }
+                if (res.ok && result.status === 'success') {
+                    setBooking(result.booking);
+                    setStatus('success');
+                } else if (res.ok && result.status === 'pending') {
+                    // Payment still processing at Paystack... poll again
+                    pollCount++;
+                    if (pollCount < maxPolls) {
+                        setTimeout(verifyBooking, 2000); // Wait 2s before checking again
+                    } else {
+                        setStatus('failed');
+                        setErrorMsg('Payment verification is taking too long. If you were charged, please contact support.');
                     }
                 } else {
-                    status = 'error';
-                    error = 'Booking record not found for this reference.';
+                    setStatus('error');
+                    setErrorMsg(result.error || 'Failed to verify booking');
                 }
-            } else {
-                console.log(`[Confirm] Payment not successful. Paystack status: ${verification.data?.status}`);
-                status = 'failed';
-                error = `Payment was not completed. Status: ${verification.data?.status || 'unknown'}`;
+            } catch (err: any) {
+                if (!isMounted) return;
+                console.error("Verification err:", err);
+                setStatus('error');
+                setErrorMsg('An error occurred while verifying your payment. Please contact support.');
             }
-        } catch (err: any) {
-            console.error('[Confirm] Verification error:', err?.message || err);
-            status = 'error';
-            error = `Failed to verify payment. Please contact support. (${err?.message || 'Unknown error'})`;
-        }
-    }
+        };
+
+        verifyBooking();
+
+        return () => { isMounted = false; };
+    }, [reference]);
 
     return (
         <>
             <Header />
-            <main className="min-h-screen bg-gray-50 pt-24 pb-12 px-4">
-                <div className="max-w-2xl mx-auto">
-                    {status === 'success' && booking ? (
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                            <div className="bg-green-600 p-10 text-center text-white">
-                                <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
+            <main className="min-h-screen bg-gray-50 pt-24 pb-12 px-4 flex items-center justify-center">
+                <div className="max-w-xl w-full mx-auto">
+                    {status === 'loading' && (
+                        <div className="bg-white rounded-3xl p-12 text-center shadow-lg border border-gray-100 flex flex-col items-center justify-center min-h-[400px]">
+                            <div className="relative mb-8">
+                                <div className="absolute inset-0 bg-green-100 rounded-full blur-xl scale-150 animate-pulse"></div>
+                                <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center relative z-10">
+                                    <Loader2 size={36} className="text-green-600 animate-spin" />
+                                </div>
+                            </div>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Confirming Payment</h2>
+                            <p className="text-gray-500 max-w-sm mx-auto">Please wait while we securely verify your payment with Paystack mapping to your booking...</p>
+                        </div>
+                    )}
+
+                    {status === 'success' && booking && (
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in zoom-in duration-500">
+                            <div className="bg-green-600 p-10 text-center text-white relative overflow-hidden">
+                                <div className="absolute inset-0 bg-[url('/pattern.svg')] opacity-10"></div>
+                                <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm relative z-10">
                                     <CheckCircle size={40} className="text-white" />
                                 </div>
-                                <h1 className="text-3xl font-bold">Booking Confirmed!</h1>
-                                <p className="text-green-100 mt-2">Your payment was successful</p>
+                                <h1 className="text-3xl font-bold relative z-10">Booking Confirmed!</h1>
+                                <p className="text-green-100 mt-2 relative z-10">Your payment was successful</p>
                             </div>
 
                             <div className="p-8 space-y-8">
@@ -114,8 +113,8 @@ export default async function BookingConfirmPage({ searchParams }: Props) {
                                     </p>
                                     <div className="bg-green-50 rounded-xl p-4 border border-green-100">
                                         <h3 className="font-semibold text-green-900 mb-2">Check-in Instructions</h3>
-                                        <p className="text-green-800 text-sm leading-relaxed">
-                                            {(booking as any).property.check_in_instructions || 'Please contact the caretaker on arrival.'}
+                                        <p className="text-green-800 text-sm leading-relaxed whitespace-pre-wrap">
+                                            {booking.property?.check_in_instructions || 'Please contact the caretaker on arrival to get your keys.'}
                                         </p>
                                     </div>
                                 </div>
@@ -123,44 +122,55 @@ export default async function BookingConfirmPage({ searchParams }: Props) {
                                 <div className="border-t border-gray-100 pt-8">
                                     <h3 className="font-semibold text-gray-900 mb-4">Reservation Details</h3>
                                     <div className="space-y-4">
-                                        <div className="flex items-start gap-3">
-                                            <MapPin className="text-gray-400 mt-1" size={20} />
+                                        <div className="flex items-start gap-4 p-4 rounded-xl bg-gray-50 border border-gray-100">
+                                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm shrink-0">
+                                                <MapPin className="text-gray-500" size={20} />
+                                            </div>
                                             <div>
-                                                <p className="font-medium text-gray-900">{(booking as any).property.name}</p>
-                                                <p className="text-sm text-gray-500">{(booking as any).property.address}</p>
+                                                <p className="font-medium text-gray-900">{booking.property?.name}</p>
+                                                <p className="text-sm text-gray-500 mt-0.5">{booking.property?.address}</p>
                                             </div>
                                         </div>
-                                        <div className="flex items-start gap-3">
-                                            <Calendar className="text-gray-400 mt-1" size={20} />
+                                        
+                                        <div className="flex items-start gap-4 p-4 rounded-xl bg-gray-50 border border-gray-100">
+                                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm shrink-0">
+                                                <Calendar className="text-gray-500" size={20} />
+                                            </div>
                                             <div>
                                                 <p className="font-medium text-gray-900">
-                                                    {booking.check_in}  —  {booking.check_out}
+                                                    {new Date(booking.check_in).toLocaleDateString()} — {new Date(booking.check_out).toLocaleDateString()}
                                                 </p>
-                                                <p className="text-sm text-gray-500">
-                                                    Check-in: {(booking as any).property.check_in_time} | Check-out: {(booking as any).property.check_out_time}
-                                                </p>
+                                                <div className="text-sm text-gray-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                                                    <span>Check-in: {booking.property?.check_in_time}</span>
+                                                    <span>Check-out: {booking.property?.check_out_time}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="flex gap-4">
-                                    <Link href="/" className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 text-center py-3 rounded-xl font-medium transition-colors">
-                                        Back to Home
+                                <div className="flex gap-4 pt-2">
+                                    <Link href="/" className="flex-1 bg-gray-900 hover:bg-gray-800 text-white text-center py-3.5 rounded-xl font-medium transition-colors">
+                                        Return Home
+                                    </Link>
+                                    <Link href="/properties" className="flex-1 bg-white hover:bg-gray-50 border border-gray-200 text-gray-900 text-center py-3.5 rounded-xl font-medium transition-colors">
+                                        Book Another
                                     </Link>
                                 </div>
                             </div>
                         </div>
-                    ) : (
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+                    )}
+
+                    {(status === 'failed' || status === 'error') && (
+                        <div className="bg-white rounded-3xl p-12 text-center shadow-lg border border-red-100 flex flex-col items-center justify-center min-h-[400px]">
                             <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
                                 <XCircle size={40} className="text-red-500" />
                             </div>
-                            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                                {status === 'failed' ? 'Payment Failed' : 'Something went wrong'}
+                            <h1 className="text-2xl font-bold text-gray-900 mb-3">
+                                {status === 'failed' ? 'Payment Failed' : 'Verification Issue'}
                             </h1>
-                            <p className="text-gray-500 mb-8">{error}</p>
-                            <Link href="/" className="text-green-600 font-medium hover:underline">
+                            <p className="text-gray-500 mb-8 max-w-sm mx-auto">{errorMsg}</p>
+                            <Link href="/properties" className="bg-gray-900 text-white px-8 py-3 rounded-full font-medium hover:bg-gray-800 transition-colors">
                                 Return to Properties
                             </Link>
                         </div>

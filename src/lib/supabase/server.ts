@@ -16,8 +16,8 @@ export function createAdminClient() {
     });
 }
 
-// Deprecated alias to maintain compatibility if used elsewhere (but we should switch)
-export const createServerClient = createAdminClient;
+// Default server client respects RLS
+export const createServerClient = createSessionClient;
 
 // SESSION Client - For getting the current logged-in user in Server Components
 export async function createSessionClient() {

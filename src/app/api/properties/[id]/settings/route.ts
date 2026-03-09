@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requirePropertyAccess } from '@/lib/auth/require-property-access';
 
 interface Props {
     params: Promise<{ id: string }>;
@@ -9,12 +9,10 @@ export async function PATCH(request: NextRequest, { params }: Props) {
     try {
         const { id } = await params;
 
-        // Using untyped client to avoid Supabase type resolution issues
-        const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            { auth: { autoRefreshToken: false, persistSession: false } }
-        );
+        const { adminClient, error: authError, status } = await requirePropertyAccess(id);
+        if (authError || !adminClient) return NextResponse.json({ error: authError }, { status });
+
+        const supabase = adminClient;
 
         const body = await request.json();
         const { check_in_instructions, house_rules } = body;

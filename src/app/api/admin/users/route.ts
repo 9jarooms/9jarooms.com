@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-function getAdminSupabase() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-}
+import { requireAdmin } from '@/lib/auth/require-admin';
 
 // Create a new user (owner or caretaker) via Supabase Admin API
 export async function POST(request: NextRequest) {
     try {
-        const supabase = getAdminSupabase();
+        const { adminClient, error: reqError, status } = await requireAdmin();
+        if (reqError || !adminClient) return NextResponse.json({ error: reqError }, { status });
+        const supabase = adminClient;
         const body = await request.json();
         const { email, password, name, phone, role } = body;
 
@@ -72,7 +66,9 @@ export async function POST(request: NextRequest) {
 // List users by role
 export async function GET(request: NextRequest) {
     try {
-        const supabase = getAdminSupabase();
+        const { adminClient, error: reqError, status } = await requireAdmin();
+        if (reqError || !adminClient) return NextResponse.json({ error: reqError }, { status });
+        const supabase = adminClient;
         const { searchParams } = new URL(request.url);
         const role = searchParams.get('role');
 
@@ -135,7 +131,9 @@ export async function GET(request: NextRequest) {
 // Update user details (specifically for owners subaccount)
 export async function PATCH(request: NextRequest) {
     try {
-        const supabase = getAdminSupabase();
+        const { adminClient, error: reqError, status } = await requireAdmin();
+        if (reqError || !adminClient) return NextResponse.json({ error: reqError }, { status });
+        const supabase = adminClient;
         const body = await request.json();
         const { id, owner_id, paystack_subaccount_code } = body;
 

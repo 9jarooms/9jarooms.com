@@ -24,6 +24,7 @@ interface CalendarProps {
     onDateSelect?: (checkIn: Date, checkOut: Date) => void;
     selectedCheckIn?: Date | null;
     selectedCheckOut?: Date | null;
+    minimumStay?: number;
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -33,6 +34,7 @@ export default function BookingCalendar({
     onDateSelect,
     selectedCheckIn: externalCheckIn,
     selectedCheckOut: externalCheckOut,
+    minimumStay = 1,
 }: CalendarProps) {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [checkIn, setCheckIn] = useState<Date | null>(externalCheckIn || null);
@@ -119,24 +121,26 @@ export default function BookingCalendar({
             // Same as check-in = cancel
             if (isSameDay(date, checkIn)) return false;
 
-            // If this date is booked, it's not a valid checkout
-            if (fullyBooked) return true;
+            // Enforce minimum stay: checkout must be at least minimumStay days after check-in
+            const minCheckoutDate = addDays(checkIn, minimumStay);
+            if (isBefore(date, minCheckoutDate)) return true;
+
+            // If this date is booked AND it's not the start of a booking block, it's not a valid checkout
+            if (fullyBooked && !isCheckinDay(date)) return true;
 
             const nextUnavailable = getNextUnavailableDate(checkIn);
 
             if (nextUnavailable) {
-                // Block anything ON or AFTER the next booked date
-                // (The checkout day is the day BEFORE the next booking starts,
-                // or the booked date itself is not valid for checkout)
-                if (isSameDay(date, nextUnavailable) || isAfter(date, nextUnavailable)) return true;
+                // Block anything AFTER the next booked date (allow checkout ON it if it's the checkin day of that block)
+                if (isAfter(date, nextUnavailable)) return true;
             }
 
             // Available dates between check-in and barrier are all valid
             return false;
         }
 
-        // Selecting CHECK-IN date: booked dates are always disabled
-        if (fullyBooked) return true;
+        // Selecting CHECK-IN date: booked dates and checkout-only dates are disabled
+        if (fullyBooked && !isCheckoutDay(date)) return true;
 
         return false;
     };
@@ -333,7 +337,12 @@ export default function BookingCalendar({
                         </>
                     )}
                     {!checkOut && (
-                        <p className="text-green-600 text-xs mt-2">Select a check-out date</p>
+                        <p className="text-green-600 text-xs mt-2">
+                            {minimumStay > 1
+                                ? `Select a check-out date (min ${minimumStay} nights — earliest: ${format(addDays(checkIn, minimumStay), 'MMM d')})`
+                                : 'Select a check-out date'
+                            }
+                        </p>
                     )}
                 </div>
             )}

@@ -125,6 +125,12 @@ export type Database = {
 // Table Types
 // ============================================
 
+export interface DiscountRule {
+    min_nights: number;
+    discount_percent?: number;  // e.g. 10 = 10% off
+    discount_amount?: number;   // e.g. 5000 = ₦5,000 off total
+}
+
 export type UserRole = 'admin' | 'owner' | 'caretaker' | 'call_operator';
 
 export interface UserRoleRecord {
@@ -173,6 +179,9 @@ export interface Property {
     check_out_time: string;
     check_in_instructions: string | null;
     house_rules: string | null;
+    minimum_stay: number | null;
+    discount_rules: DiscountRule[] | null;
+    category: 'budget' | 'standard' | 'luxury' | null;
     is_active: boolean;
     is_featured: boolean;
     created_at: string;

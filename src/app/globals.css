@@ -11,7 +11,23 @@
   .no-spinner {
     -moz-appearance: textfield;
   }
+
+  /* Hide scrollbar while keeping scroll functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Mobile bottom nav safe area */
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
+
 
 @theme {
   /* Override default green palette with Brand Green #8fd168 */

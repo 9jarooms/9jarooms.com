@@ -43,7 +43,7 @@ export default function OperatorShell({ children, userName }: { children: React.
                 <div className="flex flex-col h-full">
                     <div className="p-6 border-b border-gray-100 flex-1">
                         <Link href="/" className="block">
-                            <img src="/logo.png" alt="9jaRooms" className="h-10 w-auto object-contain" />
+                            <img src="/icon.png" alt="9jaRooms" className="h-14 w-auto object-contain" />
                         </Link>
                         <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
                             Call Operator

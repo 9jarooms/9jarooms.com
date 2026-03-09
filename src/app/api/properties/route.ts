@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const guests = searchParams.get('guests');
     const sort = searchParams.get('sort');
     const bedrooms = searchParams.get('bedrooms');
+    const category = searchParams.get('category');
 
     let query = supabase
         .from('properties')
@@ -30,6 +31,10 @@ export async function GET(request: NextRequest) {
 
     if (type) {
         query = query.eq('type', type);
+    }
+
+    if (category) {
+        query = query.eq('category', category);
     }
 
     if (area) {

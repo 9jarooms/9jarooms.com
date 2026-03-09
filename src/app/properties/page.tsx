@@ -28,6 +28,7 @@ function PropertiesContent() {
     const [maxPrice, setMaxPrice] = useState(searchParams.get('max_price') || '');
     const [guests, setGuests] = useState(searchParams.get('guests') || '');
     const [sort, setSort] = useState(searchParams.get('sort') || 'newest');
+    const [category, setCategory] = useState(searchParams.get('category') || '');
 
     // Available bedroom counts from API
     const [availableBedrooms, setAvailableBedrooms] = useState<number[]>([]);
@@ -112,6 +113,7 @@ function PropertiesContent() {
         if (maxPrice) params.set('max_price', maxPrice);
         if (guests) params.set('guests', guests);
         if (sort) params.set('sort', sort);
+        if (category) params.set('category', category);
 
         router.push(`/properties?${params.toString()}`);
     }
@@ -125,6 +127,7 @@ function PropertiesContent() {
         setSort('newest');
         setCheckIn('');
         setCheckOut('');
+        setCategory('');
         router.push('/properties');
     }
 
@@ -186,9 +189,9 @@ function PropertiesContent() {
         <div className="min-h-screen bg-[#f7f7f7]">
             <Header />
 
-            <main className="pt-20 pb-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
+            <main className="pt-20 md:pt-[105px] pb-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
                 {/* Search & Filters */}
-                <div className="lg:sticky lg:top-16 z-40 bg-[#f7f7f7] pt-3 pb-2 mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+                <div className="lg:sticky lg:top-[105px] z-40 bg-[#f7f7f7] pt-3 pb-2 mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
 
                     {/* Desktop: Horizontal search bar */}
                     <div className="hidden lg:flex items-center gap-3 p-2 border border-gray-200 rounded-full shadow-sm hover:shadow-lg transition-all duration-300 bg-white">
@@ -227,6 +230,20 @@ function PropertiesContent() {
                                 checkOut={checkOut}
                                 onChange={(start, end) => { setCheckIn(start); setCheckOut(end); }}
                             />
+                        </div>
+                        {/* Category */}
+                        <div className="px-3 py-1.5 border-r border-gray-200">
+                            <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Type</label>
+                            <select
+                                value={category}
+                                onChange={(e) => setCategory(e.target.value)}
+                                className="bg-transparent border-none text-sm text-gray-900 font-medium focus:ring-0 p-0 cursor-pointer"
+                            >
+                                <option value="">Any type</option>
+                                <option value="budget">Budget</option>
+                                <option value="standard">Standard</option>
+                                <option value="luxury">Luxury</option>
+                            </select>
                         </div>
                         {/* Rooms */}
                         <div className="px-3 py-1.5">
@@ -305,6 +322,17 @@ function PropertiesContent() {
                                         onChange={(start, end) => { setCheckIn(start); setCheckOut(end); }}
                                     />
                                 </div>
+                                <select
+                                    value={category}
+                                    onChange={(e) => { setCategory(e.target.value); setTimeout(applyFilters, 100); }}
+                                    className={`shrink-0 px-3 py-2 rounded-xl text-xs font-medium focus:ring-0 cursor-pointer appearance-none border transition-colors ${category ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-600'
+                                        }`}
+                                >
+                                    <option value="">Any type</option>
+                                    <option value="budget">💚 Budget</option>
+                                    <option value="standard">⭐ Standard</option>
+                                    <option value="luxury">👑 Luxury</option>
+                                </select>
                                 <select
                                     value={bedrooms}
                                     onChange={(e) => { setBedrooms(e.target.value); setTimeout(applyFilters, 100); }}

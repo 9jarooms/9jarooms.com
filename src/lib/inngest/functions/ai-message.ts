@@ -1,5 +1,5 @@
 import { inngest } from '../client';
-import { createServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { GoogleGenAI, Type, type FunctionDeclaration } from '@google/genai';
 import { format, addDays } from 'date-fns';
 import { generateReference } from '@/lib/paystack';
@@ -108,7 +108,7 @@ const tools = [
 
 // Tool execution functions
 async function executeSearchProperties(args: Record<string, unknown>) {
-    const supabase = createServerClient();
+    const supabase = createAdminClient();
 
     let query = supabase
         .from('properties')
@@ -188,7 +188,7 @@ async function executeSearchProperties(args: Record<string, unknown>) {
 }
 
 async function executeCheckAvailability(args: Record<string, unknown>) {
-    const supabase = createServerClient();
+    const supabase = createAdminClient();
     const checkIn = new Date(args.check_in as string);
     const checkOut = new Date(args.check_out as string);
     const dates: string[] = [];
@@ -238,7 +238,7 @@ async function executeCreateBooking(args: Record<string, unknown>) {
 }
 
 async function executeGetPropertyDetails(args: Record<string, unknown>) {
-    const supabase = createServerClient();
+    const supabase = createAdminClient();
 
     const { data: property } = await supabase
         .from('properties')
@@ -299,7 +299,7 @@ export const aiMessageReceived = inngest.createFunction(
     async ({ event, step }) => {
         const { conversationId, message, senderPhone, senderName, channel, externalId } = event.data;
 
-        const supabase = createServerClient();
+        const supabase = createAdminClient();
 
         // Step 1: Get or create conversation
         const conversation = await step.run('get-conversation', async () => {

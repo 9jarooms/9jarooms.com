@@ -14,6 +14,7 @@ import {
     X,
     Shield,
     PhoneCall,
+    Settings2,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -25,6 +26,7 @@ const navItems = [
     { href: '/admin/operators', label: 'Call Operators', icon: PhoneCall },
     { href: '/admin/properties', label: 'Properties', icon: Building2 },
     { href: '/admin/bookings', label: 'Bookings', icon: CalendarDays },
+    { href: '/admin/settings', label: 'Settings', icon: Settings2 },
 ];
 
 export default function AdminShell({ children, userName }: { children: React.ReactNode; userName?: string }) {
@@ -57,7 +59,7 @@ export default function AdminShell({ children, userName }: { children: React.Rea
                     {/* Brand */}
                     <div className="p-6 border-b border-gray-100">
                         <Link href="/" className="block">
-                            <img src="/logo.png" alt="9jaRooms" className="h-10 w-auto object-contain" />
+                            <img src="/icon.png" alt="9jaRooms" className="h-14 w-auto object-contain" />
                         </Link>
                         <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
                             Admin Portal

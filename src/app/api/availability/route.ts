@@ -4,7 +4,7 @@ import { createServerClient } from '@/lib/supabase/server';
 // Get availability for a room
 export async function GET(request: NextRequest) {
     try {
-        const supabase = createServerClient();
+        const supabase = await createServerClient();
         const { searchParams } = new URL(request.url);
 
         const roomId = searchParams.get('roomId');

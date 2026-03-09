@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, subDays } from 'date-fns';
-import {
-    Copy, Plus, CheckCircle, RefreshCw, Search, CalendarDays,
+import { Copy, Plus, CheckCircle, RefreshCw, Search, CalendarDays,
     MapPin, Building2, Phone, Mail, User, ArrowRight, MessageCircle,
     Clock, AlertCircle, ChevronRight
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import BookingCalendar from '@/components/BookingCalendar';
 import type { Property, Room, Availability } from '@/types/database';
 
@@ -17,11 +17,22 @@ interface PropertyWithRooms extends Property {
 interface Props {
     properties: PropertyWithRooms[];
     availability: Availability[];
+    pendingRequests: any[];
 }
 
 type Step = 'dates' | 'property' | 'details';
 
-export default function OperatorDashboardClient({ properties, availability }: Props) {
+export default function OperatorDashboardClient({ properties, availability, pendingRequests: initialPending }: Props) {
+    const router = useRouter();
+    const [activeTab, setActiveTab] = useState<'new' | 'pending'>('new');
+    const [pendingRequests, setPendingRequests] = useState(initialPending);
+    const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+    // Sync pending requests when server data refreshes (e.g. after router.refresh() from a manual booking)
+    useEffect(() => {
+        setPendingRequests(initialPending);
+    }, [initialPending]);
+
     // Step tracker
     const [currentStep, setCurrentStep] = useState<Step>('dates');
 
@@ -48,8 +59,43 @@ export default function OperatorDashboardClient({ properties, availability }: Pr
     const [copied, setCopied] = useState(false);
     const [showSuggestDates, setShowSuggestDates] = useState(false);
 
+    // Manual Success State
+    const [manualSuccess, setManualSuccess] = useState(false);
+
     const selectedProperty = properties.find(p => p.id === selectedPropertyId);
     const selectedRoom = selectedProperty?.rooms.find(r => r.id === selectedRoomId);
+
+    // Compute Global Availability (dates where ALL properties are unavailable)
+    const globalAvailability = useMemo(() => {
+        if (!properties.length) return [];
+
+        const allDatesSet = new Set<string>();
+        availability.forEach(a => allDatesSet.add(a.date));
+
+        const globalDisabledDates: Availability[] = [];
+
+        Array.from(allDatesSet).forEach(dateStr => {
+            // Check if there is AT LEAST ONE property with at least one room available on this date
+            const isAnyPropertyAvailable = properties.some(property => {
+                return property.rooms.some(room => {
+                    const roomAvail = availability.find(a => a.room_id === room.id && a.date === dateStr);
+                    return !roomAvail || (roomAvail.status !== 'booked' && roomAvail.status !== 'held' && roomAvail.status !== 'maintenance');
+                });
+            });
+
+            if (!isAnyPropertyAvailable) {
+                // If NO properties are available, mark the date as globally booked
+                globalDisabledDates.push({
+                    id: `global-${dateStr}`,
+                    room_id: 'global',
+                    date: dateStr,
+                    status: 'booked'
+                } as Availability);
+            }
+        });
+
+        return globalDisabledDates;
+    }, [availability, properties]);
 
     // ===== AVAILABILITY HELPERS =====
 
@@ -186,6 +232,7 @@ export default function OperatorDashboardClient({ properties, availability }: Pr
         setIsBooking(true);
         setError('');
         setPaystackLink('');
+        setManualSuccess(false);
 
         try {
             const response = await fetch('/api/bookings', {
@@ -212,8 +259,12 @@ export default function OperatorDashboardClient({ properties, availability }: Pr
 
             if (data.paystackUrl) {
                 setPaystackLink(data.paystackUrl);
+                router.refresh();
+            } else if (data.message) {
+                setManualSuccess(true);
+                router.refresh();
             } else {
-                throw new Error('Link generation succeeded, but no Paystack URL was returned.');
+                throw new Error(data.warning || data.message || 'Link generation succeeded, but no Paystack URL was returned.');
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -229,10 +280,40 @@ export default function OperatorDashboardClient({ properties, availability }: Pr
     };
 
     const handleWhatsAppShare = () => {
-        if (!paystackLink || !guestPhone) return;
-        const phone = guestPhone.replace(/\D/g, '');
-        const message = `Hi ${guestName}! 🏠\n\nHere's your booking payment link for *${selectedProperty?.name}*:\n\n📅 ${globalCheckIn && format(globalCheckIn, 'MMM d')} → ${globalCheckOut && format(globalCheckOut, 'MMM d, yyyy')}\n💰 ₦${totalAmount.toLocaleString()}\n\n🔗 ${paystackLink}\n\nPlease complete payment within 30 minutes to secure your booking. Thank you!\n\n— 9jaRooms`;
-        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+                if (!guestPhone) return;
+                const phone = guestPhone.replace(/\D/g, '');
+                
+                let message: string;
+                if (paystackLink) {
+                    message = `Hi ${guestName}! 🏠\n\nHere's your booking payment link for *${selectedProperty?.name}*:\n\n📅 ${globalCheckIn && format(globalCheckIn, 'MMM d')} → ${globalCheckOut && format(globalCheckOut, 'MMM d, yyyy')}\n💰 ₦${totalAmount.toLocaleString()}\n\n🔗 ${paystackLink}\n\nPlease complete payment within 30 minutes to secure your booking. Thank you!\n\n— 9jaRooms`;
+                } else {
+                     message = `Hi ${guestName}! 🏠\n\nYour stay request for *${selectedProperty?.name}* has been received:\n\n📅 ${globalCheckIn && format(globalCheckIn, 'MMM d')} → ${globalCheckOut && format(globalCheckOut, 'MMM d, yyyy')}\n💰 ₦${totalAmount.toLocaleString()}\n\nWe will follow up with you shortly regarding payment details to confirm your booking. Thank you!\n\n— 9jaRooms`;
+                }
+                
+                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+            };
+
+    const handleManualConfirm = async (bookingId: string) => {
+        if (!confirm('Are you sure you want to manually confirm this payment? This will block the dates and send confirmation emails to the customer.')) return;
+        
+        setConfirmingId(bookingId);
+        try {
+            const res = await fetch('/api/admin/bookings/confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to confirm booking');
+            
+            // Remove from list
+            setPendingRequests(prev => prev.filter(b => b.id !== bookingId));
+            alert('Payment successfully confirmed!');
+        } catch (err: any) {
+            alert(err.message || 'Something went wrong');
+        } finally {
+            setConfirmingId(null);
+        }
     };
 
     const resetForm = () => {
@@ -258,7 +339,93 @@ export default function OperatorDashboardClient({ properties, availability }: Pr
 
     return (
         <div className="space-y-6">
-            {/* Quick Stats Bar */}
+            {/* Tabs */}
+            <div className="flex items-center gap-4 overflow-x-auto whitespace-nowrap border-b border-gray-200 no-scrollbar pb-1">
+                <button 
+                    onClick={() => setActiveTab('new')}
+                    className={`pb-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'new' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                >
+                    Create New Booking
+                </button>
+                <button 
+                    onClick={() => setActiveTab('pending')}
+                    className={`pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'pending' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                >
+                    Pending Stay Requests
+                    {pendingRequests.length > 0 && (
+                        <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full font-bold">
+                            {pendingRequests.length}
+                        </span>
+                    )}
+                </button>
+            </div>
+
+            {activeTab === 'pending' && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="p-4 sm:p-6 border-b border-gray-100">
+                        <h2 className="text-lg font-semibold text-gray-900">Pending Stay Requests</h2>
+                        <p className="text-sm text-gray-500 mt-1">Pending bookings requested via the website or WhatsApp.</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="text-left font-medium text-gray-500 px-6 py-3">Guest Details</th>
+                                    <th className="text-left font-medium text-gray-500 px-6 py-3">Property & Room</th>
+                                    <th className="text-left font-medium text-gray-500 px-6 py-3">Stay Dates</th>
+                                    <th className="text-left font-medium text-gray-500 px-6 py-3">Price</th>
+                                    <th className="text-right font-medium text-gray-500 px-6 py-3">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {pendingRequests.map(req => (
+                                    <tr key={req.id} className="hover:bg-gray-50/50">
+                                        <td className="px-6 py-4">
+                                            <p className="font-medium text-gray-900">{req.guest_name}</p>
+                                            <p className="text-gray-500 text-xs">{req.guest_phone}</p>
+                                            <p className="text-gray-500 text-xs">Source: <span className="capitalize">{req.booking_source}</span></p>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <p className="font-medium text-gray-900">{req.property?.name}</p>
+                                            <p className="text-gray-500 text-xs">{req.room?.name}</p>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <p className="font-medium text-gray-900">{req.check_in}</p>
+                                            <p className="text-gray-500 text-xs">→ {req.check_out} ({req.nights} nights)</p>
+                                        </td>
+                                        <td className="px-6 py-4 font-bold text-gray-900">
+                                            ₦{req.total_amount?.toLocaleString()}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <button
+                                                onClick={() => handleManualConfirm(req.id)}
+                                                disabled={confirmingId === req.id}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                                            >
+                                                {confirmingId === req.id ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                                                Confirm Payment
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {pendingRequests.length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                                            <CalendarDays size={32} className="mx-auto text-gray-300 mb-3" />
+                                            <p className="font-medium">No pending requests</p>
+                                            <p className="text-xs text-gray-400 mt-1">All stay requests have been processed.</p>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'new' && (
+                <div className="space-y-6">
+                    {/* Quick Stats Bar */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-3">
                     <div className="w-9 h-9 bg-green-50 rounded-lg flex items-center justify-center">
@@ -334,7 +501,7 @@ export default function OperatorDashboardClient({ properties, availability }: Pr
                     <h2 className="text-lg font-semibold text-gray-900 mb-2">When does the customer need a room?</h2>
                     <p className="text-sm text-gray-500 mb-4">Select check-in and check-out dates to see available properties.</p>
                     <BookingCalendar
-                        availability={[]}
+                        availability={globalAvailability}
                         onDateSelect={handleGlobalDateSelect}
                         selectedCheckIn={globalCheckIn}
                         selectedCheckOut={globalCheckOut}
@@ -594,7 +761,7 @@ export default function OperatorDashboardClient({ properties, availability }: Pr
                                         <span>₦{totalAmount.toLocaleString()}</span>
                                     </div>
 
-                                    {!paystackLink ? (
+                                    {(!paystackLink && !manualSuccess) ? (
                                         <div className="mt-6 space-y-4">
                                             {error && (
                                                 <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl flex items-start gap-2">
@@ -608,33 +775,43 @@ export default function OperatorDashboardClient({ properties, availability }: Pr
                                                 className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white py-3.5 rounded-xl font-semibold transition-colors"
                                             >
                                                 {isBooking ? <RefreshCw className="animate-spin" size={20} /> : <Plus size={20} />}
-                                                {isBooking ? 'Generating Link...' : 'Generate Payment Link'}
+                                                {isBooking ? 'Processing...' : 'Submit Manual Booking'}
                                             </button>
                                         </div>
                                     ) : (
                                         <div className="mt-6 space-y-4">
-                                            {/* Success: Payment Link */}
-                                            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <CheckCircle size={16} className="text-green-600" />
-                                                    <p className="text-sm text-green-800 font-medium">Room blocked for 30 minutes</p>
+                                            {/* Success: Payment Link or Manual Block */}
+                                            {paystackLink ? (
+                                                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <CheckCircle size={16} className="text-green-600" />
+                                                        <p className="text-sm text-green-800 font-medium">Room blocked for 30 minutes</p>
+                                                    </div>
+                                                    <p className="text-xs text-green-700 mb-3">Send this payment link to the customer:</p>
+                                                    <div className="flex bg-white border border-green-100 p-2 rounded-lg gap-1">
+                                                        <input
+                                                            readOnly
+                                                            value={paystackLink}
+                                                            className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-gray-600 px-2 min-w-0"
+                                                        />
+                                                        <button
+                                                            onClick={handleCopy}
+                                                            className="px-3 py-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded-md text-sm font-medium flex items-center gap-1 transition-colors shrink-0"
+                                                        >
+                                                            {copied ? <CheckCircle size={14} /> : <Copy size={14} />}
+                                                            {copied ? 'Copied!' : 'Copy'}
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <p className="text-xs text-green-700 mb-3">Send this payment link to the customer:</p>
-                                                <div className="flex bg-white border border-green-100 p-2 rounded-lg gap-1">
-                                                    <input
-                                                        readOnly
-                                                        value={paystackLink}
-                                                        className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-gray-600 px-2 min-w-0"
-                                                    />
-                                                    <button
-                                                        onClick={handleCopy}
-                                                        className="px-3 py-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded-md text-sm font-medium flex items-center gap-1 transition-colors shrink-0"
-                                                    >
-                                                        {copied ? <CheckCircle size={14} /> : <Copy size={14} />}
-                                                        {copied ? 'Copied!' : 'Copy'}
-                                                    </button>
+                                            ) : manualSuccess ? (
+                                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <CheckCircle size={16} className="text-amber-600" />
+                                                        <p className="text-sm text-amber-800 font-medium">Manual Booking Submitted!</p>
+                                                    </div>
+                                                    <p className="text-xs text-amber-700">The dates are now held. This booking is in your "Pending Stay Requests" tab awaiting manual payment confirmation.</p>
                                                 </div>
-                                            </div>
+                                            ) : null}
 
                                             {/* Quick Actions */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -661,6 +838,8 @@ export default function OperatorDashboardClient({ properties, availability }: Pr
                             )}
                         </div>
                     </div>
+                </div>
+            )}
                 </div>
             )}
         </div>

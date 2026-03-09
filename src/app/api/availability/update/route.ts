@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireRoomAccess } from '@/lib/auth/require-room-access';
 
 // Update availability status for a specific room + date
-// Using untyped client to avoid complex Supabase type resolution issues
 export async function POST(request: NextRequest) {
     try {
-        const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            { auth: { autoRefreshToken: false, persistSession: false } }
-        );
-
         const body = await request.json();
         const roomId = body.roomId as string;
         const date = body.date as string;
@@ -19,6 +12,11 @@ export async function POST(request: NextRequest) {
         if (!roomId || !date || !status) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
+
+        const { adminClient, error: authError, status: authStatus } = await requireRoomAccess(roomId);
+        if (authError || !adminClient) return NextResponse.json({ error: authError }, { status: authStatus || 401 });
+
+        const supabase = adminClient;
 
         const validStatuses = ['available', 'cleaning', 'maintenance'];
         if (!validStatuses.includes(status)) {

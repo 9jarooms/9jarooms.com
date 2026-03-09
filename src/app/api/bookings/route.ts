@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, createSessionClient } from '@/lib/supabase/server';
+import { createAdminClient, createSessionClient } from '@/lib/supabase/server';
 import { initializePayment, generateReference } from '@/lib/paystack';
 import { addDays, format } from 'date-fns';
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Create a new booking
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { roomId, propertyId, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
+        const { roomId, propertyId, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource, contactPreference, isStayRequest } = body;
 
         // Validate required fields
         if (!roomId || !propertyId || !guestName || !checkIn || !checkOut) {
@@ -25,7 +28,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const supabase = createServerClient(); // Admin client for DB ops
+        const supabase = createAdminClient(); // Explicit Admin client for DB ops to enable safe guest inserts
         const sessionSupabase = await createSessionClient(); // Session client for Auth
 
         // Check authentication for manual booking
@@ -119,17 +122,39 @@ export async function POST(request: NextRequest) {
         const pricePerNight = room.price_per_night || property.price_per_night;
         const nightCount = dates.length;
 
+        // Validate minimum stay
+        if (property.minimum_stay && nightCount < property.minimum_stay) {
+            return NextResponse.json(
+                { error: `Minimum stay is ${property.minimum_stay} nights. You selected ${nightCount}.` },
+                { status: 400 }
+            );
+        }
+
         // Handle Maintenance vs Guest Booking type
         const bookingType = body.bookingType || 'guest';
 
         let totalAmount = pricePerNight * nightCount;
+
+        // Apply discount from property's discount_rules
+        if (property.discount_rules && Array.isArray(property.discount_rules) && bookingType !== 'maintenance') {
+            const sorted = [...property.discount_rules].sort((a: any, b: any) => b.min_nights - a.min_nights);
+            const bestRule = sorted.find((r: any) => nightCount >= r.min_nights);
+            if (bestRule) {
+                if (bestRule.discount_percent) {
+                    totalAmount = Math.round(totalAmount * (1 - bestRule.discount_percent / 100));
+                } else if (bestRule.discount_amount) {
+                    totalAmount = Math.max(0, totalAmount - bestRule.discount_amount);
+                }
+            }
+        }
+
         if (bookingType === 'maintenance') {
             totalAmount = 0;
         }
 
-        // Get owner's Paystack subaccount from the database
+        // Get owner's Paystack subaccount from the database (skip for stay requests)
         const subaccount = (owner as any)?.paystack_subaccount_code;
-        if (!isInternalBooking && !subaccount) {
+        if (!isInternalBooking && !isStayRequest && !subaccount) {
             console.error(`[Booking API] Owner has no Paystack subaccount for property ${propertyId}`);
             return NextResponse.json(
                 { error: 'Property not configured for online payments. Please contact support.' },
@@ -152,7 +177,9 @@ export async function POST(request: NextRequest) {
 
         const bookingNotes = body.notes || (isInternalBooking
             ? (bookingType === 'maintenance' ? 'Blocked for Maintenance' : 'Manual Booking (Caretaker/Agent)')
-            : null);
+            : isStayRequest
+                ? `Stay Request — Contact via ${contactPreference || 'whatsapp'}`
+                : null);
 
         const finalGuestEmail = isInternalBooking && user?.email ? user.email : guestEmail;
 
@@ -236,8 +263,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 6. Initialize Paystack (ONLY if NOT internal)
-        if (!isInternalBooking) {
+        // 6. Initialize Paystack (ONLY if NOT internal, NOT stay request, and NOT operator)
+        if (!isInternalBooking && !isStayRequest && bookingSource !== 'operator') {
             try {
                 const payment = await initializePayment({
                     email: guestEmail,
@@ -270,14 +297,51 @@ export async function POST(request: NextRequest) {
                     reference: reference,
                 });
 
-            } catch (payError) {
+            } catch (payError: any) {
                 console.error('Paystack Init Error:', payError);
                 return NextResponse.json({
                     success: true,
                     bookingId: booking.id,
-                    warning: 'Payment initialization failed. Please retry from booking page.',
+                    warning: payError?.message || 'Payment initialization failed. Please retry from booking page.',
                 });
             }
+        } else if (isStayRequest) {
+            // Send email to the team to notify them of the request
+            try {
+                await resend.emails.send({
+                    from: '9jaRooms <9jarooms@thewoodlandswuye.com>',
+                    to: ['9jarooms@thewoodlandswuye.com'], // Team email
+                    subject: `New Stay Request from ${guestName}`,
+                    html: `
+                        <h2>New Stay Request Received!</h2>
+                        <p><strong>Customer Name:</strong> ${guestName}</p>
+                        <p><strong>Contact Info:</strong> ${guestPhone || ''} | ${guestEmail || ''} ${whatsappUserPhone ? `| WhatsApp: ${whatsappUserPhone}` : ''}</p>
+                        <p><strong>Property:</strong> ${property.name}</p>
+                        <p><strong>Room:</strong> ${room.name}</p>
+                        <p><strong>Dates:</strong> ${checkIn} to ${checkOut} (${nightCount} nights)</p>
+                        <p><strong>Total Estimate:</strong> ₦${totalAmount.toLocaleString()}</p>
+                        <p><strong>Contact Preference:</strong> ${contactPreference || 'Unknown'}</p>
+                        <p><em>Please follow up with this customer to confirm their booking and arrange payment. Once payment is received, use the Operator Dashboard to manually confirm the booking.</em></p>
+                    `
+                });
+                console.log('[Booking API] Stay Request Team Email sent successfully');
+            } catch (emailError) {
+                console.error('[Booking API] Failed to send Stay Request Team Email', emailError);
+            }
+
+            // Return success for stay request (team will follow up)
+            return NextResponse.json({
+                success: true,
+                bookingId: booking.id,
+                message: 'Stay request submitted. Our team will contact you shortly.',
+            });
+        } else if (bookingSource === 'operator') {
+            // Operator dashboard manual booking (Pending payment)
+            return NextResponse.json({
+                success: true,
+                bookingId: booking.id,
+                message: 'Booking created successfully. Pending manual payment confirmation.',
+            });
         } else {
             // Return success for internal booking immediately
             return NextResponse.json({

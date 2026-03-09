@@ -9,7 +9,7 @@ interface Props {
 
 export default async function PropertyPage({ params }: Props) {
     const { id } = await params;
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
 
     // Fetch property with rooms and availability
     const { data: property } = await supabase
@@ -34,6 +34,17 @@ export default async function PropertyPage({ params }: Props) {
         .in('room_id', roomIds)
         .gte('date', new Date().toISOString().split('T')[0]);
 
+    // Fetch site settings (contact numbers)
+    const { data: settingsData } = await supabase
+        .from('site_settings')
+        .select('key, value')
+        .in('key', ['contact_phone', 'contact_whatsapp']);
+
+    const settings: Record<string, string> = {};
+    for (const row of settingsData || []) {
+        settings[row.key] = row.value as string;
+    }
+
     return (
         <>
             <Header />
@@ -42,6 +53,8 @@ export default async function PropertyPage({ params }: Props) {
                     property={property}
                     rooms={rooms || []}
                     availability={availability || []}
+                    contactPhone={settings.contact_phone || ''}
+                    contactWhatsapp={settings.contact_whatsapp || ''}
                 />
             </main>
         </>

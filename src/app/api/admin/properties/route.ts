@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// Helper to get Service Role client (bypasses RLS)
-function getAdminSupabase() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-}
+import { requireAdmin } from '@/lib/auth/require-admin';
 
 export async function GET(request: NextRequest) {
-    const supabase = getAdminSupabase();
+    const { adminClient, error, status } = await requireAdmin();
+    if (error || !adminClient) return NextResponse.json({ error }, { status });
+    const supabase = adminClient;
 
-    const { data, error } = await supabase
+    const { data, error: dbError } = await supabase
         .from('properties')
         .select(`
             *,
@@ -23,12 +16,14 @@ export async function GET(request: NextRequest) {
         `)
         .order('created_at', { ascending: false });
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
     return NextResponse.json({ data });
 }
 
 export async function POST(request: NextRequest) {
-    const supabase = getAdminSupabase();
+    const { adminClient, error: authError, status } = await requireAdmin();
+    if (authError || !adminClient) return NextResponse.json({ error: authError }, { status });
+    const supabase = adminClient;
     const body = await request.json();
 
     // Destructure known fields to avoid passing junk
@@ -36,8 +31,9 @@ export async function POST(request: NextRequest) {
         name, description, address, area, city, state, price_per_night, max_guests,
         owner_id, caretaker_id, check_in_instructions, house_rules, amenities,
         check_in_time, check_out_time,
-        type, images, thumbnail, // New field: thumbnail
-        is_featured,
+        type, images, thumbnail,
+        is_featured, category,
+        minimum_stay, discount_rules,
         rooms
     } = body;
 
@@ -57,8 +53,11 @@ export async function POST(request: NextRequest) {
             check_in_time, check_out_time,
             type: type || 'Entire Apartment',
             images: images || [],
-            thumbnail, // Insert thumbnail
+            thumbnail,
             is_featured: Boolean(is_featured),
+            category: category || 'standard',
+            minimum_stay: minimum_stay ? Number(minimum_stay) : null,
+            discount_rules: discount_rules || null,
         })
         .select()
         .single();
@@ -94,7 +93,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-    const supabase = getAdminSupabase();
+    const { adminClient, error: authError, status } = await requireAdmin();
+    if (authError || !adminClient) return NextResponse.json({ error: authError }, { status });
+    const supabase = adminClient;
     const body = await request.json();
 
     // Strip relations and ID from updates

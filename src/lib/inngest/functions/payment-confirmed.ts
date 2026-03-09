@@ -1,5 +1,5 @@
 import { inngest } from '../client';
-import { createServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -11,17 +11,26 @@ export const paymentConfirmed = inngest.createFunction(
     async ({ event, step }) => {
         const { reference, amount, paystackData } = event.data;
 
-        const supabase = createServerClient();
+        const supabase = createAdminClient();
 
-        // Step 1: Find the booking by Paystack reference
+        // Step 1: Find the booking by Paystack reference or explicit booking ID
         const booking = await step.run('find-booking', async () => {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('bookings')
-                .select('*, room:rooms(*), property:properties(*, owner:owners(*))')
-                .eq('paystack_reference', reference)
-                .single();
+                .select('*, room:rooms(*), property:properties(*, owner:owners(*))');
 
-            if (error || !data) throw new Error(`Booking not found for reference: ${reference}`);
+            // Support manual confirmation which passes the booking_id in metadata
+            if (event.data.metadata?.booking_id) {
+                query = query.eq('id', event.data.metadata.booking_id);
+            } else {
+                query = query.eq('paystack_reference', reference);
+            }
+
+            const { data, error } = await query.single();
+
+            if (error || !data) {
+                throw new Error(`Booking not found for reference/ID: ${reference} / ${event.data.metadata?.booking_id}`);
+            }
 
             // If already paid, we still want to ensure emails are sent (idempotency), 
             // but we can skip the "mark as paid" logic if we want, or just let it update again.
@@ -80,7 +89,7 @@ export const paymentConfirmed = inngest.createFunction(
                 html: `
                     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #374151;">
                         <div style="text-align: center; margin-bottom: 30px;">
-                            <img src="${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/public-assets/email-logo.png" alt="9jaRooms" style="height: 80px; width: auto;" />
+                            <img src="${process.env.NEXT_PUBLIC_APP_URL}/icon.png" alt="9jaRooms" style="height: 60px; width: auto;" />
                         </div>
                         
                         <h1 style="color: #16a34a; text-align: center; margin-bottom: 24px;">Booking Confirmed!</h1>

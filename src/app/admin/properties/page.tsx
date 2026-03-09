@@ -47,14 +47,17 @@ export default function AdminPropertiesPage() {
     const [success, setSuccess] = useState('');
 
     const initialFormState = {
-        name: '', description: '', address: '', area: '', city: 'Lagos',
+        name: '', description: '', address: '', area: '', city: 'Abuja',
         type: 'Entire Apartment',
+        category: 'standard',
         price_per_night: '', max_guests: '2', owner_id: '', caretaker_id: '',
         check_in_instructions: '', house_rules: '',
         amenities: 'WiFi,AC,Smart TV,Kitchen,Security,Power Backup',
         thumbnail: '',
         images: [] as string[],
         is_featured: false,
+        minimum_stay: '',
+        discount_rules: [] as { min_nights: string; type: 'percent' | 'amount'; value: string }[],
         rooms: [{ name: 'Entire Property', price_per_night: '', max_guests: '2', description: '', images: [] as string[] }],
     };
 
@@ -93,13 +96,19 @@ export default function AdminPropertiesPage() {
 
     function handleEdit(property: Property) {
         setEditingId(property.id);
+        const existingDiscountRules = ((property as any).discount_rules || []).map((r: any) => ({
+            min_nights: r.min_nights?.toString() || '',
+            type: r.discount_percent ? 'percent' as const : 'amount' as const,
+            value: (r.discount_percent || r.discount_amount || '')?.toString(),
+        }));
         setForm({
             name: property.name || '',
             description: property.description || '',
             address: property.address || '',
             area: property.area || '',
-            city: property.city || 'Lagos',
+            city: property.city || 'Abuja',
             type: property.type || 'Entire Apartment',
+            category: (property as any).category || 'standard',
             price_per_night: property.price_per_night?.toString() || '',
             max_guests: property.max_guests?.toString() || '2',
             owner_id: property.owner_id || property.owner?.id || '',
@@ -110,6 +119,8 @@ export default function AdminPropertiesPage() {
             thumbnail: property.thumbnail || (property.images && property.images.length > 0 ? property.images[0] : ''),
             images: property.images || [],
             is_featured: property.is_featured || false,
+            minimum_stay: (property as any).minimum_stay?.toString() || '',
+            discount_rules: existingDiscountRules,
             rooms: property.rooms.length > 0 ? property.rooms.map(r => ({
                 name: r.name,
                 price_per_night: r.price_per_night?.toString() || '',
@@ -133,6 +144,14 @@ export default function AdminPropertiesPage() {
         setCreating(true);
         setError('');
 
+        // Build discount rules for DB
+        const discountRules = form.discount_rules
+            .filter(r => r.min_nights && r.value)
+            .map(r => ({
+                min_nights: Number(r.min_nights),
+                ...(r.type === 'percent' ? { discount_percent: Number(r.value) } : { discount_amount: Number(r.value) }),
+            }));
+
         const payload = {
             name: form.name,
             description: form.description,
@@ -140,6 +159,7 @@ export default function AdminPropertiesPage() {
             area: form.area,
             city: form.city,
             type: form.type,
+            category: form.category,
             price_per_night: Number(form.price_per_night),
             max_guests: Number(form.max_guests),
             owner_id: form.owner_id,
@@ -150,6 +170,8 @@ export default function AdminPropertiesPage() {
             thumbnail: form.thumbnail,
             images: form.images,
             is_featured: form.is_featured,
+            minimum_stay: form.minimum_stay ? Number(form.minimum_stay) : null,
+            discount_rules: discountRules.length > 0 ? discountRules : null,
             rooms: [], // 1-to-1 mapping enforced. API will auto-create default room.
         };
 
@@ -280,6 +302,19 @@ export default function AdminPropertiesPage() {
                                     </select>
                                 </div>
                                 <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                                    <select
+                                        value={form.category}
+                                        onChange={e => setForm({ ...form, category: e.target.value })}
+                                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                                    >
+                                        <option value="budget">💚 Budget — Great value stays</option>
+                                        <option value="standard">⭐ Standard — Comfortable & reliable</option>
+                                        <option value="luxury">👑 Luxury — Premium experiences</option>
+                                    </select>
+                                    <p className="text-xs text-gray-400 mt-1">Shown on homepage and used for filtering.</p>
+                                </div>
+                                <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Area *</label>
                                     <input type="text" required value={form.area} onChange={e => setForm({ ...form, area: e.target.value })}
                                         className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
@@ -343,6 +378,75 @@ export default function AdminPropertiesPage() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">House Rules</label>
                                 <textarea rows={2} value={form.house_rules} onChange={e => setForm({ ...form, house_rules: e.target.value })}
                                     className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
+                            </div>
+
+                            {/* Minimum Stay & Discount Rules */}
+                            <div className="border border-gray-200 rounded-xl p-4 space-y-4">
+                                <h3 className="font-medium text-gray-900">Stay Rules & Discounts</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Stay (nights)</label>
+                                        <input type="number" min="1" value={form.minimum_stay} onChange={e => setForm({ ...form, minimum_stay: e.target.value })}
+                                            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                                            placeholder="e.g. 2 (leave empty for no minimum)" />
+                                        <p className="text-xs text-gray-400 mt-1">Guests must book at least this many nights.</p>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Discount Rules</label>
+                                    <p className="text-xs text-gray-400 mb-3">Offer discounts for longer stays. The best matching rule applies.</p>
+                                    <div className="space-y-2">
+                                        {form.discount_rules.map((rule, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
+                                                <div className="flex-1">
+                                                    <label className="text-xs text-gray-500">Min nights</label>
+                                                    <input type="number" min="1" value={rule.min_nights}
+                                                        onChange={e => {
+                                                            const rules = [...form.discount_rules];
+                                                            rules[idx] = { ...rules[idx], min_nights: e.target.value };
+                                                            setForm({ ...form, discount_rules: rules });
+                                                        }}
+                                                        className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <label className="text-xs text-gray-500">Discount type</label>
+                                                    <select value={rule.type}
+                                                        onChange={e => {
+                                                            const rules = [...form.discount_rules];
+                                                            rules[idx] = { ...rules[idx], type: e.target.value as 'percent' | 'amount' };
+                                                            setForm({ ...form, discount_rules: rules });
+                                                        }}
+                                                        className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm">
+                                                        <option value="percent">% off</option>
+                                                        <option value="amount">₦ off</option>
+                                                    </select>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <label className="text-xs text-gray-500">{rule.type === 'percent' ? 'Percent' : 'Amount (₦)'}</label>
+                                                    <input type="number" min="1" value={rule.value}
+                                                        onChange={e => {
+                                                            const rules = [...form.discount_rules];
+                                                            rules[idx] = { ...rules[idx], value: e.target.value };
+                                                            setForm({ ...form, discount_rules: rules });
+                                                        }}
+                                                        className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm"
+                                                        placeholder={rule.type === 'percent' ? 'e.g. 10' : 'e.g. 5000'} />
+                                                </div>
+                                                <button type="button" onClick={() => {
+                                                    setForm({ ...form, discount_rules: form.discount_rules.filter((_, i) => i !== idx) });
+                                                }} className="mt-4 text-red-400 hover:text-red-600">
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button type="button" onClick={() => {
+                                        setForm({ ...form, discount_rules: [...form.discount_rules, { min_nights: '', type: 'percent', value: '' }] });
+                                    }} className="mt-2 text-sm text-red-500 hover:text-red-600 font-medium flex items-center gap-1">
+                                        <Plus size={14} /> Add Discount Rule
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="flex items-center gap-3 p-4 bg-blue-50/50 border border-blue-100 rounded-xl">

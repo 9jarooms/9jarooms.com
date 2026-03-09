@@ -1,8 +1,8 @@
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
 
     // Check for Authorization header first (more reliable for API calls directly after login)
     const authHeader = request.headers.get('Authorization');
@@ -23,8 +23,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Use Service Role Client to fetch roles (Bypasses RLS)
-    // createServerClient uses the service role key internally
-    const { data: roles, error: roleError } = await supabase
+    // Now that createServerClient enforces RLS, we use createAdminClient explicitly
+    const adminSupabase = createAdminClient();
+    const { data: roles, error: roleError } = await adminSupabase
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id);
