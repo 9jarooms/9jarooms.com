@@ -16,9 +16,9 @@ const CATEGORIES = [
 export default async function HomePage() {
   const supabase = await createServerClient();
 
-  // Fetch all active properties with their booking counts to find the most booked
+  // Fetch all active and non-deleted properties with their booking counts to find the most booked
   const [propertiesRes, settingsRes] = await Promise.all([
-    supabase.from('properties').select('*, bookings(count)').eq('is_active', true),
+    supabase.from('properties').select('*, bookings(count)').eq('is_active', true).neq('is_deleted', true),
     supabase.from('site_settings').select('value').eq('key', 'category_thumbnails').maybeSingle(),
   ]);
 

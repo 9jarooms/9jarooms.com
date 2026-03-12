@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
             caretaker:caretakers(id, name, email),
             rooms(*)
         `)
+        .neq('is_deleted', true)
         .order('created_at', { ascending: false });
 
     if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
@@ -113,4 +114,25 @@ export async function PATCH(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     return NextResponse.json({ data });
+}
+
+export async function DELETE(request: NextRequest) {
+    const { adminClient, error: authError, status } = await requireAdmin();
+    if (authError || !adminClient) return NextResponse.json({ error: authError }, { status });
+    const supabase = adminClient;
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) return NextResponse.json({ error: 'Property ID required' }, { status: 400 });
+
+    const { data, error } = await supabase
+        .from('properties')
+        .update({ is_deleted: true, is_active: false })
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({ success: true, data });
 }

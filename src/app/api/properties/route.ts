@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
                 bookings(check_in, check_out, status)
             )
         `)
-        .eq('is_active', true);
+        .eq('is_active', true).neq('is_deleted', true);
 
     if (type) {
         query = query.eq('type', type);
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
                 const { data: areaCheck } = await supabase
                     .from('properties')
                     .select('id')
-                    .eq('is_active', true)
+                    .eq('is_active', true).neq('is_deleted', true)
                     .or(`area.ilike.%${area}%,city.ilike.%${area}%`)
                     .limit(1);
 
@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
                                 bookings(check_in, check_out, status)
                             )
                         `)
-                        .eq('is_active', true)
+                        .eq('is_active', true).neq('is_deleted', true)
                         .or(`area.ilike.%${area}%,city.ilike.%${area}%`);
 
                     if (areaProperties && areaProperties.length > 0) {
@@ -215,7 +215,7 @@ export async function GET(request: NextRequest) {
                 const { data: cityLookup } = await supabase
                     .from('properties')
                     .select('city')
-                    .eq('is_active', true)
+                    .eq('is_active', true).neq('is_deleted', true)
                     .or(`area.ilike.%${area}%,city.ilike.%${area}%`)
                     .limit(1);
 
@@ -234,7 +234,7 @@ export async function GET(request: NextRequest) {
                                 bookings(check_in, check_out, status)
                             )
                         `)
-                        .eq('is_active', true)
+                        .eq('is_active', true).neq('is_deleted', true)
                         .eq('city', city)
                         .not('area', 'ilike', `%${area}%`)
                         .limit(10);
@@ -265,7 +265,7 @@ export async function GET(request: NextRequest) {
                             bookings(check_in, check_out, status)
                         )
                     `)
-                    .eq('is_active', true)
+                    .eq('is_active', true).neq('is_deleted', true)
                     .limit(20);
 
                 if (type) {
@@ -294,7 +294,7 @@ export async function GET(request: NextRequest) {
         const { data: allProps } = await supabase
             .from('properties')
             .select('id, rooms(id)')
-            .eq('is_active', true);
+            .eq('is_active', true).neq('is_deleted', true);
 
         allProps?.forEach((p: any) => {
             const roomCount = (p.rooms as any[])?.length || 0;

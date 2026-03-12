@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, X, Building2, Pencil, User, Home, Star } from 'lucide-react';
+import { Plus, X, Building2, Pencil, User, Home, Star, Trash2, CalendarOff } from 'lucide-react';
 import MediaUploader from '@/components/MediaUploader';
 
 interface Property {
@@ -46,6 +46,10 @@ export default function AdminPropertiesPage() {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
+    const [showBlockDates, setShowBlockDates] = useState(false);
+    const [blockPropertyId, setBlockPropertyId] = useState<string | null>(null);
+    const [blockDatesForm, setBlockDatesForm] = useState({ check_in: '', check_out: '' });
+
     const initialFormState = {
         name: '', description: '', address: '', area: '', city: 'Abuja',
         type: 'Entire Apartment',
@@ -56,6 +60,7 @@ export default function AdminPropertiesPage() {
         thumbnail: '',
         images: [] as string[],
         is_featured: false,
+        is_active: false,
         minimum_stay: '',
         discount_rules: [] as { min_nights: string; type: 'percent' | 'amount'; value: string }[],
         rooms: [{ name: 'Entire Property', price_per_night: '', max_guests: '2', description: '', images: [] as string[] }],
@@ -119,6 +124,7 @@ export default function AdminPropertiesPage() {
             thumbnail: property.thumbnail || (property.images && property.images.length > 0 ? property.images[0] : ''),
             images: property.images || [],
             is_featured: property.is_featured || false,
+            is_active: property.is_active ?? false,
             minimum_stay: (property as any).minimum_stay?.toString() || '',
             discount_rules: existingDiscountRules,
             rooms: property.rooms.length > 0 ? property.rooms.map(r => ({
@@ -170,6 +176,7 @@ export default function AdminPropertiesPage() {
             thumbnail: form.thumbnail,
             images: form.images,
             is_featured: form.is_featured,
+            is_active: form.is_active,
             minimum_stay: form.minimum_stay ? Number(form.minimum_stay) : null,
             discount_rules: discountRules.length > 0 ? discountRules : null,
             rooms: [], // 1-to-1 mapping enforced. API will auto-create default room.
@@ -221,6 +228,51 @@ export default function AdminPropertiesPage() {
 
     const formatPrice = (n: number) => new Intl.NumberFormat('en-NG').format(n);
 
+    async function handleDelete(id: string, name: string) {
+        if (!window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) return;
+
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/admin/properties?id=${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            setSuccess(`Property ${name} deleted successfully`);
+            fetchAll();
+        } catch (err: any) {
+            setError(err.message || 'Failed to delete property');
+            setLoading(false);
+        }
+    }
+
+    async function handleBlockDates(e: React.FormEvent) {
+        e.preventDefault();
+        setCreating(true);
+        setError('');
+        
+        try {
+            const res = await fetch('/api/admin/properties/block-dates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    property_id: blockPropertyId,
+                    check_in: blockDatesForm.check_in,
+                    check_out: blockDatesForm.check_out,
+                }),
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            
+            setSuccess('Dates blocked successfully');
+            setShowBlockDates(false);
+            setBlockPropertyId(null);
+            setBlockDatesForm({ check_in: '', check_out: '' });
+        } catch (err: any) {
+            setError(err.message || 'Failed to block dates');
+        }
+        setCreating(false);
+    }
+
+
     if (loading) {
         return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-3 border-gray-200 border-t-red-500 rounded-full animate-spin" /></div>;
     }
@@ -242,6 +294,33 @@ export default function AdminPropertiesPage() {
                 <div className={`mb-4 px-4 py-3 rounded-xl text-sm ${error ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
                     {error || success}
                     <button onClick={() => { setError(''); setSuccess(''); }} className="ml-2 font-bold">×</button>
+                </div>
+            )}
+
+            {/* Block Dates Modal */}
+            {showBlockDates && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-lg font-bold">Block Calendar Dates</h2>
+                            <button onClick={() => { setShowBlockDates(false); setBlockPropertyId(null); }}><X size={20} className="text-gray-400" /></button>
+                        </div>
+                        <form onSubmit={handleBlockDates} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                <input type="date" required value={blockDatesForm.check_in} onChange={e => setBlockDatesForm({ ...blockDatesForm, check_in: e.target.value })}
+                                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                <input type="date" required value={blockDatesForm.check_out} onChange={e => setBlockDatesForm({ ...blockDatesForm, check_out: e.target.value })}
+                                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+                            </div>
+                            <button type="submit" disabled={creating} className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-medium disabled:opacity-50 mt-4">
+                                {creating ? 'Saving...' : 'Block Dates'}
+                            </button>
+                        </form>
+                    </div>
                 </div>
             )}
 
@@ -313,6 +392,18 @@ export default function AdminPropertiesPage() {
                                         <option value="luxury">👑 Luxury — Premium experiences</option>
                                     </select>
                                     <p className="text-xs text-gray-400 mt-1">Shown on homepage and used for filtering.</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                    <select
+                                        value={form.is_active ? 'active' : 'draft'}
+                                        onChange={e => setForm({ ...form, is_active: e.target.value === 'active' })}
+                                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                                    >
+                                        <option value="draft">Draft (Hidden from guests)</option>
+                                        <option value="active">Active (Published)</option>
+                                    </select>
+                                    <p className="text-xs text-gray-400 mt-1">Draft properties can be blocked out before publishing.</p>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Area *</label>
@@ -499,11 +590,19 @@ export default function AdminPropertiesPage() {
                                 </button>
                                 <button onClick={() => toggleActive(prop.id, prop.is_active)}
                                     className={`px-2.5 py-1 rounded-full text-xs font-medium ${prop.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                                    {prop.is_active ? 'Active' : 'Inactive'}
+                                    {prop.is_active ? 'Active' : 'Draft'}
                                 </button>
                                 <button onClick={() => handleEdit(prop)}
-                                    className="p-1 px-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">
+                                    className="p-1 px-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
                                     <Pencil size={14} />
+                                </button>
+                                <button onClick={() => { setBlockPropertyId(prop.id); setShowBlockDates(true); }}
+                                    className="p-1 px-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors" title="Block Dates">
+                                    <CalendarOff size={14} />
+                                </button>
+                                <button onClick={() => handleDelete(prop.id, prop.name)}
+                                    className="p-1 px-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                                    <Trash2 size={14} />
                                 </button>
                             </div>
                         </div>
