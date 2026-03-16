@@ -365,6 +365,16 @@ export default function AdminPropertiesPage() {
                                             accept={{ 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] }}
                                             existingUrls={form.images}
                                             onUpload={(urls) => setForm({ ...form, images: urls })}
+                                            thumbnail={form.thumbnail}
+                                            onThumbnailChange={(url) => {
+                                                // Keep old thumbnail in gallery if it isn't already there
+                                                const oldThumb = form.thumbnail;
+                                                const updatedImages =
+                                                    oldThumb && !form.images.includes(oldThumb)
+                                                        ? [...form.images, oldThumb]
+                                                        : form.images;
+                                                setForm({ ...form, thumbnail: url, images: updatedImages });
+                                            }}
                                         />
                                     </div>
                                 </div>

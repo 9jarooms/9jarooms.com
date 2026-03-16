@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { createClient } from '@/lib/supabase/client';
 import imageCompression from 'browser-image-compression';
-import { X, Upload, Loader2, ImagePlus } from 'lucide-react';
+import { X, Loader2, ImagePlus, Star } from 'lucide-react';
 
 interface MediaUploaderProps {
     onUpload: (urls: string[]) => void;
@@ -14,6 +14,10 @@ interface MediaUploaderProps {
     accept?: Record<string, string[]>;
     maxSizeMB?: number;
     single?: boolean;
+    /** The current thumbnail URL (only meaningful when single=false) */
+    thumbnail?: string;
+    /** Called when user clicks the star icon on an image to set it as thumbnail */
+    onThumbnailChange?: (url: string) => void;
 }
 
 export default function MediaUploader({
@@ -25,12 +29,18 @@ export default function MediaUploader({
         'image/*': ['.png', '.jpg', '.jpeg', '.webp']
     },
     maxSizeMB = 10,
-    single = false
+    single = false,
+    thumbnail,
+    onThumbnailChange,
 }: MediaUploaderProps) {
     const [uploading, setUploading] = useState(false);
     const [urls, setUrls] = useState<string[]>(existingUrls);
     const [error, setError] = useState('');
     const [progress, setProgress] = useState(0);
+
+    // drag-to-reorder state
+    const dragItem = useRef<number | null>(null);
+    const dragOver = useRef<number | null>(null);
 
     const supabase = createClient();
 
@@ -40,13 +50,9 @@ export default function MediaUploader({
         setProgress(0);
         const newUrls: string[] = [];
 
-        console.log('MediaUploader: Files dropped:', acceptedFiles.map(f => `${f.name} (${f.type}, ${f.size} bytes)`));
-
         try {
-            // Check session first
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             if (sessionError || !session) {
-                console.error('MediaUploader: No active session. Upload blocked.');
                 throw new Error('You must be logged in to upload files.');
             }
 
@@ -54,9 +60,6 @@ export default function MediaUploader({
             const total = acceptedFiles.length;
 
             for (const file of acceptedFiles) {
-                console.log(`MediaUploader: Processing ${file.name}...`);
-
-                // Check size
                 if (file.size > maxSizeMB * 1024 * 1024) {
                     setError(`File ${file.name} exceeds ${maxSizeMB}MB limit.`);
                     continue;
@@ -65,45 +68,27 @@ export default function MediaUploader({
                 let fileToUpload = file;
                 const isImage = file.type.startsWith('image/');
 
-                // Compress images
                 if (isImage) {
                     try {
-                        console.log(`Compressing ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)...`);
-                        const options = {
-                            maxSizeMB: 1, // Compress to ~1MB
-                            maxWidthOrHeight: 1920,
-                            useWebWorker: true,
-                        };
+                        const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
                         fileToUpload = await imageCompression(file, options);
-                        console.log(`Compressed to ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
                     } catch (err) {
                         console.error('Compression failed, using original:', err);
                     }
                 }
 
-                // Upload to Supabase
                 const fileExt = file.name.split('.').pop();
                 const fileName = `${folder}/${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-
-                console.log(`MediaUploader: Uploading ${file.name} to ${bucket}/${fileName}...`);
 
                 const { data, error: uploadError } = await supabase.storage
                     .from(bucket)
                     .upload(fileName, fileToUpload);
 
-                if (uploadError) {
-                    console.error('MediaUploader: Supabase Upload Error:', uploadError);
-                    throw uploadError;
-                }
+                if (uploadError) throw uploadError;
 
-                console.log('MediaUploader: Upload successful:', data);
-
-                // Get Public URL
                 const { data: { publicUrl } } = supabase.storage
                     .from(bucket)
                     .getPublicUrl(fileName);
-
-                console.log('MediaUploader: Public URL:', publicUrl);
 
                 newUrls.push(publicUrl);
                 completed++;
@@ -112,7 +97,7 @@ export default function MediaUploader({
 
             let updatedUrls;
             if (single) {
-                updatedUrls = [newUrls[newUrls.length - 1]]; // Keep only the last uploaded
+                updatedUrls = [newUrls[newUrls.length - 1]];
             } else {
                 updatedUrls = [...urls, ...newUrls];
             }
@@ -121,7 +106,6 @@ export default function MediaUploader({
             onUpload(updatedUrls);
 
         } catch (err: any) {
-            console.error('Upload error catch block:', err);
             setError(err.message || 'Failed to upload files');
         } finally {
             setUploading(false);
@@ -133,6 +117,31 @@ export default function MediaUploader({
         setUrls(updated);
         onUpload(updated);
     };
+
+    // ── Drag-to-reorder handlers ──────────────────────────────────────────────
+    const handleDragStart = (index: number) => {
+        dragItem.current = index;
+    };
+
+    const handleDragEnter = (index: number) => {
+        dragOver.current = index;
+    };
+
+    const handleDragEnd = () => {
+        if (dragItem.current === null || dragOver.current === null) return;
+        if (dragItem.current === dragOver.current) return;
+
+        const reordered = [...urls];
+        const [moved] = reordered.splice(dragItem.current, 1);
+        reordered.splice(dragOver.current, 0, moved);
+
+        dragItem.current = null;
+        dragOver.current = null;
+
+        setUrls(reordered);
+        onUpload(reordered);
+    };
+    // ─────────────────────────────────────────────────────────────────────────
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -168,7 +177,7 @@ export default function MediaUploader({
                     </div>
                 ) : (
                     <div className="flex flex-col items-center gap-2 text-gray-500 py-2">
-                        {single ? <ImagePlus size={24} /> : <ImagePlus size={24} />}
+                        <ImagePlus size={24} />
                         <p className="text-sm font-medium">{single ? 'Upload Thumbnail' : 'Click to upload or drag & drop'}</p>
                         <p className="text-xs text-gray-400">
                             {single ? 'Select one image' : 'Images (compressed)'}
@@ -179,23 +188,70 @@ export default function MediaUploader({
 
             {error && <p className="text-xs text-red-500 mt-2 font-medium bg-red-50 p-2 rounded border border-red-100">{error}</p>}
 
+            {/* Gallery grid with drag-to-reorder + thumbnail picker */}
             {!single && urls.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-                    {urls.map((url, index) => {
-                        return (
-                            <div key={index} className="relative group bg-gray-100 rounded-lg overflow-hidden aspect-video border border-gray-200 shadow-sm">
-                                <img src={url} alt="Uploaded" className="w-full h-full object-cover" />
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); removeUrl(index); }}
-                                    className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-                                    type="button"
+                <>
+                    {onThumbnailChange && (
+                        <p className="text-xs text-gray-400 mt-3 mb-1.5 flex items-center gap-1">
+                            <Star size={11} className="text-amber-400 fill-amber-400" />
+                            Drag images to reorder · Click <Star size={11} className="inline text-amber-400 fill-amber-400" /> to set as thumbnail
+                        </p>
+                    )}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-1">
+                        {urls.map((url, index) => {
+                            const isThumbnail = thumbnail ? url === thumbnail : index === 0;
+                            return (
+                                <div
+                                    key={url + index}
+                                    draggable
+                                    onDragStart={() => handleDragStart(index)}
+                                    onDragEnter={() => handleDragEnter(index)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    className="relative group bg-gray-100 rounded-lg overflow-hidden aspect-video border-2 shadow-sm cursor-grab active:cursor-grabbing select-none transition-all"
+                                    style={{
+                                        borderColor: isThumbnail ? '#f59e0b' : '#e5e7eb',
+                                    }}
                                 >
-                                    <X size={12} strokeWidth={2.5} />
-                                </button>
-                            </div>
-                        );
-                    })}
-                </div>
+                                    <img src={url} alt="Uploaded" className="w-full h-full object-cover pointer-events-none" />
+
+                                    {/* Thumbnail badge */}
+                                    {isThumbnail && (
+                                        <div className="absolute top-1 left-1 bg-amber-400 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow">
+                                            <Star size={9} className="fill-white" /> Thumbnail
+                                        </div>
+                                    )}
+
+                                    {/* Hover overlay with controls */}
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-1.5">
+                                        {/* Set as thumbnail star button */}
+                                        {onThumbnailChange && !isThumbnail && (
+                                            <button
+                                                type="button"
+                                                title="Set as thumbnail"
+                                                onClick={(e) => { e.stopPropagation(); onThumbnailChange(url); }}
+                                                className="bg-amber-400 hover:bg-amber-500 text-white rounded-full p-1.5 shadow-lg transition-colors"
+                                            >
+                                                <Star size={12} strokeWidth={2} />
+                                            </button>
+                                        )}
+                                        {isThumbnail && <span />}
+
+                                        {/* Delete button */}
+                                        <button
+                                            type="button"
+                                            title="Remove image"
+                                            onClick={(e) => { e.stopPropagation(); removeUrl(index); }}
+                                            className="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition-colors"
+                                        >
+                                            <X size={12} strokeWidth={2.5} />
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </>
             )}
         </div>
     );
