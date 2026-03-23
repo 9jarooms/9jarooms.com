@@ -90,7 +90,7 @@ export default function CustomerAccountPage() {
             <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
                     <a href="/" className="block">
-                        <img src="/icon.png" alt="9jaRooms" className="h-[4.5rem] w-auto object-contain" />
+                        <img src="/WHITE.jpg" alt="9jaRooms" className="h-[4.5rem] w-auto object-contain" />
                     </a>
                     <button 
                         onClick={handleSignOut}

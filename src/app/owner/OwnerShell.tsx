@@ -40,7 +40,7 @@ export default function OwnerShell({ children, userName }: { children: React.Rea
                 <div className="flex flex-col h-full">
                     <div className="p-6 border-b border-gray-100">
                         <Link href="/" className="block">
-                            <img src="/icon.png" alt="9jaRooms" className="h-14 w-auto object-contain" />
+                            <img src="/WHITE.jpg" alt="9jaRooms" className="h-14 w-auto object-contain" />
                         </Link>
                         <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
                             Owner Portal

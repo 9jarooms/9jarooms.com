@@ -502,7 +502,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                         {(contactPhone || contactWhatsapp) && (
                             <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Or contact us directly</h3>
-                                <p className="text-xs text-gray-500 mb-4">Need a room instantly? Call or message us and we&apos;ll book for you right away.</p>
+                                <p className="text-xs text-gray-500 mb-4">If you prefer to book by call or WhatsApp, reach out to us and we&apos;ll book for you right away.</p>
                                 <div className="space-y-2">
                                     {contactPhone && (
                                         <a

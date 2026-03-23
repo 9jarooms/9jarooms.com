@@ -1,16 +1,15 @@
 import type { Metadata } from "next";
-import { Inter, Playfair_Display } from "next/font/google"; // Added Playfair_Display
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const geistSans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
-  variable: "--font-inter",
 });
 
-const playfair = Playfair_Display({
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
-  variable: "--font-playfair",
-  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -21,11 +20,6 @@ export const metadata: Metadata = {
     title: "9jaRooms — The Right Room, Every Time",
     description: "Book clean, comfortable serviced apartments in Abuja.",
     type: "website",
-  },
-  icons: {
-    icon: '/favicon.png',
-    shortcut: '/favicon.png',
-    apple: '/apple-touch-icon.png',
   },
   manifest: '/site.webmanifest',
 };
@@ -44,7 +38,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${playfair.variable} font-sans antialiased bg-gray-50 text-gray-900`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased bg-gray-50 text-gray-900`}>
         {children}
       </body>
     </html>

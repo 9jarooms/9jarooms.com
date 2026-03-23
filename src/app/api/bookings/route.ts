@@ -3,22 +3,55 @@ import { createAdminClient, createSessionClient } from '@/lib/supabase/server';
 import { initializePayment, generateReference } from '@/lib/paystack';
 import { addDays, format } from 'date-fns';
 import { Resend } from 'resend';
+import { z } from 'zod';
+
+const bookingSchema = z.object({
+    roomId: z.string().uuid(),
+    propertyId: z.string().uuid(),
+    guestName: z.string().min(2).max(100),
+    guestEmail: z.string().email().optional().nullable().or(z.literal('')),
+    guestPhone: z.string().max(20).optional().nullable().or(z.literal('')),
+    whatsappUserPhone: z.string().optional().nullable().or(z.literal('')),
+    checkIn: z.string(),
+    checkOut: z.string(),
+    userId: z.string().uuid().optional().nullable(),
+    isManualBooking: z.boolean().optional(),
+    bookingSource: z.string().optional().nullable(),
+    bookingType: z.string().optional().nullable(),
+    notes: z.string().max(1000).optional().nullable()
+});
+
+const rateLimitStore = new Map<string, { count: number, resetAt: number }>();
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Create a new booking
 export async function POST(request: NextRequest) {
-    try {
-        const body = await request.json();
-        const { roomId, propertyId, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
-
-        // Validate required fields
-        if (!roomId || !propertyId || !guestName || !checkIn || !checkOut) {
-            return NextResponse.json(
-                { error: 'Missing required fields' },
-                { status: 400 }
-            );
+    // Basic IP Rate Limiting (Abuse Prevention)
+    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+    const now = Date.now();
+    const rateRecord = rateLimitStore.get(ip);
+    
+    if (rateRecord && rateRecord.resetAt > now) {
+        if (rateRecord.count >= 10) { // Max 10 attempts per 15 minutes
+            return NextResponse.json({ error: 'Too many booking attempts. Please try again later.' }, { status: 429 });
         }
+        rateRecord.count++;
+    } else {
+        rateLimitStore.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    }
+
+    try {
+        const rawBody = await request.json();
+        
+        // Input Validation & Sanitization
+        const validation = bookingSchema.safeParse(rawBody);
+        if (!validation.success) {
+            return NextResponse.json({ error: 'Invalid input data', details: validation.error.format() }, { status: 400 });
+        }
+        
+        const body = validation.data;
+        const { roomId, propertyId, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
 
         // guestEmail is required for guest bookings, but optional for manual (uses auth email)
         if (!isManualBooking && !guestEmail) {
@@ -274,7 +307,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 const payment = await initializePayment({
-                    email: guestEmail,
+                    email: guestEmail as string,
                     amount: totalAmount * 100, // kobo
                     reference: reference,
                     subaccount: subaccount,
@@ -306,11 +339,10 @@ export async function POST(request: NextRequest) {
 
             } catch (payError: any) {
                 console.error('Paystack Init Error:', payError);
-                return NextResponse.json({
-                    success: true,
-                    bookingId: booking.id,
-                    warning: payError?.message || 'Payment initialization failed. Please retry from booking page.',
-                });
+                return NextResponse.json(
+                    { error: payError?.message || 'Payment initialization failed with Paystack. Please try again or contact support.' },
+                    { status: 400 }
+                );
             }
         } else if (bookingSource === 'operator') {
             // Operator dashboard manual booking (Pending payment)

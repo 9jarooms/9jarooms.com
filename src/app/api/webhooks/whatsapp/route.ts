@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
+        console.log('--- WHATSAPP WEBHOOK RECEIVED ---');
+        console.log(JSON.stringify(body, null, 2));
 
         // Check if this is a WhatsApp status update or message
         if (body.object === 'whatsapp_business_account') {

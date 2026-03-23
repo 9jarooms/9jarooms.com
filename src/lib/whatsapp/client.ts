@@ -45,6 +45,40 @@ export class WhatsAppClient {
         }
     }
 
+    async sendTemplate(to: string, templateName: string, languageCode: string, components: any[] = []) {
+        try {
+            const response = await fetch(`${WHATSAPP_API_URL}/${this.phoneId}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    messaging_product: 'whatsapp',
+                    recipient_type: 'individual',
+                    to: to,
+                    type: 'template',
+                    template: {
+                        name: templateName,
+                        language: { code: languageCode },
+                        components: components.length > 0 ? components : undefined,
+                    },
+                }),
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                console.error('WhatsApp Template Send Error:', JSON.stringify(error, null, 2));
+                throw new Error(error.error?.message || 'Failed to send WhatsApp template');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('WhatsApp Client Template Error:', error);
+            throw error;
+        }
+    }
+
     async markAsRead(messageId: string) {
         try {
             await fetch(`${WHATSAPP_API_URL}/${this.phoneId}/messages`, {

@@ -30,35 +30,36 @@
 
 
 @theme {
-  /* Override default green palette with Brand Green #8fd168 */
-  --color-green-50: #f4fbef;
-  --color-green-100: #e6f6db;
-  --color-green-200: #ceedba;
-  --color-green-300: #aee08e;
-  --color-green-400: #8fd168;
-  --color-green-500: #72b94a;
-  --color-green-600: #579435;
-  --color-green-700: #44722c;
-  --color-green-800: #385a27;
-  --color-green-900: #304d24;
-  --color-green-950: #172a0f;
+  /* Brand Green Palette */
+  --color-green-50: #F4FBEF;
+  --color-green-100: #E6F7ED;
+  --color-green-200: #B3E3C5;
+  --color-green-300: #7ED957; /* Light Brand Green */
+  --color-green-400: #339F5F;
+  --color-green-500: #008737; /* Primary Brand Green */
+  --color-green-600: #00762E;
+  --color-green-700: #005A23;
+  --color-green-800: #00421A;
+  --color-green-900: #212624; /* Brand Black used for darkest accents */
+  --color-green-950: #161A18;
 
-  /* Add Serif Font Family */
-  --font-serif: var(--font-playfair), 'Times New Roman', serif;
+  /* Add Geist Font Family */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 :root {
-  /* Brand Green Palette based on #8fd168 */
-  --green-primary: #8fd168;
+  /* Brand Palette from Manual */
+  --green-primary: #008737;
   /* Brand green - Primary */
-  --green-dark: #385a27;
-  /* Dark variant for contrast/hover */
-  --green-light: #ceedba;
-  /* Light accent */
-  --green-subtle: #f4fbef;
-  /* Very subtle background */
+  --green-dark: #212624;
+  /* Dark variant using Brand Black */
+  --green-light: #7ED957;
+  /* Light accent - Secondary Green */
+  --green-subtle: #FCF7EA;
+  /* Very subtle background using Brand Accent */
 
-  /* Neutral Palette - Refined for "High-End" text */
+  /* Neutral Palette - Refined */
   --gray-50: #fafafa;
   --gray-100: #f4f4f5;
   --gray-200: #e4e4e7;
@@ -67,8 +68,8 @@
   --gray-500: #71717a;
   --gray-600: #52525b;
   --gray-700: #3f3f46;
-  --gray-800: #27272a;
-  --gray-900: #18181b;
+  --gray-800: #212624; /* Brand Black */
+  --gray-900: #1a1e1d;
 
   --radius: 16px;
   /* Slightly more rounded for modern feel */
@@ -86,7 +87,7 @@ select {
 }
 
 body {
-  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color: var(--gray-900);
   background-color: #fafafa;
   /* Off-white background is more premium/paper-like than pure #fff */
@@ -101,7 +102,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-serif);
+  font-family: var(--font-geist-sans);
   letter-spacing: -0.02em;
   /* Tighter tracking for headings looks more editorial */
 }

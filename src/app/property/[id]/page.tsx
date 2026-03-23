@@ -65,8 +65,8 @@ export default async function PropertyPage({ params }: Props) {
                     property={property}
                     rooms={rooms || []}
                     availability={availability || []}
-                    contactPhone={settings.contact_phone || ''}
-                    contactWhatsapp={settings.contact_whatsapp || ''}
+                    contactPhone={settings.contact_phone || '09067779344'}
+                    contactWhatsapp={settings.contact_whatsapp || '09067779344'}
                 />
             </main>
         </>

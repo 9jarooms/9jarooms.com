@@ -78,7 +78,7 @@ function BookingConfirmContent() {
         <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-3 sm:p-4 md:p-8">
             <div className="mb-6 md:mb-8 relative z-10 scale-90 md:scale-100">
                 <Link href="/">
-                    <img src="/logo.png" alt="9jaRooms" className="h-8 md:h-10 w-auto" />
+                    <img src="/WHITE.jpg" alt="9jaRooms" className="h-8 md:h-10 w-auto" />
                 </Link>
             </div>
             <div className="max-w-xl w-full mx-auto">

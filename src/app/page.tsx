@@ -72,8 +72,8 @@ export default async function HomePage() {
           </div>
 
           <div className="relative z-10 max-w-4xl mx-auto w-full px-4 sm:px-6 text-center flex flex-col items-center">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif text-white leading-tight mb-2 italic">
-              The Right Room, Every Time.
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-sans tracking-tight font-extrabold text-white leading-[1.1] mb-4">
+              The Right Room,<br />Every Time.
             </h1>
             <p className="text-white/75 text-sm md:text-base mb-8 md:mb-10">
               Discover hand-picked short-let apartments across Abuja.
@@ -90,7 +90,7 @@ export default async function HomePage() {
             <section>
               {/* Section header — clean, minimal */}
               <div className="flex items-center justify-between mb-8">
-                <h2 className="text-2xl font-serif font-semibold text-gray-900">
+                <h2 className="text-2xl font-bold tracking-tight text-gray-900">
                   Most Booked Properties
                 </h2>
                 <Link
@@ -176,7 +176,7 @@ export default async function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-10">
             <div className="max-w-xl">
               <span className="text-green-400 font-medium tracking-widest uppercase text-xs mb-3 block">For Property Owners</span>
-              <h2 className="text-2xl md:text-4xl font-serif mb-4 leading-tight">
+              <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-4 leading-[1.1]">
                 Let 9jaRooms Manage<br />Your Bookings.
               </h2>
               <p className="text-gray-400 text-sm md:text-base font-light leading-relaxed mb-6">
@@ -188,8 +188,8 @@ export default async function HomePage() {
             </div>
             <div className="hidden md:block shrink-0">
               <div className="p-7 border border-white/10 rounded-2xl bg-white/5 backdrop-blur-sm">
-                <div className="text-4xl font-serif text-white mb-1">80%+</div>
-                <div className="text-gray-400 text-sm font-light">Average occupancy rate<br />for our managed properties.</div>
+                <div className="text-5xl font-extrabold text-white mb-2 tracking-tight">80%+</div>
+                <div className="text-gray-400 text-sm font-medium">Average occupancy rate<br />for our managed properties.</div>
               </div>
             </div>
           </div>

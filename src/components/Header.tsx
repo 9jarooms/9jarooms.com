@@ -35,14 +35,14 @@ export default function Header() {
                 <div className="flex items-center justify-between h-14 md:h-16">
                     {/* Logo - Using icon instead of full text logo as requested */}
                     <Link href="/" className="flex items-center z-50 relative shrink-0">
-                        <img src="/icon.png" alt="9jaRooms Logo" className="h-[3.5rem] md:h-[4.5rem] w-auto object-contain" />
+                        <img src="/WHITE.jpg" alt="9jaRooms Logo" className="h-[3.125rem] md:h-[3.75rem] w-auto object-contain" />
                     </Link>
 
                     {/* Desktop right: Phone + Login */}
                     <div className="hidden md:flex items-center gap-5">
-                        <a href="tel:+2348168078712" className="text-sm text-gray-500 hover:text-gray-800 transition-colors flex items-center gap-1.5">
+                        <a href="tel:+2348092777798" className="text-sm text-gray-500 hover:text-gray-800 transition-colors flex items-center gap-1.5">
                             <Phone size={13} />
-                            08031333333
+                            +2348092777798
                         </a>
                         <Link
                             href="/login"
@@ -57,7 +57,7 @@ export default function Header() {
 
                     {/* Mobile right: Phone + hamburger */}
                     <div className="md:hidden flex items-center gap-2">
-                        <a href="tel:+2348168078712" className="p-2 text-gray-500">
+                        <a href="tel:+2348092777798" className="p-2 text-gray-500">
                             <Phone size={19} />
                         </a>
                         <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 text-gray-600">

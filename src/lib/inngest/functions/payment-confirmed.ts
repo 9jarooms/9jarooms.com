@@ -89,7 +89,7 @@ export const paymentConfirmed = inngest.createFunction(
                 html: `
                     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #374151;">
                         <div style="text-align: center; margin-bottom: 30px;">
-                            <img src="https://www.9jarooms.com/icon.png" alt="9jaRooms" style="height: 60px; width: auto;" />
+                            <img src="https://www.9jarooms.com/WHITE.jpg" alt="9jaRooms" style="height: 60px; width: auto;" />
                         </div>
                         
                         <h1 style="color: #16a34a; text-align: center; margin-bottom: 24px;">Booking Confirmed!</h1>
@@ -163,7 +163,7 @@ export const paymentConfirmed = inngest.createFunction(
 
             if (error) {
                 console.error('Failed to send guest email:', error);
-                throw new Error(`Failed to send guest email: ${error.message}`);
+                return { success: false, error: error.message }; // Do not throw to keep workflow progressing
             }
             return { success: true };
         });
@@ -242,16 +242,9 @@ export const paymentConfirmed = inngest.createFunction(
                 const { WhatsAppClient } = await import('@/lib/whatsapp/client');
                 const wa = new WhatsAppClient();
 
-                // Normalize phone number to international format (WhatsApp requires it)
-                let phone = targetPhone.replace(/[\s\-\(\)]/g, '');
-                if (phone.startsWith('0')) {
-                    phone = '234' + phone.slice(1); // Convert 080... → 23480...
-                } else if (phone.startsWith('+')) {
-                    phone = phone.slice(1); // Remove leading +
-                }
-                if (!phone.startsWith('234') && phone.length === 10) {
-                    phone = '234' + phone;
-                }
+                let phone = targetPhone.replace(/[\s\-\(\)\+]/g, '');
+                if (phone.startsWith('0')) phone = '234' + phone.slice(1);
+                else if (phone.length === 10 && !phone.startsWith('234')) phone = '234' + phone;
 
                 console.log(`[WhatsApp Confirm] Sending to: ${phone} (original: ${targetPhone})`);
 
@@ -259,21 +252,70 @@ export const paymentConfirmed = inngest.createFunction(
                 const checkInDate = new Date(booking.check_in).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
                 const checkOutDate = new Date(booking.check_out).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
-                const message = `✅ *Payment Confirmed!*\n\n` +
-                    `Hi ${booking.guest_name}, your booking is confirmed!\n\n` +
-                    `🏠 *${property.name}*\n` +
-                    `📅 Check-in: ${checkInDate} (${property.check_in_time})\n` +
-                    `📅 Check-out: ${checkOutDate} (${property.check_out_time})\n` +
-                    `💰 Total Paid: ₦${(booking.total_amount || 0).toLocaleString()}\n\n` +
-                    `📍 ${property.address}\n\n` +
-                    `${property.check_in_instructions ? `🔑 *Check-in Instructions:*\n${property.check_in_instructions}\n\n` : ''}` +
-                    `📧 You will also receive a confirmation email with all the details.\n\n` +
-                    `We can't wait to host you! 🎉`;
+                const components = [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: booking.guest_name },
+                            { type: 'text', text: property.name },
+                            { type: 'text', text: property.address },
+                            { type: 'text', text: `${checkInDate} (${property.check_in_time})` },
+                            { type: 'text', text: `${checkOutDate} (${property.check_out_time})` }
+                        ]
+                    }
+                ];
 
-                await wa.sendMessage(phone, message);
+                await wa.sendTemplate(phone, 'booking_confirmed', 'en_US', components);
                 return { sent: true };
             } catch (error) {
                 console.error('Failed to send WhatsApp confirmation:', error);
+                return { sent: false, error: String(error) };
+            }
+        });
+
+        // Step 8: Send WhatsApp notification to Caretaker (via Meta Cloud API)
+        await step.run('send-whatsapp-caretaker', async () => {
+            const property = (booking as any).property;
+            if (!property.caretaker_id) return { sent: false, reason: 'No caretaker assigned' };
+
+            const { data: caretaker } = await supabase
+                .from('caretakers')
+                .select('phone, name')
+                .eq('id', property.caretaker_id)
+                .single();
+
+            if (!caretaker || !caretaker.phone) return { sent: false, reason: 'No caretaker phone' };
+
+            try {
+                const { WhatsAppClient } = await import('@/lib/whatsapp/client');
+                const wa = new WhatsAppClient();
+
+                let phone = caretaker.phone.replace(/[\s\-\(\)\+]/g, '');
+                if (phone.startsWith('0')) phone = '234' + phone.slice(1);
+                else if (phone.length === 10 && !phone.startsWith('234')) phone = '234' + phone;
+
+                const checkInDate = new Date(booking.check_in).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                const checkOutDate = new Date(booking.check_out).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+                const components = [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: caretaker.name || 'Caretaker' },
+                            { type: 'text', text: property.name },
+                            { type: 'text', text: booking.guest_name },
+                            { type: 'text', text: booking.guest_phone || 'N/A' },
+                            { type: 'text', text: checkInDate },
+                            { type: 'text', text: checkOutDate },
+                            { type: 'text', text: String(booking.guests || 1) }
+                        ]
+                    }
+                ];
+
+                await wa.sendTemplate(phone, 'caretaker_new_booking_alert', 'en', components);
+                return { sent: true };
+            } catch (error) {
+                console.error('Failed to send Caretaker WhatsApp confirmation:', error);
                 return { sent: false, error: String(error) };
             }
         });
