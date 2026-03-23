@@ -13,9 +13,18 @@ const supabase = createClient(
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-// Force frontend links to always use the real domain even if NEXT_PUBLIC_APP_URL is accidentally set to ngrok in Vercel
+// Force frontend links to always use the real domain
 const FRONTEND_URL = 'https://9jarooms.com';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.includes('ngrok') ? 'https://9jarooms.com' : (process.env.NEXT_PUBLIC_APP_URL || 'https://9jarooms.com');
+
+function getAppUrl() {
+    let url = process.env.NEXT_PUBLIC_APP_URL || 'https://9jarooms.com';
+    if (url.includes('ngrok')) return 'https://9jarooms.com'; // Bypass accidental ngrok leaks in production
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `https://${url}`; // Fix Vercel configs missing protocols (prevents Node fetch "failed to parse URL" crash)
+    }
+    return url;
+}
+const APP_URL = getAppUrl();
 const HUMAN_HANDOFF_NUMBER = '09067779344';
 
 // ============================================
