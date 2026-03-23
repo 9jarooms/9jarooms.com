@@ -13,7 +13,9 @@ const supabase = createClient(
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://9jarooms.com';
+// Force frontend links to always use the real domain even if NEXT_PUBLIC_APP_URL is accidentally set to ngrok in Vercel
+const FRONTEND_URL = 'https://9jarooms.com';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.includes('ngrok') ? 'https://9jarooms.com' : (process.env.NEXT_PUBLIC_APP_URL || 'https://9jarooms.com');
 const HUMAN_HANDOFF_NUMBER = '09067779344';
 
 // ============================================
@@ -165,7 +167,7 @@ async function executeSearchProperties(args: any) {
             price_per_night: p.price_per_night,
             max_guests: p.max_guests,
             amenities: (p.amenities || []).slice(0, 5),
-            link: `${APP_URL}/property/${p.id}`,
+            link: `${FRONTEND_URL}/property/${p.id}`,
         })),
     };
 }
@@ -315,7 +317,7 @@ async function executeCheckAvailability(args: any) {
                         area: prop.area,
                         price_per_night: propRooms[0].price_per_night || prop.price_per_night,
                         total_price: (propRooms[0].price_per_night || prop.price_per_night || 0) * nightCount,
-                        link: `${APP_URL}/property/${prop.id}`,
+                        link: `${FRONTEND_URL}/property/${prop.id}`,
                     });
                 }
             }
@@ -401,10 +403,11 @@ async function executeCreateBooking(args: any) {
             expires_in_minutes: 30,
         };
     } catch (err: any) {
-        console.error('[WhatsApp Booking] Error:', err?.message || err);
+        const errorMsg = err?.message || err;
+        console.error('[WhatsApp Booking] Error:', errorMsg);
         return {
             success: false,
-            reason: 'Booking system temporarily unavailable. Please try again or book on our website.',
+            reason: `System error (${errorMsg}). Please tell the user exactly this error so my developer can fix it. Also provide the website link: ${FRONTEND_URL}/property/${property_id}`,
         };
     }
 }
@@ -440,7 +443,7 @@ async function executeGetPropertyDetails(args: any) {
             price_per_night: r.price_per_night,
             max_guests: r.max_guests,
         })),
-        link: `${APP_URL}/property/${property.id}`,
+        link: `${FRONTEND_URL}/property/${property.id}`,
     };
 }
 
@@ -491,7 +494,7 @@ ALWAYS use this date/time as your reference. When a guest says "the 14th" or "ne
 
 1. **Greeting:** Short and warm. Wait for them to tell you what they need, or if they ask a very generic question like "what do you have available" or "show me apartments", DO NOT interrogate them. Do NOT respond with a list of questions asking for their budget, location, and headcount. Instead, IMMEDIATELY call 'search_properties' without any arguments, and show them 2-3 random lovely options to get the conversation started.
 
-2. **Search and share options:** Use 'search_properties' based on their location, budget, or dates. Include the link to each property at ${APP_URL}/property/[id] so they can see photos and details. Keep descriptions conversational.
+2. **Search and share options:** Use 'search_properties' based on their location, budget, or dates. Include the link to each property at ${FRONTEND_URL}/property/[id] so they can see photos and details. Keep descriptions conversational.
 
 3. **Check Availability:** Once they pick a property or mention specific dates, use 'check_availability'. If it's taken, the system gives you nearby dates and alternative properties — share those right away. Something like "That one's booked for those dates, but it opens up on the 15th. Or there's a similar place in Gwarinpa that's free — want me to send the details?"
 
