@@ -58,28 +58,21 @@ export async function POST(request: NextRequest) {
         const body = validation.data;
         const { roomId, propertyId, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
 
-        // guestEmail is required for guest bookings, but optional for manual (uses auth email)
-        if (!isManualBooking && !guestEmail) {
-            return NextResponse.json(
-                { error: 'Missing guest email' },
-                { status: 400 }
-            );
-        }
-
         const supabase = createAdminClient(); // Explicit Admin client for DB ops to enable safe guest inserts
         const sessionSupabase = await createSessionClient(); // Session client for Auth
 
-        // Check authentication for manual booking
-        let isInternalBooking = false;
+        // Fetch user from session for ALL types of bookings to link their ID
         let user: any = null;
+        let isInternalBooking = false;
+
+        const { data: { user: sessionUser }, error: userError } = await sessionSupabase.auth.getUser();
+        if (!userError && sessionUser) {
+            user = sessionUser;
+        }
 
         if (isManualBooking) {
-            // Use sessionSupabase to get the logged-in user
-            const { data: { user: sessionUser }, error: userError } = await sessionSupabase.auth.getUser();
-            user = sessionUser;
-
-            if (userError || !user) {
-                console.error("Manual Booking Auth Error: User not found", userError);
+            if (!user) {
+                console.error("Manual Booking Auth Error: User not found");
                 return NextResponse.json({ error: 'Unauthorized: User not logged in' }, { status: 401 });
             }
 
@@ -87,7 +80,6 @@ export async function POST(request: NextRequest) {
 
             if (user && user.email) {
                 // Verify if user is caretaker (id matches auth id)
-                // Use Admin `supabase` for DB checks to bypass RLS if needed
                 const { data: caretaker, error: caretakerError } = await supabase
                     .from('caretakers')
                     .select('id')
@@ -97,7 +89,7 @@ export async function POST(request: NextRequest) {
                 if (caretaker) console.log("User verified as Caretaker:", caretaker.id);
                 if (caretakerError && caretakerError.code !== 'PGRST116') console.error("Caretaker check error:", caretakerError);
 
-                // Check owner by email (since owners table doesn't have user_id in schema)
+                // Check owner by email
                 const { data: owner, error: ownerError } = await supabase
                     .from('owners')
                     .select('id')
@@ -118,6 +110,14 @@ export async function POST(request: NextRequest) {
             } else {
                 return NextResponse.json({ error: 'Unauthorized: No email found for user' }, { status: 401 });
             }
+        }
+
+        // guestEmail is required for guest bookings, unless they are logged in OR manual
+        if (!isManualBooking && !guestEmail && (!user || !user.email)) {
+            return NextResponse.json(
+                { error: 'Missing guest email' },
+                { status: 400 }
+            );
         }
 
         // 1. Generate date array (check-in to day before check-out)
@@ -219,7 +219,8 @@ export async function POST(request: NextRequest) {
 
         // If it's a manual booking from an operator, we WANT to use the guestEmail they entered
         // Only fallback to user.email if it's a maintenance block or caretaker booking themselves
-        const finalGuestEmail = guestEmail || (isInternalBooking && user?.email ? user.email : null);
+        // For standard guests, use the provided guestEmail, or fallback to their session user email
+        const finalGuestEmail = guestEmail || (user?.email ? user.email : null);
 
         const { data: booking, error: bookingError } = await supabase
             .from('bookings')

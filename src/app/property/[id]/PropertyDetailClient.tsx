@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
+import { createClient } from '@/lib/supabase/client';
 import {
     MapPin,
     Users,
@@ -83,6 +84,34 @@ export default function PropertyDetailClient({ property, rooms, availability, co
     const [error, setError] = useState('');
     const [bookingSuccess, setBookingSuccess] = useState(false);
     const [copied, setCopied] = useState(false);
+
+    useEffect(() => {
+        const fetchUserForPrefill = async () => {
+            try {
+                const supabase = createClient();
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    const meta = session.user.user_metadata;
+                    if (meta) {
+                        if (meta.first_name && meta.last_name) {
+                            setGuestName(`${meta.first_name} ${meta.last_name}`);
+                        } else if (meta.name) {
+                            setGuestName(meta.name);
+                        }
+                        if (meta.phone) {
+                            setGuestPhone(meta.phone);
+                        }
+                    }
+                    if (session.user.email) {
+                        setGuestEmail(session.user.email);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch user for prefill:", err);
+            }
+        };
+        fetchUserForPrefill();
+    }, []);
 
     const pricePerNight = selectedRoom?.price_per_night || property.price_per_night;
     const nights = checkIn && checkOut
