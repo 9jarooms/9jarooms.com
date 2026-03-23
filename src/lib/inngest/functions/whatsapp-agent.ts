@@ -496,6 +496,7 @@ ALWAYS use this date/time as your reference. When a guest says "the 14th" or "ne
 6. **Never say a booking is confirmed without actually calling 'create_booking'.**
 7. **Punctuation & Formatting:** Never use em-dashes. Use only standard punctuation. No emojis.
 8. **CRITICAL GUARDRAIL:** We DO NOT offer cancellations, refunds, or modifications. If a guest asks, politely decline and state that all bookings are final. Do NOT invent policies, features, or services we don't have.
+9. **ALWAYS RESPOND WITH TEXT:** Every time you receive a message or a tool result, you MUST output a text message formatting the result for the user. Never output an empty text. If a user asks for a link, and you are missing details, ask for the details explicitly!
 
 **The Booking Flow**
 
@@ -707,6 +708,9 @@ export const whatsappMessageProcessor = inngest.createFunction(
 
             // Handle function calls (may need multiple rounds)
             let maxIterations = 5;
+            let lastToolResult: any = null;
+            let lastToolName: string = '';
+
             while (maxIterations > 0) {
                 const functionCalls = response.functionCalls();
                 if (!functionCalls || functionCalls.length === 0) break;
@@ -752,6 +756,9 @@ export const whatsappMessageProcessor = inngest.createFunction(
                             response: toolResult,
                         },
                     });
+                    
+                    lastToolName = call.name;
+                    lastToolResult = toolResult;
                 }
 
                 // Send function results back to Gemini
@@ -768,7 +775,25 @@ export const whatsappMessageProcessor = inngest.createFunction(
                 return text;
             } catch (err) {
                 console.error('[WhatsApp AI] Error extracting final text response:', err);
-                return "I've processed that for you, but I'm having a little trouble displaying the final result. Give me a second, or if you need immediate help placing the booking, you can call us at " + HUMAN_HANDOFF_NUMBER;
+                
+                // Smart Fallbacks based on the invoked tool
+                if (lastToolName === 'create_booking') {
+                    if (lastToolResult?.success && lastToolResult?.payment_link) {
+                        return `Here is your payment link! You have 30 minutes to complete the booking: ${lastToolResult.payment_link}`;
+                    }
+                    return lastToolResult?.reason || "I need your full name, email, and phone number before I can generate that link for you!";
+                }
+                if (lastToolName === 'check_availability') {
+                    if (lastToolResult?.available) {
+                         return "Yes, those dates are available! Let me know your full name, email, and phone number and we can book it now.";
+                    }
+                    return lastToolResult?.reason || "That property isn't available for those dates. Let me know if you want to try different dates!";
+                }
+                if (lastToolName === 'search_properties') {
+                    return lastToolResult?.message || "I found some great properties for you. Just let me know which one you like!";
+                }
+                
+                return "I received your message, could you provide more details?";
             }
         });
 
