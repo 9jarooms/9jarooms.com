@@ -121,20 +121,6 @@ const tools: any[] = [
                     required: ['property_id'],
                 },
             },
-            {
-                name: 'handoff_to_human',
-                description: 'Transfer the conversation to a human agent. Call this when you cannot help the user, when they have a complaint, or when the request is too complex.',
-                parameters: {
-                    type: SchemaType.OBJECT,
-                    properties: {
-                        reason: {
-                            type: SchemaType.STRING,
-                            description: 'Reason for handoff',
-                        },
-                    },
-                    required: ['reason'],
-                },
-            },
         ],
     },
 ];
@@ -324,6 +310,7 @@ async function executeCheckAvailability(args: any) {
                 if (!blocked || blocked.length === 0) {
                     alternativeProperties.push({
                         property_id: prop.id,
+                        room_id: propRooms[0].id,
                         name: prop.name,
                         area: prop.area,
                         price_per_night: propRooms[0].price_per_night || prop.price_per_night,
@@ -355,16 +342,24 @@ async function executeCreateBooking(args: any) {
     console.log(`[WhatsApp Booking] Calling /api/bookings: property=${property_id}, room=${room_id}, dates=${check_in} to ${check_out}, guest=${guest_name}, booker=${whatsapp_user_phone}`);
 
     try {
+        // Prepare autofills in case Gemini fails to completely extract contact details
+        const safeGuestName = guest_name && guest_name.trim() !== '' ? guest_name : 'WhatsApp Guest';
+        const safeGuestEmail = guest_email && guest_email.trim() !== '' ? guest_email : `${whatsapp_user_phone.replace('+', '')}@whatsapp.9jarooms.com`;
+        const safeGuestPhone = guest_phone && guest_phone.trim() !== '' ? guest_phone : whatsapp_user_phone;
+
         // Call the existing booking API — same code path as website bookings
         const response = await fetch(`${APP_URL}/api/bookings`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-internal-secret': process.env.SUPABASE_SERVICE_ROLE_KEY! 
+            },
             body: JSON.stringify({
                 roomId: room_id,
                 propertyId: property_id,
-                guestName: guest_name,
-                guestEmail: guest_email,
-                guestPhone: guest_phone,
+                guestName: safeGuestName,
+                guestEmail: safeGuestEmail,
+                guestPhone: safeGuestPhone,
                 whatsappUserPhone: whatsapp_user_phone, // Pass the sender's phone
                 checkIn: check_in,
                 checkOut: check_out,
@@ -377,7 +372,7 @@ async function executeCreateBooking(args: any) {
             console.error(`[WhatsApp Booking] API error (${response.status}):`, result);
             return {
                 success: false,
-                reason: result.error || 'Failed to create booking. Please try again.',
+                reason: `Our system encountered an error: ${result.error || 'Unknown'}. If you haven't provided all details, please let me know your full name and email so I can fix it!`,
             };
         }
 
@@ -449,13 +444,7 @@ async function executeGetPropertyDetails(args: any) {
     };
 }
 
-function executeHandoffToHuman(args: any) {
-    return {
-        handoff: true,
-        message: `I understand this needs special attention. Please contact our team directly at ${HUMAN_HANDOFF_NUMBER} and they will assist you personally. You can also send a WhatsApp message to that number.`,
-        reason: args.reason,
-    };
-}
+// Removed executeHandoffToHuman
 
 function getSystemPrompt() {
     const now = new Date();
@@ -517,17 +506,16 @@ ALWAYS use this date/time as your reference. When a guest says "the 14th" or "ne
 6. **Send the link:** The 'create_booking' tool returns a payment link. Give them the link and let them know: "You've got 30 minutes to pay using this link. Once your payment goes through, you'll get a confirmation email with check-in details. You're all set!"
 
 **Handling Edge Cases**
-- **Non-booking queries / Complaints:** If a customer has a complaint or a problem you can't handle, use the 'handoff_to_human' tool to connect them with a real person at ${HUMAN_HANDOFF_NUMBER}. Let them know someone will reach out.
 - **Property unavailable:** "That one's not available right now. We do have [alternative] though - want to look at that?"
 - **Property Details:** Use 'get_property_details' only when someone asks for more info on a specific place.
 - **Off-topic chat:** Gently steer back. "Haha, good one. So - any specific area in Abuja you're looking at?"
+- **Errors:** If you encounter an error calling a tool or missing details, EXPLAIN the specific error back to the user and ask them for the missing details. You MUST resolve issues yourself. Do not pass them to human support.
 
 **Your Tools**
 - search_properties: Find apartments by location, budget, guest count. Use when someone asks what's available.
 - check_availability: Check if a property is free for specific dates. If it's not, you'll get alternatives back automatically.
 - get_property_details: Pull up full details on a property.
 - create_booking: Make a booking and generate a payment link. Only call this once you have everything: property_id, room_id, check_in, check_out, guest_name, guest_email, guest_phone.
-- handoff_to_human: Pass the conversation to a human. Use for complaints, disputes, or anything beyond your scope.
 `;
 }
 
@@ -736,9 +724,6 @@ export const whatsappMessageProcessor = inngest.createFunction(
                                 break;
                             case 'get_property_details':
                                 toolResult = await executeGetPropertyDetails(call.args);
-                                break;
-                            case 'handoff_to_human':
-                                toolResult = executeHandoffToHuman(call.args);
                                 break;
                             default:
                                 toolResult = { error: 'Unknown function' };

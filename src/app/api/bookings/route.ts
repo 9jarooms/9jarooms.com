@@ -27,18 +27,23 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Create a new booking
 export async function POST(request: NextRequest) {
-    // Basic IP Rate Limiting (Abuse Prevention)
-    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
-    const now = Date.now();
-    const rateRecord = rateLimitStore.get(ip);
-    
-    if (rateRecord && rateRecord.resetAt > now) {
-        if (rateRecord.count >= 10) { // Max 10 attempts per 15 minutes
-            return NextResponse.json({ error: 'Too many booking attempts. Please try again later.' }, { status: 429 });
+    const internalSecret = request.headers.get('x-internal-secret');
+    const isInternalService = internalSecret === process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    // Basic IP Rate Limiting (Abuse Prevention) - Only apply to public unauthenticated requests
+    if (!isInternalService) {
+        const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+        const now = Date.now();
+        const rateRecord = rateLimitStore.get(ip);
+        
+        if (rateRecord && rateRecord.resetAt > now) {
+            if (rateRecord.count >= 10) { // Max 10 attempts per 15 minutes
+                return NextResponse.json({ error: 'Too many booking attempts. Please try again later.' }, { status: 429 });
+            }
+            rateRecord.count++;
+        } else {
+            rateLimitStore.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
         }
-        rateRecord.count++;
-    } else {
-        rateLimitStore.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
     }
 
     try {
