@@ -45,7 +45,7 @@ export default function Header() {
                             +2348092777798
                         </a>
                         <Link
-                            href="/login"
+                            href="/account"
                             className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all duration-200"
                         >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -128,8 +128,8 @@ export default function Header() {
                                 {item.label}
                             </Link>
                         ))}
-                        <Link href="/login" className="mt-3 text-sm font-medium text-center text-green-600 border border-green-500 rounded-full px-5 py-3 hover:bg-green-500 hover:text-white transition-all" onClick={() => setMenuOpen(false)}>
-                            Login / Sign Up
+                        <Link href="/account" className="mt-3 text-sm font-medium text-center text-green-600 border border-green-500 rounded-full px-5 py-3 hover:bg-green-500 hover:text-white transition-all" onClick={() => setMenuOpen(false)}>
+                            My Account
                         </Link>
                     </div>
                 </nav>

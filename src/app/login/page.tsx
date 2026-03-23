@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -11,30 +11,8 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-
+    const redirectBasedOnRole = async (accessToken: string) => {
         try {
-            const supabase = createClient();
-            // Get user role and redirect accordingly
-            const { data, error: authError } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
-
-            if (authError || !data.session) {
-                setError(authError?.message || 'Login failed');
-                setLoading(false);
-                return;
-            }
-
-            const accessToken = data.session.access_token;
-            console.log('Login Debug - Auth Success, Token:', accessToken.substring(0, 10) + '...');
-
-            // Get user role via secure API (bypasses RLS issues)
-            // Explicitly pass token to avoid cookie race conditions
             const roleResponse = await fetch('/api/auth/role', {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`
@@ -43,15 +21,11 @@ export default function LoginPage() {
             if (!roleResponse.ok) {
                 const errText = await roleResponse.text();
                 console.error('Role API Error:', errText);
-                // Fallback: If API fails, try to proceed as guest or show error
-                // helpful debugging
                 if (roleResponse.status === 401) {
                     setError('Session invalid, please try again');
                     setLoading(false);
                     return;
                 }
-                // Default to dashboard if role fetch fails but auth succeeded?
-                // Safer to show error or default.
                 console.warn('Defaulting to dashboard due to role fetch failure');
                 router.push('/dashboard');
                 return;
@@ -63,29 +37,74 @@ export default function LoginPage() {
 
             switch (role) {
                 case 'admin':
-                    console.log('Login Debug - Redirecting to /admin');
                     router.refresh();
                     router.push('/admin');
                     break;
                 case 'owner':
-                    console.log('Login Debug - Redirecting to /owner');
-                    // Force hard navigation to ensure cookies are sent
                     window.location.href = '/owner';
                     break;
                 case 'caretaker':
-                    console.log('Login Debug - Redirecting to /dashboard');
                     router.refresh();
                     router.push('/dashboard');
                     break;
                 case 'call_operator':
-                    console.log('Login Debug - Redirecting to /operator');
                     router.refresh();
                     router.push('/operator');
                     break;
                 default:
-                    console.log('Login Debug - No role matched, redirecting to /dashboard');
-                    router.push('/dashboard');
+                    router.push('/account'); // default to customer dashboard
             }
+        } catch (err) {
+            console.error('Redirect Error:', err);
+            router.push('/account');
+        }
+    };
+
+    // Automatically check for an existing session (useful for password resets / email verification links)
+    useEffect(() => {
+        let mounted = true;
+        const supabase = createClient();
+        
+        const checkInitialSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session && mounted) {
+                redirectBasedOnRole(session.access_token);
+            }
+        };
+        checkInitialSession();
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN' && session && mounted) {
+                redirectBasedOnRole(session.access_token);
+            }
+        });
+
+        return () => {
+            mounted = false;
+            subscription.unsubscribe();
+        };
+    }, []);
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            const supabase = createClient();
+            const { data, error: authError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+
+            if (authError || !data.session) {
+                setError(authError?.message || 'Login failed');
+                setLoading(false);
+                return;
+            }
+
+            console.log('Login Debug - Auth Success');
+            await redirectBasedOnRole(data.session.access_token);
         } catch (err) {
             console.error('Login Debug - Exception:', err);
             setError('An unexpected error occurred');

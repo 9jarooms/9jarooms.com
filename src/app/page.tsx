@@ -209,7 +209,7 @@ export default async function HomePage() {
             <Heart size={22} strokeWidth={1.5} />
             <span className="text-[10px] font-medium">Saved</span>
           </Link>
-          <Link href="/login" className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-400 hover:text-green-600 transition-colors">
+          <Link href="/account" className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-400 hover:text-green-600 transition-colors">
             <User size={22} strokeWidth={1.5} />
             <span className="text-[10px] font-medium">Account</span>
           </Link>
