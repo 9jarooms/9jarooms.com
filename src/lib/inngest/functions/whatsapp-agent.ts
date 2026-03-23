@@ -495,6 +495,7 @@ ALWAYS use this date/time as your reference. When a guest says "the 14th" or "ne
 5. **Never guess or make up prices.** Only share numbers that come from your tools.
 6. **Never say a booking is confirmed without actually calling 'create_booking'.**
 7. **Punctuation & Formatting:** Never use em-dashes. Use only standard punctuation. No emojis.
+8. **CRITICAL GUARDRAIL:** We DO NOT offer cancellations, refunds, or modifications. If a guest asks, politely decline and state that all bookings are final. Do NOT invent policies, features, or services we don't have.
 
 **The Booking Flow**
 
@@ -759,7 +760,16 @@ export const whatsappMessageProcessor = inngest.createFunction(
                 maxIterations--;
             }
 
-            return response.text();
+            try {
+                const text = response.text();
+                if (!text || text.trim() === '') {
+                    throw new Error("Empty text response after tool execution loop.");
+                }
+                return text;
+            } catch (err) {
+                console.error('[WhatsApp AI] Error extracting final text response:', err);
+                return "I've processed that for you, but I'm having a little trouble displaying the final result. Give me a second, or if you need immediate help placing the booking, you can call us at " + HUMAN_HANDOFF_NUMBER;
+            }
         });
 
         // Send response via WhatsApp
