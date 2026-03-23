@@ -608,8 +608,8 @@ export const whatsappMessageProcessor = inngest.createFunction(
     async ({ event, step }) => {
         const { phone, contactName } = event.data;
 
-        // Debounce disabled for testing — re-enable later
-        // await step.sleep('debounce-wait', '30s');
+        // Debounce wait to buffer multiple concurrent texts before replying
+        await step.sleep('debounce-wait', '15s');
 
         // Get conversation
         const conversation = await step.run('get-conversation', async () => {

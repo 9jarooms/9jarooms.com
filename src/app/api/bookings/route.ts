@@ -8,10 +8,10 @@ import { z } from 'zod';
 const bookingSchema = z.object({
     roomId: z.string().uuid(),
     propertyId: z.string().uuid(),
-    guestName: z.string().min(2).max(100),
-    guestEmail: z.string().email().optional().nullable().or(z.literal('')),
-    guestPhone: z.string().max(20).optional().nullable().or(z.literal('')),
-    whatsappUserPhone: z.string().optional().nullable().or(z.literal('')),
+    guestName: z.string().trim().min(2).max(100),
+    guestEmail: z.string().trim().email().optional().nullable().or(z.literal('')),
+    guestPhone: z.string().trim().max(20).optional().nullable().or(z.literal('')),
+    whatsappUserPhone: z.string().trim().optional().nullable().or(z.literal('')),
     checkIn: z.string(),
     checkOut: z.string(),
     userId: z.string().uuid().optional().nullable(),
@@ -307,7 +307,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 const payment = await initializePayment({
-                    email: guestEmail as string,
+                    email: finalGuestEmail ? finalGuestEmail.trim() : 'booking@9jarooms.com',
                     amount: totalAmount * 100, // kobo
                     reference: reference,
                     subaccount: subaccount,
