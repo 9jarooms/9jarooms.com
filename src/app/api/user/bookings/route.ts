@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createAdminClient, createSessionClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
-    const supabase = await createServerClient();
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    // 1. Verify the user is authenticated using the session client
+    const sessionSupabase = await createSessionClient();
+    const { data: { session }, error: authError } = await sessionSupabase.auth.getSession();
 
     if (authError || !session) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // 2. Use admin client to bypass RLS and fetch this user's bookings
+    const supabase = createAdminClient();
     const { data, error } = await supabase
         .from('bookings')
         .select(`
