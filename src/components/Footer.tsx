@@ -22,24 +22,12 @@ export default function Footer() {
                     <div className="md:col-span-2 md:col-start-6">
                         <h4 className="font-serif text-lg text-gray-900 mb-6">Explore</h4>
                         <ul className="space-y-4">
-                            <li><Link href="/search" className="text-gray-500 hover:text-green-800 transition-colors">The Abuja Collection</Link></li>
-                            <li><Link href="/about" className="text-gray-500 hover:text-green-800 transition-colors">About Us</Link></li>
-                            <li><Link href="/concierge" className="text-gray-500 hover:text-green-800 transition-colors">Concierge</Link></li>
+                            <li><Link href="/properties" className="text-gray-500 hover:text-green-800 transition-colors">Browse Properties</Link></li>
                             <li><Link href="/partner" className="text-gray-500 hover:text-green-800 transition-colors">Partner With Us</Link></li>
                         </ul>
                     </div>
 
-                    <div className="md:col-span-2">
-                        <h4 className="font-serif text-lg text-gray-900 mb-6">Neighborhoods</h4>
-                        <ul className="space-y-4">
-                            <li><span className="text-gray-500">Maitama</span></li>
-                            <li><span className="text-gray-500">Asokoro</span></li>
-                            <li><span className="text-gray-500">Wuse II</span></li>
-                            <li><span className="text-gray-500">Gwarinpa</span></li>
-                        </ul>
-                    </div>
-
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-3 md:col-start-10">
                         <h4 className="font-serif text-lg text-gray-900 mb-6">Contact</h4>
                         <ul className="space-y-4 text-gray-500">
                             <li>
@@ -52,7 +40,7 @@ export default function Footer() {
                             </li>
                             <li>
                                 <span className="block text-gray-400 text-sm mb-1 uppercase tracking-wider">Phone</span>
-                                <a href="tel:+2348168078712" className="hover:text-green-800 transition-colors">+234 816 807 8712</a>
+                                <a href="tel:+2348092777798" className="hover:text-green-800 transition-colors">+234 809 277 7798</a>
                             </li>
                         </ul>
                     </div>
