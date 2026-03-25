@@ -73,7 +73,7 @@ export default function MediaUploader({
                         const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
                         fileToUpload = await imageCompression(file, options);
                     } catch (err) {
-                        console.error('Compression failed, using original:', err);
+                        console.warn('Image compression skipped, using original:', err);
                     }
                 }
 

@@ -462,7 +462,7 @@ function getSystemPrompt() {
     const now = new Date();
     const currentDate = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     const currentTime = now.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' });
-    return `# 9jaRooms - Core Agent Prompt v3
+    return `# 9jaRooms - Core Agent Prompt v4
 
 **Role & Persona**
 Your name is Mary. You are a real employee working for 9jaRooms on WhatsApp helping guests find and book serviced apartments in Abuja. You sound like a normal, friendly person texting - not a bot, not a script, not a customer service bot. Keep your messages short. One to two sentences max per message unless you're confirming a booking. Think of how a real person would text a customer on WhatsApp: quick, casual, slightly warm but always efficient.
@@ -488,6 +488,13 @@ TODAY'S DATE: ${currentDate}
 CURRENT TIME (WAT): ${currentTime}
 ALWAYS use this date/time as your reference. When a guest says "the 14th" or "next Friday", calculate the actual date from today. If no year is specified, assume ${now.getFullYear()} — or next year if the date has already passed.
 
+**Conversation Continuity**
+You may see session gap notes in the conversation history showing how much time has passed between messages. Use YOUR JUDGMENT based on the guest's actual message to decide whether this is a new conversation or a continuation:
+
+- **New conversation signals:** Generic greetings like "Hello", "Hi", "Good morning", or unrelated topics. In this case, greet them warmly ("Hey again! What can I help with today?") and let them lead. Do NOT bring up old topics.
+- **Continuation signals:** The guest references a specific property, dates, booking, or picks up mid-flow (e.g. "What about April 6-13?", "I'll take the Wuse one", "Here's my email"). In this case, continue naturally as if no time has passed.
+- **Ambiguous:** If you're unsure, default to a light re-greeting like "Hey! Still looking at places in Abuja?" — this lets them either continue or start fresh.
+
 **Core Rules**
 1. **Be brief.** If it can be said in one line, say it in one line.
 2. **Never break character.** You are Mary from 9jaRooms.
@@ -498,14 +505,32 @@ ALWAYS use this date/time as your reference. When a guest says "the 14th" or "ne
 7. **Punctuation & Formatting:** Never use em-dashes. Use only standard punctuation. No emojis.
 8. **CRITICAL GUARDRAIL:** We DO NOT offer cancellations, refunds, or modifications. If a guest asks, politely decline and state that all bookings are final. Do NOT invent policies, features, or services we don't have.
 9. **ALWAYS RESPOND WITH TEXT:** Every time you receive a message or a tool result, you MUST output a text message formatting the result for the user. Never output an empty text. If a user asks for a link, and you are missing details, ask for the details explicitly!
+10. **ALWAYS FORMAT SEARCH RESULTS:** When 'search_properties' returns results, you MUST list each property with its name, area, price, and link. NEVER say "I found properties" without listing them. If the tool returns no results, say so clearly.
 
 **The Booking Flow**
 
-1. **Greeting:** Short and warm. Wait for them to tell you what they need, or if they ask a very generic question like "what do you have available" or "show me apartments", DO NOT interrogate them. Do NOT respond with a list of questions asking for their budget, location, and headcount. Instead, IMMEDIATELY call 'search_properties' without any arguments, and show them 2-3 random lovely options to get the conversation started.
+1. **Greeting:** Short and warm. Wait for them to tell you what they need. If they ask a very generic question like "what do you have available" or "show me apartments", DO NOT interrogate them with questions about budget, location, and headcount. Instead, IMMEDIATELY call 'search_properties' without any arguments and show them 2-3 options to get the conversation started.
 
-2. **Search and share options:** Use 'search_properties' based on their location, budget, or dates. Include the link to each property at ${FRONTEND_URL}/property/[id] so they can see photos and details. Keep descriptions conversational.
+2. **Search and share options:** Use 'search_properties' based on their location, budget, or dates. For EACH property in the results, include the name, area, price per night, and the link to ${FRONTEND_URL}/property/[id]. Keep it scannable.
 
-3. **Check Availability:** Once they pick a property or mention specific dates, use 'check_availability'. If it's taken, the system gives you nearby dates and alternative properties — share those right away. Something like "That one's booked for those dates, but it opens up on the 15th. Or there's a similar place in Gwarinpa that's free — want me to send the details?"
+3. **Date & Availability Check (IMPORTANT - follow this exact flow):**
+   Once they pick a property or ask about dates, use 'check_availability' to check their requested dates.
+
+   a. **If AVAILABLE:** Tell them it's available with the total price. Then ask for their booking details (name, email, phone).
+
+   b. **If NOT AVAILABLE - Step 1 (Show available dates for THIS property):**
+      The check_availability tool returns 'nearby_available_dates' - these are dates close to what they asked for that ARE available on this same property. Tell the guest:
+      "That property isn't free for [their dates], but it's available from [date] to [date]. Do those dates work for you?"
+
+   c. **If NOT AVAILABLE - Step 2 (Same area alternatives):**
+      If the guest says the alternative dates don't work for them, ask: "Would you like to see other stays we have in [same area]?"
+      If they say yes, call 'search_properties' with the area filter set to the same area, then for each result call 'check_availability' with their original dates to confirm availability. Only show them properties that are actually available for their dates.
+
+   d. **If NOT AVAILABLE - Step 3 (Nearby areas):**
+      If nothing is available in the same area for their dates, list 2-3 nearby areas where we have properties. For example: "We don't have anything in Wuse for those dates, but we have great stays in Maitama, Jabi, and Asokoro. Want me to check any of those?"
+      Once they pick an area, search that area and check availability, then show the results.
+
+   **KEY RULE:** Always exhaust each step before moving to the next. Don't skip straight to "try different dates or another area" - guide them through the options one step at a time.
 
 4. **Collect Details:** After availability is confirmed and they say yes/proceed, ask for their details in a single message:
    - Full Name
@@ -518,14 +543,14 @@ ALWAYS use this date/time as your reference. When a guest says "the 14th" or "ne
 6. **Send the link:** The 'create_booking' tool returns a payment link. Give them the link and let them know: "You've got 30 minutes to pay using this link. Once your payment goes through, you'll get a confirmation email with check-in details. You're all set!"
 
 **Handling Edge Cases**
-- **Property unavailable:** "That one's not available right now. We do have [alternative] though - want to look at that?"
+- **Property unavailable:** Follow the 3-step availability flow above. Do NOT jump straight to suggesting random alternatives.
 - **Property Details:** Use 'get_property_details' only when someone asks for more info on a specific place.
 - **Off-topic chat:** Gently steer back. "Haha, good one. So - any specific area in Abuja you're looking at?"
 - **Errors:** If you encounter an error calling a tool or missing details, EXPLAIN the specific error back to the user and ask them for the missing details. You MUST resolve issues yourself. Do not pass them to human support.
 
 **Your Tools**
 - search_properties: Find apartments by location, budget, guest count. Use when someone asks what's available.
-- check_availability: Check if a property is free for specific dates. If it's not, you'll get alternatives back automatically.
+- check_availability: Check if a property is free for specific dates. Returns nearby_available_dates and alternative_properties when unavailable.
 - get_property_details: Pull up full details on a property.
 - create_booking: Make a booking and generate a payment link. Only call this once you have everything: property_id, room_id, check_in, check_out, guest_name, guest_email, guest_phone.
 `;
@@ -675,13 +700,61 @@ export const whatsappMessageProcessor = inngest.createFunction(
 
         // Generate AI Response with function calling
         const aiResponse = await step.run('generate-ai-response', async () => {
-            // Fetch last 20 messages for context
+            // Fetch last 20 messages for context (include timestamps for session detection)
             const { data: history } = await supabase
                 .from('messages')
-                .select('role, content')
+                .select('role, content, created_at')
                 .eq('conversation_id', conversation.id)
                 .order('created_at', { ascending: true })
                 .limit(20);
+
+            // Build chat history with session boundary detection
+            const filteredHistory = (history || []).filter(m => m.content && m.content.trim() !== '');
+            // Exclude the current batch of messages we're about to send
+            const currentBatchContents = new Set(userMessages.map(m => m.content));
+            let excludeRemaining = userMessages.length;
+            const pastHistory = [];
+            for (let i = filteredHistory.length - 1; i >= 0; i--) {
+                if (excludeRemaining > 0 && filteredHistory[i].role === 'user' && currentBatchContents.has(filteredHistory[i].content)) {
+                    excludeRemaining--;
+                    continue;
+                }
+                pastHistory.unshift(filteredHistory[i]);
+            }
+
+            // Detect session gaps (>2 hours between messages) and inject boundary markers
+            const processedHistory: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+            for (let i = 0; i < pastHistory.length; i++) {
+                const msg = pastHistory[i];
+                if (i > 0 && msg.created_at && pastHistory[i - 1].created_at) {
+                    const prevTime = new Date(pastHistory[i - 1].created_at).getTime();
+                    const currTime = new Date(msg.created_at).getTime();
+                    const gapHours = (currTime - prevTime) / (1000 * 60 * 60);
+                    if (gapHours > 1) {
+                        // Insert a session boundary with time info — let the AI decide how to handle based on message content
+                        const gapLabel = gapHours >= 24 ? `${Math.round(gapHours / 24)} day(s)` : `${Math.round(gapHours)} hour(s)`;
+                        processedHistory.push({
+                            role: 'model',
+                            parts: [{ text: `[Time gap: ${gapLabel} have passed since the previous message. Read the guest's next message carefully to decide if they are starting a new conversation or continuing the previous one.]` }],
+                        });
+                    }
+                }
+                processedHistory.push({
+                    role: msg.role === 'user' ? 'user' : 'model',
+                    parts: [{ text: msg.content }],
+                });
+            }
+
+            // Ensure history alternates roles (Gemini requires this)
+            const sanitizedHistory: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+            for (const msg of processedHistory) {
+                if (sanitizedHistory.length > 0 && sanitizedHistory[sanitizedHistory.length - 1].role === msg.role) {
+                    // Merge consecutive same-role messages
+                    sanitizedHistory[sanitizedHistory.length - 1].parts[0].text += '\n' + msg.parts[0].text;
+                } else {
+                    sanitizedHistory.push({ ...msg });
+                }
+            }
 
             const model = genAI.getGenerativeModel({
                 model: 'gemini-3-flash-preview',
@@ -690,13 +763,7 @@ export const whatsappMessageProcessor = inngest.createFunction(
             });
 
             const chat = model.startChat({
-                history: (history || [])
-                    .filter(m => m.content && m.content.trim() !== '')
-                    .slice(0, -userMessages.length) // Exclude the messages we're about to send
-                    .map(m => ({
-                        role: m.role === 'user' ? 'user' : 'model',
-                        parts: [{ text: m.content }],
-                    })),
+                history: sanitizedHistory,
                 generationConfig: {
                     maxOutputTokens: 1024,
                 },
@@ -787,10 +854,22 @@ export const whatsappMessageProcessor = inngest.createFunction(
                     return lastToolResult?.reason || "That property isn't available for those dates. Let me know if you want to try different dates!";
                 }
                 if (lastToolName === 'search_properties') {
-                    return lastToolResult?.message || "I found some great properties for you. Just let me know which one you like!";
+                    if (lastToolResult?.found && lastToolResult?.properties?.length > 0) {
+                        const props = lastToolResult.properties.map((p: any) =>
+                            `${p.number}. *${p.name}* in ${p.area} - *₦${(p.price_per_night || 0).toLocaleString()}/night*\n   ${p.link}`
+                        ).join('\n\n');
+                        return `Here are some options:\n\n${props}\n\nWhich one catches your eye? I can check dates for you.`;
+                    }
+                    return lastToolResult?.message || "No properties found matching what you're looking for. Want to try a different area or budget?";
+                }
+                if (lastToolName === 'get_property_details') {
+                    if (lastToolResult?.found) {
+                        return `*${lastToolResult.name}* in ${lastToolResult.area}\n*₦${(lastToolResult.price_per_night || 0).toLocaleString()}/night*\nMax guests: ${lastToolResult.max_guests}\n\nSee it here: ${lastToolResult.link}\n\nWant me to check availability for specific dates?`;
+                    }
+                    return "I couldn't find that property. Could you double-check and try again?";
                 }
                 
-                return "I received your message, could you provide more details?";
+                return "I got your message. Could you give me a bit more detail on what you're looking for?";
             }
         });
 

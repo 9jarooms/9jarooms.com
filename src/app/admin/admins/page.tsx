@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, X, Shield } from 'lucide-react';
+import { Plus, X, Shield, Pencil } from 'lucide-react';
 
 interface AdminUser {
     id: string;
@@ -14,8 +14,9 @@ interface AdminUser {
 export default function AdminsPage() {
     const [admins, setAdmins] = useState<AdminUser[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showCreate, setShowCreate] = useState(false);
-    const [creating, setCreating] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
@@ -29,27 +30,53 @@ export default function AdminsPage() {
         setLoading(false);
     }
 
-    async function createAdmin(e: React.FormEvent) {
+    function handleEdit(admin: AdminUser) {
+        setEditingId(admin.id);
+        setForm({ name: admin.name, email: admin.email, phone: admin.phone || '', password: '' });
+        setShowModal(true);
+    }
+
+    function handleCloseModal() {
+        setShowModal(false);
+        setEditingId(null);
+        setForm({ name: '', email: '', phone: '', password: '' });
+        setError('');
+    }
+
+    async function handleSave(e: React.FormEvent) {
         e.preventDefault();
-        setCreating(true);
+        setSaving(true);
         setError('');
 
-        const res = await fetch('/api/admin/users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...form, role: 'admin' }),
-        });
+        let res;
+        if (editingId) {
+            res = await fetch('/api/admin/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: editingId,
+                    role: 'admin',
+                    name: form.name,
+                    phone: form.phone || null,
+                }),
+            });
+        } else {
+            res = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...form, role: 'admin' }),
+            });
+        }
 
         const data = await res.json();
         if (data.error) {
             setError(data.error);
         } else {
-            setSuccess('System Admin created successfully');
-            setShowCreate(false);
-            setForm({ name: '', email: '', phone: '', password: '' });
+            setSuccess(editingId ? 'Admin updated successfully' : 'System Admin created successfully');
+            handleCloseModal();
             fetchAdmins();
         }
-        setCreating(false);
+        setSaving(false);
     }
 
     if (loading) {
@@ -64,7 +91,7 @@ export default function AdminsPage() {
                     <p className="text-gray-500 mt-1">Superusers with full access to the platform</p>
                 </div>
                 <button
-                    onClick={() => setShowCreate(true)}
+                    onClick={() => { setEditingId(null); setForm({ name: '', email: '', phone: '', password: '' }); setShowModal(true); }}
                     className="flex items-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
                 >
                     <Plus size={16} />
@@ -79,15 +106,15 @@ export default function AdminsPage() {
                 </div>
             )}
 
-            {/* Create Modal */}
-            {showCreate && (
+            {/* Create/Edit Modal */}
+            {showModal && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl max-w-md w-full p-6">
                         <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-bold">Create System Admin</h2>
-                            <button onClick={() => setShowCreate(false)}><X size={20} className="text-gray-400" /></button>
+                            <h2 className="text-lg font-bold">{editingId ? 'Edit Admin' : 'Create System Admin'}</h2>
+                            <button onClick={handleCloseModal}><X size={20} className="text-gray-400" /></button>
                         </div>
-                        <form onSubmit={createAdmin} className="space-y-4">
+                        <form onSubmit={handleSave} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                                 <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
@@ -96,28 +123,34 @@ export default function AdminsPage() {
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                                 <input type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-                                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900" />
+                                    disabled={!!editingId}
+                                    className={`w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 ${editingId ? 'opacity-50 cursor-not-allowed' : ''}`} />
+                                {editingId && <p className="text-xs text-gray-400 mt-1">Email cannot be changed after creation.</p>}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                                 <input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
                                     className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900" placeholder="+234..." />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                                <input type="password" required minLength={6} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
-                                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900" />
-                            </div>
-                            <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-100 flex items-start gap-2">
-                                <Shield className="mt-0.5 flex-shrink-0" size={16} />
-                                <div>
-                                    <p className="font-semibold">Warning: High Privileges</p>
-                                    <p className="text-xs text-red-600">This user will have unrestricted access to all dashboard operations, financial data, and user management.</p>
-                                </div>
-                            </div>
-                            <button type="submit" disabled={creating}
+                            {!editingId && (
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                        <input type="password" required minLength={6} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
+                                            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900" />
+                                    </div>
+                                    <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-100 flex items-start gap-2">
+                                        <Shield className="mt-0.5 flex-shrink-0" size={16} />
+                                        <div>
+                                            <p className="font-semibold">Warning: High Privileges</p>
+                                            <p className="text-xs text-red-600">This user will have unrestricted access to all dashboard operations, financial data, and user management.</p>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            <button type="submit" disabled={saving}
                                 className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-medium disabled:opacity-50">
-                                {creating ? 'Creating...' : 'Create Admin Account'}
+                                {saving ? 'Saving...' : (editingId ? 'Save Changes' : 'Create Admin Account')}
                             </button>
                         </form>
                     </div>
@@ -134,6 +167,7 @@ export default function AdminsPage() {
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Email</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Phone</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Joined</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -151,6 +185,12 @@ export default function AdminsPage() {
                                     <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{admin.phone || '—'}</td>
                                     <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">
                                         {new Date(admin.created_at).toLocaleDateString()}
+                                    </td>
+                                    <td className="px-5 py-3 whitespace-nowrap">
+                                        <button onClick={() => handleEdit(admin)}
+                                            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                                            <Pencil size={14} />
+                                        </button>
                                     </td>
                                 </tr>
                             ))}

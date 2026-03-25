@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, X, UserCog } from 'lucide-react';
+import { Plus, X, UserCog, Pencil } from 'lucide-react';
 
 interface Caretaker {
     id: string;
@@ -14,8 +14,9 @@ interface Caretaker {
 export default function CaretakersPage() {
     const [caretakers, setCaretakers] = useState<Caretaker[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showCreate, setShowCreate] = useState(false);
-    const [creating, setCreating] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
@@ -29,27 +30,56 @@ export default function CaretakersPage() {
         setLoading(false);
     }
 
-    async function createCaretaker(e: React.FormEvent) {
+    function handleEdit(ct: Caretaker) {
+        setEditingId(ct.id);
+        setForm({ name: ct.name, email: ct.email, phone: ct.phone || '', password: '' });
+        setShowModal(true);
+    }
+
+    function handleCloseModal() {
+        setShowModal(false);
+        setEditingId(null);
+        setForm({ name: '', email: '', phone: '', password: '' });
+        setError('');
+    }
+
+    async function handleSave(e: React.FormEvent) {
         e.preventDefault();
-        setCreating(true);
+        setSaving(true);
         setError('');
 
-        const res = await fetch('/api/admin/users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...form, role: 'caretaker' }),
-        });
+        let res;
+        if (editingId) {
+            // Update existing
+            res = await fetch('/api/admin/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: editingId,
+                    role: 'caretaker',
+                    name: form.name,
+                    email: form.email,
+                    phone: form.phone || null,
+                }),
+            });
+        } else {
+            // Create new
+            res = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...form, role: 'caretaker' }),
+            });
+        }
 
         const data = await res.json();
         if (data.error) {
             setError(data.error);
         } else {
-            setSuccess('Caretaker created successfully');
-            setShowCreate(false);
-            setForm({ name: '', email: '', phone: '', password: '' });
+            setSuccess(editingId ? 'Caretaker updated successfully' : 'Caretaker created successfully');
+            handleCloseModal();
             fetchCaretakers();
         }
-        setCreating(false);
+        setSaving(false);
     }
 
     if (loading) {
@@ -64,7 +94,7 @@ export default function CaretakersPage() {
                     <p className="text-gray-500 mt-1">Property managers who handle bookings and availability</p>
                 </div>
                 <button
-                    onClick={() => setShowCreate(true)}
+                    onClick={() => { setEditingId(null); setForm({ name: '', email: '', phone: '', password: '' }); setShowModal(true); }}
                     className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
                 >
                     <Plus size={16} />
@@ -79,15 +109,15 @@ export default function CaretakersPage() {
                 </div>
             )}
 
-            {/* Create Modal */}
-            {showCreate && (
+            {/* Create/Edit Modal */}
+            {showModal && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl max-w-md w-full p-6">
                         <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-bold">Create Caretaker</h2>
-                            <button onClick={() => setShowCreate(false)}><X size={20} className="text-gray-400" /></button>
+                            <h2 className="text-lg font-bold">{editingId ? 'Edit Caretaker' : 'Create Caretaker'}</h2>
+                            <button onClick={handleCloseModal}><X size={20} className="text-gray-400" /></button>
                         </div>
-                        <form onSubmit={createCaretaker} className="space-y-4">
+                        <form onSubmit={handleSave} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                                 <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
@@ -96,22 +126,26 @@ export default function CaretakersPage() {
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                                 <input type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-                                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
+                                    disabled={!!editingId}
+                                    className={`w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 ${editingId ? 'opacity-50 cursor-not-allowed' : ''}`} />
+                                {editingId && <p className="text-xs text-gray-400 mt-1">Email cannot be changed after creation.</p>}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                                 <input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
                                     className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="+234..." />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                                <input type="password" required minLength={6} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
-                                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
-                            </div>
-                            <p className="text-xs text-gray-400">This creates a login account. The caretaker can sign in and manage assigned properties.</p>
-                            <button type="submit" disabled={creating}
+                            {!editingId && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                    <input type="password" required minLength={6} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
+                                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
+                                </div>
+                            )}
+                            {!editingId && <p className="text-xs text-gray-400">This creates a login account. The caretaker can sign in and manage assigned properties.</p>}
+                            <button type="submit" disabled={saving}
                                 className="w-full py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-medium disabled:opacity-50">
-                                {creating ? 'Creating...' : 'Create Caretaker Account'}
+                                {saving ? 'Saving...' : (editingId ? 'Save Changes' : 'Create Caretaker Account')}
                             </button>
                         </form>
                     </div>
@@ -128,6 +162,7 @@ export default function CaretakersPage() {
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Email</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Phone</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Joined</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -146,10 +181,16 @@ export default function CaretakersPage() {
                                     <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">
                                         {new Date(ct.created_at).toLocaleDateString()}
                                     </td>
+                                    <td className="px-5 py-3 whitespace-nowrap">
+                                        <button onClick={() => handleEdit(ct)}
+                                            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                                            <Pencil size={14} />
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                             {caretakers.length === 0 && (
-                                <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400">No caretakers yet. Click &quot;Add Caretaker&quot; to create one.</td></tr>
+                                <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">No caretakers yet. Click &quot;Add Caretaker&quot; to create one.</td></tr>
                             )}
                         </tbody>
                     </table>

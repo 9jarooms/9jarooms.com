@@ -18,7 +18,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
         }
 
-        // 1. Create auth user
+        // 1. Check if email already exists on the platform
+        const { data: existingUsers } = await supabase.auth.admin.listUsers();
+        const emailExists = existingUsers?.users?.some(u => u.email?.toLowerCase() === email.toLowerCase());
+        if (emailExists) {
+            return NextResponse.json({ error: 'This email is already registered on the platform. Please use a different email address.' }, { status: 400 });
+        }
+
+        // 2. Create auth user
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
             email,
             password,
@@ -128,32 +135,65 @@ export async function GET(request: NextRequest) {
     }
 }
 
-// Update user details (specifically for owners subaccount)
+// Update user details (profile fields + paystack for owners)
 export async function PATCH(request: NextRequest) {
     try {
         const { adminClient, error: reqError, status } = await requireAdmin();
         if (reqError || !adminClient) return NextResponse.json({ error: reqError }, { status });
         const supabase = adminClient;
         const body = await request.json();
-        const { id, owner_id, paystack_subaccount_code } = body;
+        const { id, owner_id, role, name, phone, email, paystack_subaccount_code } = body;
 
-        // Target can be passed as 'id' (from owner table) or 'owner_id'
         const targetId = id || owner_id;
+        if (!targetId) {
+            return NextResponse.json({ error: 'Missing user ID' }, { status: 400 });
+        }
 
-        if (paystack_subaccount_code && targetId) {
+        // Update paystack subaccount code for owners
+        if (paystack_subaccount_code !== undefined && (role === 'owner' || owner_id)) {
             const { error } = await supabase
                 .from('owners')
                 .update({ paystack_subaccount_code })
                 .eq('id', targetId);
-
-            if (error) {
-                return NextResponse.json({ error: error.message }, { status: 500 });
-            }
-
-            return NextResponse.json({ success: true });
+            if (error) return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        return NextResponse.json({ error: 'Missing required fields (id/owner_id and code)' }, { status: 400 });
+        // Update profile fields in the role-specific table
+        if (name || phone || email) {
+            const profileUpdates: Record<string, any> = {};
+            if (name) profileUpdates.name = name;
+            if (phone) profileUpdates.phone = phone;
+            if (email) profileUpdates.email = email;
+
+            if (role === 'caretaker') {
+                const { error } = await supabase
+                    .from('caretakers')
+                    .update(profileUpdates)
+                    .eq('id', targetId);
+                if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+            } else if (role === 'owner') {
+                const { error } = await supabase
+                    .from('owners')
+                    .update(profileUpdates)
+                    .eq('id', targetId);
+                if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+            }
+
+            // Also update auth user metadata
+            const metaUpdates: Record<string, any> = {};
+            if (name) metaUpdates.name = name;
+            if (phone) metaUpdates.phone = phone;
+            const updatePayload: any = { user_metadata: metaUpdates };
+            if (email) updatePayload.email = email;
+
+            const { error: authUpdateError } = await supabase.auth.admin.updateUserById(targetId, updatePayload);
+            if (authUpdateError) {
+                console.error('Auth metadata update error:', authUpdateError);
+                // Non-critical — profile table was already updated
+            }
+        }
+
+        return NextResponse.json({ success: true });
     } catch (error) {
         console.error('User update error:', error);
         return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
