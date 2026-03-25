@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { createClient } from '@/lib/supabase/client';
 import imageCompression from 'browser-image-compression';
+import heic2any from 'heic2any';
 import { X, Loader2, ImagePlus, Star } from 'lucide-react';
 
 interface MediaUploaderProps {
@@ -26,7 +27,7 @@ export default function MediaUploader({
     bucket = 'property-media',
     folder = 'uploads',
     accept = {
-        'image/*': ['.png', '.jpg', '.jpeg', '.webp']
+        'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif']
     },
     maxSizeMB = 10,
     single = false,
@@ -65,19 +66,33 @@ export default function MediaUploader({
                     continue;
                 }
 
-                let fileToUpload = file;
-                const isImage = file.type.startsWith('image/');
+                let fileToUpload: File = file;
+                const isImage = file.type.startsWith('image/') || /\.(heic|heif)$/i.test(file.name);
+                const isHeic = file.type === 'image/heic' || file.type === 'image/heif' || /\.(heic|heif)$/i.test(file.name);
+
+                // Convert HEIC/HEIF to JPEG first
+                if (isHeic) {
+                    try {
+                        const convertedBlob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
+                        const jpegBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+                        fileToUpload = new File([jpegBlob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' });
+                    } catch (err) {
+                        console.warn('HEIC conversion failed:', err);
+                        setError('Could not process this image format. Please convert to JPG/PNG first.');
+                        continue;
+                    }
+                }
 
                 if (isImage) {
                     try {
                         const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
-                        fileToUpload = await imageCompression(file, options);
+                        fileToUpload = await imageCompression(fileToUpload, options);
                     } catch (err) {
                         console.warn('Image compression skipped, using original:', err);
                     }
                 }
 
-                const fileExt = file.name.split('.').pop();
+                const fileExt = fileToUpload.name.split('.').pop() || 'jpg';
                 const fileName = `${folder}/${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
 
                 const { data, error: uploadError } = await supabase.storage
