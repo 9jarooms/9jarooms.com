@@ -320,6 +320,51 @@ export const paymentConfirmed = inngest.createFunction(
             }
         });
 
+        // Step 9: Send Telegram notification to Caretaker
+        await step.run('send-telegram-caretaker', async () => {
+            const property = (booking as any).property;
+            if (!property.caretaker_id) return { sent: false, reason: 'No caretaker assigned' };
+
+            const { data: caretaker } = await supabase
+                .from('caretakers')
+                .select('telegram_chat_id, name')
+                .eq('id', property.caretaker_id)
+                .single();
+
+            if (!caretaker?.telegram_chat_id) return { sent: false, reason: 'No Telegram connected' };
+
+            try {
+                const { TelegramClient } = await import('@/lib/telegram/client');
+                const telegram = new TelegramClient();
+
+                const checkInDate = new Date(booking.check_in).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                const checkOutDate = new Date(booking.check_out).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                const room = (booking as any).room;
+
+                const msg = [
+                    `🔔 <b>New Booking!</b>`,
+                    ``,
+                    `🏠 <b>${property.name}</b>${room ? ` - ${room.name}` : ''}`,
+                    `👤 ${booking.guest_name}`,
+                    `📱 ${booking.guest_phone || 'N/A'}`,
+                    `📧 ${booking.guest_email}`,
+                    ``,
+                    `📅 Check-in: <b>${checkInDate}</b> (${property.check_in_time})`,
+                    `📅 Check-out: <b>${checkOutDate}</b> (${property.check_out_time})`,
+                    `🌙 ${booking.nights} night${booking.nights > 1 ? 's' : ''}`,
+                    `💰 <b>₦${(booking.total_amount || 0).toLocaleString()}</b>`,
+                    ``,
+                    `Ref: ${booking.paystack_reference}`,
+                ].join('\n');
+
+                await telegram.sendMessage(caretaker.telegram_chat_id, msg);
+                return { sent: true };
+            } catch (error) {
+                console.error('Failed to send Telegram notification:', error);
+                return { sent: false, error: String(error) };
+            }
+        });
+
         return {
             bookingId: booking.id,
             status: 'success'

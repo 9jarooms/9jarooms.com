@@ -134,7 +134,7 @@ export default async function HomePage() {
                     className="relative aspect-square rounded-xl overflow-hidden group"
                   >
                     {img ? (
-                      <img src={img} alt={cat.label} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      <Image src={img} alt={cat.label} fill sizes="33vw" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                     ) : (
                       <div className={`w-full h-full bg-gradient-to-br ${cat.color}`} />
                     )}

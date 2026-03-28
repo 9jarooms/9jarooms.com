@@ -1,6 +1,7 @@
 import { createAuthClient } from '@/lib/supabase/auth';
 import { Building2, CalendarDays, Users, Clock } from 'lucide-react';
 import Link from 'next/link';
+import TelegramConnect from './TelegramConnect';
 
 export default async function DashboardOverview() {
     const supabase = await createAuthClient();
@@ -85,6 +86,9 @@ export default async function DashboardOverview() {
                     </div>
                     <p className="text-2xl font-bold text-gray-900">{upcomingCount || 0}</p>
                 </div>
+
+                {/* Telegram Connect */}
+                <TelegramConnect />
             </div>
 
             {/* Upcoming Bookings */}

@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Play, Image as ImageIcon, X, ChevronLeft } from 'lucide-react';
 
+import Image from 'next/image';
+
 interface PropertyGalleryProps {
     images: string[];
     thumbnail?: string;
@@ -100,10 +102,10 @@ export default function PropertyGallery({ images = [], thumbnail }: PropertyGall
                         <div className="max-w-4xl mx-auto space-y-4 md:space-y-8">
                             {allMedia.map((media, index) => (
                                 <div key={index} className="space-y-2">
-                                    <div className="rounded-xl overflow-hidden bg-gray-50">
+                                    <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-50">
                                         <MediaItem
                                             media={media}
-                                            className="w-full h-auto max-h-[85vh] object-contain mx-auto"
+                                            className="w-full h-full object-contain"
                                         />
                                     </div>
                                 </div>
@@ -117,5 +119,13 @@ export default function PropertyGallery({ images = [], thumbnail }: PropertyGall
 }
 
 function MediaItem({ media, className }: { media: { type: string, url: string }, className?: string }) {
-    return <img src={media.url} alt="Property" className={className} />;
+    return (
+        <Image
+            src={media.url}
+            alt="Property"
+            fill
+            sizes="(max-width: 768px) 100vw, 50vw"
+            className={className}
+        />
+    );
 }

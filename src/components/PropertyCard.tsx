@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Star, MapPin } from 'lucide-react';
 import { Property } from '@/types/database';
 
@@ -16,9 +17,11 @@ export default function PropertyCard({ property, className = '' }: { property: P
             {/* Image */}
             <div className="aspect-[4/3] bg-gray-100 rounded-xl overflow-hidden relative">
                 {displayImage ? (
-                    <img
+                    <Image
                         src={displayImage}
                         alt={property.name}
+                        fill
+                        sizes="(max-width: 768px) 50vw, 25vw"
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                 ) : (

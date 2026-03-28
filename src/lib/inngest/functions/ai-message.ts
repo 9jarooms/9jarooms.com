@@ -6,7 +6,7 @@ import { generateReference } from '@/lib/paystack';
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
-const SYSTEM_PROMPT = `You are the 9jaRooms booking assistant — a friendly, helpful AI agent for a short-let apartment booking platform in Lagos, Nigeria.
+const SYSTEM_PROMPT = `You are the 9jaRooms booking assistant — a friendly, helpful AI agent for a short-let apartment booking platform in Abuja, Nigeria.
 
 Your capabilities:
 1. Search for available properties by area, price range, and dates
@@ -54,7 +54,8 @@ const tools = [
         parameters: {
             type: Type.OBJECT,
             properties: {
-                area: { type: Type.STRING, description: 'Area to search in (e.g., Lekki, Victoria Island, Ikoyi, Surulere)' },
+                name: { type: Type.STRING, description: 'Property name to search for (e.g., Emerald Suite, Luxury Villa)' },
+                area: { type: Type.STRING, description: 'Area to search in (e.g., Maitama, Wuse II, Jabi, Garki, Asokoro)' },
                 min_price: { type: Type.NUMBER, description: 'Minimum price per night in Naira' },
                 max_price: { type: Type.NUMBER, description: 'Maximum price per night in Naira' },
                 check_in: { type: Type.STRING, description: 'Check-in date (YYYY-MM-DD)' },
@@ -115,6 +116,7 @@ async function executeSearchProperties(args: Record<string, unknown>) {
         .select('*, rooms(*)')
         .eq('is_active', true);
 
+    if (args.name) query = query.ilike('name', `%${args.name}%`);
     if (args.area) query = query.ilike('area', `%${args.area}%`);
     if (args.max_guests) query = query.gte('max_guests', args.max_guests as number);
 
