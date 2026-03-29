@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase/auth';
 import { createAdminClient } from '@/lib/supabase/server';
-import crypto from 'crypto';
 
 const BOT_USERNAME = 'naijaroomsbot';
 

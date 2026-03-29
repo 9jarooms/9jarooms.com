@@ -32,8 +32,18 @@ export default function TelegramConnect() {
         try {
             const res = await fetch('/api/telegram/connect', { method: 'POST' });
             const data = await res.json();
+            
+            if (!res.ok) {
+                console.error('Server returned error:', data.error);
+                alert(`Error: ${data.error || 'Connection failed'}`);
+                setConnecting(false);
+                return;
+            }
+
             if (data.url) {
-                window.open(data.url, '_blank');
+                // Use location.href instead of window.open to avoid mobile Safari popup blockers
+                window.location.href = data.url;
+                
                 // Poll for connection status
                 const poll = setInterval(async () => {
                     const statusRes = await fetch('/api/telegram/connect');
