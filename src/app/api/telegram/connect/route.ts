@@ -39,37 +39,51 @@ export async function POST() {
         const admin = createAdminClient();
 
         // Verify they are a caretaker
-        const { data: caretaker } = await admin
+        const { data: caretaker, error: caretakerError } = await admin
             .from('caretakers')
             .select('id')
             .eq('id', user.id)
             .single();
 
+        if (caretakerError) {
+            console.error('Caretaker fetch error:', caretakerError);
+            return NextResponse.json({ error: 'Database error fetching caretaker: ' + caretakerError.message }, { status: 500 });
+        }
         if (!caretaker) return NextResponse.json({ error: 'Not a caretaker' }, { status: 403 });
 
-        // Generate unique token
-        const token = crypto.randomBytes(16).toString('hex');
+        // Generate unique token (using web crypto for Edge compatibility)
+        const token = crypto.randomUUID().replace(/-/g, '');
 
         // Cleanup old tokens for this caretaker
-        await admin
+        const { error: deleteError } = await admin
             .from('telegram_connect_tokens')
             .delete()
             .eq('caretaker_id', user.id);
 
+        if (deleteError) {
+            console.error('Token delete error:', deleteError);
+            return NextResponse.json({ error: 'Database error cleaning up tokens: ' + deleteError.message }, { status: 500 });
+        }
+
         // Insert new token
-        await admin
+        const { error: insertError } = await admin
             .from('telegram_connect_tokens')
             .insert({
                 token,
                 caretaker_id: user.id,
             });
 
+        if (insertError) {
+            console.error('Token insert error:', insertError);
+            return NextResponse.json({ error: 'Database error inserting token: ' + insertError.message }, { status: 500 });
+        }
+
         const deepLink = `https://t.me/${BOT_USERNAME}?start=${token}`;
 
         return NextResponse.json({ url: deepLink });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Telegram connect POST error:', error);
-        return NextResponse.json({ error: 'Failed to generate link' }, { status: 500 });
+        return NextResponse.json({ error: error.message || 'Failed to generate link' }, { status: 500 });
     }
 }
 
