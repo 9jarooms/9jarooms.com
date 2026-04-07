@@ -303,9 +303,12 @@ export async function GET(request: NextRequest) {
             }
         });
 
+        // Strip address from public response - address is only sent privately via email/whatsapp
+        const stripAddress = (p: any) => { const { address: _a, ...rest } = p; return rest; };
+
         return NextResponse.json({
-            data: filteredData,
-            suggestions,
+            data: filteredData.map(stripAddress),
+            suggestions: suggestions.map(stripAddress),
             reason,
             alternativeDates,
             availableBedrooms: Array.from(bedroomCounts).sort((a, b) => a - b),

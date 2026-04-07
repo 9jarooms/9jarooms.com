@@ -20,6 +20,9 @@ export default async function PropertyPage({ params }: Props) {
 
     if (!property) notFound();
 
+    // Strip address before passing to client — address is only sent privately via email/whatsapp
+    const { address: _addr, ...safeProperty } = property;
+
     const { data: rooms } = await supabase
         .from('rooms')
         .select('*')
@@ -62,7 +65,7 @@ export default async function PropertyPage({ params }: Props) {
             <Header />
             <main className="pt-20 page-enter">
                 <PropertyDetailClient
-                    property={property}
+                    property={safeProperty as typeof property}
                     rooms={rooms || []}
                     availability={availability || []}
                     contactPhone={settings.contact_phone || '09067779344'}

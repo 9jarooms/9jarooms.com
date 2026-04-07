@@ -224,7 +224,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                         <h1 className="text-3xl md:text-4xl font-serif font-bold text-gray-900">{property.name}</h1>
                         <div className="flex items-center justify-center gap-2 mt-3 text-gray-500">
                             <MapPin size={16} />
-                            <span>{property.address}, {property.area}, {property.city}</span>
+                            <span>{property.area}, {property.city}</span>
                         </div>
                         <div className="mt-5">
                             <button

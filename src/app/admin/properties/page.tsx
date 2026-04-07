@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, X, Building2, Pencil, User, Home, Star, Trash2, CalendarOff } from 'lucide-react';
+import { Plus, X, Building2, Pencil, User, Home, Star, Trash2, CalendarOff, Copy } from 'lucide-react';
 import MediaUploader from '@/components/MediaUploader';
 
 interface Property {
@@ -143,6 +143,39 @@ export default function AdminPropertiesPage() {
         setEditingId(null);
         setForm(initialFormState);
         setError('');
+    }
+
+    function handleDuplicate(property: Property) {
+        setEditingId(null);
+        const existingDiscountRules = ((property as any).discount_rules || []).map((r: any) => ({
+            min_nights: r.min_nights?.toString() || '',
+            type: r.discount_percent ? 'percent' as const : 'amount' as const,
+            value: (r.discount_percent || r.discount_amount || '')?.toString(),
+        }));
+        setForm({
+            name: `Copy of ${property.name}`,
+            description: property.description || '',
+            address: property.address || '',
+            area: property.area || '',
+            city: property.city || 'Abuja',
+            type: property.type || 'Entire Apartment',
+            category: (property as any).category || 'standard',
+            price_per_night: property.price_per_night?.toString() || '',
+            max_guests: property.max_guests?.toString() || '2',
+            owner_id: property.owner_id || property.owner?.id || '',
+            caretaker_id: property.caretaker_id || property.caretaker?.id || '',
+            check_in_instructions: property.check_in_instructions || '',
+            house_rules: property.house_rules || '',
+            amenities: (property.amenities || []).join(','),
+            thumbnail: property.thumbnail || (property.images && property.images.length > 0 ? property.images[0] : ''),
+            images: property.images || [],
+            is_featured: false,
+            is_active: false,
+            minimum_stay: (property as any).minimum_stay?.toString() || '',
+            discount_rules: existingDiscountRules,
+            rooms: [{ name: 'Entire Property', price_per_night: property.price_per_night?.toString() || '', max_guests: property.max_guests?.toString() || '2', description: '', images: [] }],
+        });
+        setShowCreate(true);
     }
 
     async function handleSave(e: React.FormEvent) {
@@ -605,6 +638,10 @@ export default function AdminPropertiesPage() {
                                 <button onClick={() => handleEdit(prop)}
                                     className="p-1 px-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
                                     <Pencil size={14} />
+                                </button>
+                                <button onClick={() => handleDuplicate(prop)}
+                                    className="p-1 px-2 text-gray-400 hover:text-purple-500 hover:bg-purple-50 rounded-lg transition-colors" title="Duplicate">
+                                    <Copy size={14} />
                                 </button>
                                 <button onClick={() => { setBlockPropertyId(prop.id); setShowBlockDates(true); }}
                                     className="p-1 px-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors" title="Block Dates">
