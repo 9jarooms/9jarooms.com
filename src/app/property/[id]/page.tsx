@@ -49,6 +49,15 @@ export default async function PropertyPage({ params }: Props) {
         return true; // Keep active holds and 'booked' slots
     });
 
+    // Fetch similar properties (same area, exclude current)
+    const { data: similarProperties } = await supabase
+        .from('properties')
+        .select('*, rooms(id, price_per_night, max_guests)')
+        .eq('area', property.area)
+        .eq('is_active', true)
+        .neq('id', id)
+        .limit(4);
+
     // Fetch site settings (contact numbers)
     const { data: settingsData } = await supabase
         .from('site_settings')
@@ -70,6 +79,7 @@ export default async function PropertyPage({ params }: Props) {
                     availability={availability || []}
                     contactPhone={settings.contact_phone || '09067779344'}
                     contactWhatsapp={settings.contact_whatsapp || '09067779344'}
+                    similarProperties={similarProperties || []}
                 />
             </main>
         </>

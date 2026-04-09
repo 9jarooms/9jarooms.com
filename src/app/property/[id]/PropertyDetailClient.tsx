@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import BookingCalendar from '@/components/BookingCalendar';
 import PropertyGallery from '@/components/PropertyGallery';
+import PropertyCard from '@/components/PropertyCard';
 import type { Property, Room, Availability, DiscountRule } from '@/types/database';
 
 const amenityIconMap: Record<string, React.ReactNode> = {
@@ -69,9 +70,10 @@ interface Props {
     availability: Availability[];
     contactPhone?: string;
     contactWhatsapp?: string;
+    similarProperties?: any[];
 }
 
-export default function PropertyDetailClient({ property, rooms, availability, contactPhone, contactWhatsapp }: Props) {
+export default function PropertyDetailClient({ property, rooms, availability, contactPhone, contactWhatsapp, similarProperties = [] }: Props) {
     const router = useRouter();
     const [selectedRoom, setSelectedRoom] = useState<Room | null>(rooms.length === 1 ? rooms[0] : null);
     const [checkIn, setCheckIn] = useState<Date | null>(null);
@@ -200,6 +202,20 @@ export default function PropertyDetailClient({ property, rooms, availability, co
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {/* Discovery Banner */}
+            <a
+                href="/properties"
+                className="flex items-center justify-between gap-3 mb-6 px-4 py-3 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 transition-colors group"
+            >
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <MapPin size={16} className="text-green-600 shrink-0" />
+                    <span className="text-sm font-medium text-green-800 truncate">
+                        Exploring {property.city}? Browse all available properties
+                    </span>
+                </div>
+                <ChevronRight size={16} className="text-green-600 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+            </a>
+
             {/* Breadcrumb */}
             <nav className="flex items-center gap-2 text-sm text-gray-500 mb-6">
                 <a href="/" className="hover:text-gray-900 transition-colors">Properties</a>
@@ -569,6 +585,40 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                     </div>
                 </div>
             </div>
+
+            {/* Similar Properties */}
+            {similarProperties.length > 0 && (
+                <div className="mt-16 pt-10 border-t border-gray-100">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 className="text-xl font-serif font-semibold text-gray-900">
+                                More stays in {property.area}
+                            </h2>
+                            <p className="text-sm text-gray-400 mt-1">You might also like these</p>
+                        </div>
+                        <a
+                            href="/properties"
+                            className="hidden sm:flex items-center gap-1.5 text-sm font-medium text-green-600 hover:text-green-700 transition-colors"
+                        >
+                            View all <ChevronRight size={16} />
+                        </a>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                        {similarProperties.map((p) => (
+                            <PropertyCard key={p.id} property={p} />
+                        ))}
+                    </div>
+
+                    <a
+                        href="/properties"
+                        className="mt-8 flex items-center justify-center gap-2 w-full py-3.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl transition-colors"
+                    >
+                        View all properties in {property.city}
+                        <ChevronRight size={18} />
+                    </a>
+                </div>
+            )}
         </div>
     );
 }
