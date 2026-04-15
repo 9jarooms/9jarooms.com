@@ -40,7 +40,7 @@ export default function Footer() {
                             </li>
                             <li>
                                 <span className="block text-gray-400 text-sm mb-1 uppercase tracking-wider">Phone</span>
-                                <a href="tel:+2348092777798" className="hover:text-green-800 transition-colors">+234 809 277 7798</a>
+                                <a href="tel:+2349111101012" className="hover:text-green-800 transition-colors">+234 911 110 1012</a>
                             </li>
                         </ul>
                     </div>
