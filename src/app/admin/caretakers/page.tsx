@@ -102,7 +102,7 @@ export default function CaretakersPage() {
                     <p className="text-gray-500 mt-1">Property managers who handle bookings and availability</p>
                 </div>
                 <button
-                    onClick={() => { setEditingId(null); setForm({ name: '', email: '', phone: '', password: '' }); setShowModal(true); }}
+                    onClick={() => { setEditingId(null); setForm({ name: '', username: '', email: '', phone: '', password: '' }); setShowModal(true); }}
                     className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
                 >
                     <Plus size={16} />
