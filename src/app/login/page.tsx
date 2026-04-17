@@ -6,10 +6,15 @@ import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
     const router = useRouter();
-    const [email, setEmail] = useState('');
+    const [loginId, setLoginId] = useState(''); // email or username
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // If the input contains @ it's treated as an email; otherwise it's a username
+    // and we resolve it to the internal auth email ({username}@9jarooms.internal)
+    const resolveAuthEmail = (input: string) =>
+        input.includes('@') ? input : `${input.toLowerCase()}@9jarooms.internal`;
 
     const redirectBasedOnRole = async (accessToken: string) => {
         try {
@@ -93,7 +98,7 @@ export default function LoginPage() {
         try {
             const supabase = createClient();
             const { data, error: authError } = await supabase.auth.signInWithPassword({
-                email,
+                email: resolveAuthEmail(loginId),
                 password,
             });
 
@@ -144,13 +149,14 @@ export default function LoginPage() {
                             )}
 
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700 ml-1">Email Address</label>
+                                <label className="text-sm font-medium text-gray-700 ml-1">Email or Username</label>
                                 <input
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    type="text"
+                                    value={loginId}
+                                    onChange={(e) => setLoginId(e.target.value)}
                                     className="w-full px-5 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all font-medium text-gray-900 placeholder-gray-400"
-                                    placeholder="name@example.com"
+                                    placeholder="your_username or name@example.com"
+                                    autoComplete="username"
                                     required
                                 />
                             </div>

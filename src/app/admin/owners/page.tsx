@@ -6,7 +6,8 @@ import { Users, Plus, X, Pencil } from 'lucide-react';
 interface Owner {
     id: string;
     name: string;
-    email: string;
+    username: string | null;
+    email: string | null;
     phone: string | null;
     user_id: string | null;
     paystack_subaccount_code: string | null;
@@ -22,7 +23,7 @@ export default function OwnersPage() {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
-    const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', paystack_subaccount_code: '' });
+    const [form, setForm] = useState({ name: '', username: '', email: '', phone: '', password: '', paystack_subaccount_code: '' });
 
     useEffect(() => { fetchOwners(); }, []);
 
@@ -37,7 +38,8 @@ export default function OwnersPage() {
         setEditingId(owner.id);
         setForm({
             name: owner.name,
-            email: owner.email,
+            username: owner.username || '',
+            email: owner.email || '',
             phone: owner.phone || '',
             password: '',
             paystack_subaccount_code: owner.paystack_subaccount_code || '',
@@ -48,7 +50,7 @@ export default function OwnersPage() {
     function handleCloseModal() {
         setShowModal(false);
         setEditingId(null);
-        setForm({ name: '', email: '', phone: '', password: '', paystack_subaccount_code: '' });
+        setForm({ name: '', username: '', email: '', phone: '', password: '', paystack_subaccount_code: '' });
         setError('');
     }
 
@@ -74,7 +76,14 @@ export default function OwnersPage() {
             res = await fetch('/api/admin/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: form.name, email: form.email, phone: form.phone, password: form.password, role: 'owner' }),
+                body: JSON.stringify({
+                    username: form.username,
+                    email: form.email || undefined,
+                    name: form.name,
+                    phone: form.phone || undefined,
+                    password: form.password,
+                    role: 'owner',
+                }),
             });
         }
 
@@ -130,12 +139,31 @@ export default function OwnersPage() {
                                 <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
                                     className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
                             </div>
+                            {!editingId && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                                    <input type="text" required value={form.username}
+                                        onChange={e => setForm({ ...form, username: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })}
+                                        placeholder="e.g. ade_owner"
+                                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
+                                    <p className="text-xs text-gray-400 mt-1">Used to log in. Letters, numbers, _ and - only.</p>
+                                </div>
+                            )}
+                            {editingId && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                                    <input type="text" value={form.username} disabled
+                                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm opacity-50 cursor-not-allowed" />
+                                    <p className="text-xs text-gray-400 mt-1">Username cannot be changed.</p>
+                                </div>
+                            )}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                                <input type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-                                    disabled={!!editingId}
-                                    className={`w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 ${editingId ? 'opacity-50 cursor-not-allowed' : ''}`} />
-                                {editingId && <p className="text-xs text-gray-400 mt-1">Email cannot be changed after creation.</p>}
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Email <span className="text-gray-400 font-normal">(optional)</span>
+                                </label>
+                                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
+                                    placeholder="For password reset and notifications"
+                                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
@@ -177,6 +205,7 @@ export default function OwnersPage() {
                         <thead>
                             <tr className="text-left text-gray-500 border-b border-gray-100">
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Name</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Username</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Email</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Phone</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Paystack</th>
@@ -187,7 +216,12 @@ export default function OwnersPage() {
                             {owners.map(owner => (
                                 <tr key={owner.id} className="border-b border-gray-50 last:border-0">
                                     <td className="px-5 py-3 font-medium text-gray-900 whitespace-nowrap">{owner.name}</td>
-                                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{owner.email}</td>
+                                    <td className="px-5 py-3 whitespace-nowrap">
+                                        <span className="font-mono text-sm text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                                            {owner.username || '—'}
+                                        </span>
+                                    </td>
+                                    <td className="px-5 py-3 text-gray-500 whitespace-nowrap text-sm">{owner.email || <span className="text-gray-300">not set</span>}</td>
                                     <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{owner.phone || '—'}</td>
                                     <td className="px-5 py-3 whitespace-nowrap">
                                         {owner.paystack_subaccount_code ? (
@@ -209,7 +243,7 @@ export default function OwnersPage() {
                                 </tr>
                             ))}
                             {owners.length === 0 && (
-                                <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">No owners yet. Click &quot;Add Owner&quot; to create one.</td></tr>
+                                <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">No owners yet. Click &quot;Add Owner&quot; to create one.</td></tr>
                             )}
                         </tbody>
                     </table>

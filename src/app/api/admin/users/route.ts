@@ -8,9 +8,10 @@ export async function POST(request: NextRequest) {
         if (reqError || !adminClient) return NextResponse.json({ error: reqError }, { status });
         const supabase = adminClient;
         const body = await request.json();
-        const { email, password, name, phone, role } = body;
+        // username is the new primary identifier; email is optional (for password reset)
+        const { username, email: realEmail, password, name, phone, role } = body;
 
-        if (!email || !password || !name || !role) {
+        if (!username || !password || !name || !role) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
@@ -18,19 +19,38 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
         }
 
-        // 1. Check if email already exists on the platform
-        const { data: existingUsers } = await supabase.auth.admin.listUsers();
-        const emailExists = existingUsers?.users?.some(u => u.email?.toLowerCase() === email.toLowerCase());
-        if (emailExists) {
-            return NextResponse.json({ error: 'This email is already registered on the platform. Please use a different email address.' }, { status: 400 });
+        // Sanitise username: lowercase, only alphanumeric + underscore/hyphen
+        const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        if (cleanUsername !== username.toLowerCase()) {
+            return NextResponse.json({ error: 'Username can only contain letters, numbers, underscores and hyphens.' }, { status: 400 });
         }
 
-        // 2. Create auth user
+        // Auth email is a fake internal address — Supabase requires an email but we never send mail to it
+        const authEmail = `${cleanUsername}@9jarooms.internal`;
+
+        // 1. Check username isn't already taken
+        const { data: existingUsers } = await supabase.auth.admin.listUsers();
+        const taken = existingUsers?.users?.some(u => u.email?.toLowerCase() === authEmail);
+        if (taken) {
+            return NextResponse.json({ error: 'Username is already taken.' }, { status: 400 });
+        }
+
+        // If a real email was provided, check it isn't already in use
+        if (realEmail) {
+            const realEmailTaken = existingUsers?.users?.some(
+                u => u.user_metadata?.real_email?.toLowerCase() === realEmail.toLowerCase()
+            );
+            if (realEmailTaken) {
+                return NextResponse.json({ error: 'That email address is already registered.' }, { status: 400 });
+            }
+        }
+
+        // 2. Create auth user with fake internal email
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-            email,
+            email: authEmail,
             password,
             email_confirm: true,
-            user_metadata: { name, phone },
+            user_metadata: { name, phone, username: cleanUsername, real_email: realEmail || null },
         });
 
         if (authError) {
@@ -39,31 +59,29 @@ export async function POST(request: NextRequest) {
 
         const userId = authData.user.id;
 
-        // 2. Assign role
+        // 3. Assign role
         await supabase.from('user_roles').insert({ user_id: userId, role });
 
-        // 3. Create profile based on role
+        // 4. Create profile
         if (role === 'caretaker') {
             await supabase.from('caretakers').insert({
                 id: userId,
                 name,
-                email,
+                username: cleanUsername,
+                email: realEmail || null,
                 phone: phone || null,
             });
         } else if (role === 'owner') {
             await supabase.from('owners').insert({
                 user_id: userId,
                 name,
-                email,
+                username: cleanUsername,
+                email: realEmail || null,
                 phone: phone || null,
             });
         }
 
-        return NextResponse.json({
-            success: true,
-            userId,
-            role,
-        });
+        return NextResponse.json({ success: true, userId, role });
     } catch (error) {
         console.error('User creation error:', error);
         return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });

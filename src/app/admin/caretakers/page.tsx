@@ -6,7 +6,8 @@ import { Plus, X, UserCog, Pencil } from 'lucide-react';
 interface Caretaker {
     id: string;
     name: string;
-    email: string;
+    username: string | null;
+    email: string | null;
     phone: string | null;
     created_at: string;
 }
@@ -19,7 +20,7 @@ export default function CaretakersPage() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
+    const [form, setForm] = useState({ name: '', username: '', email: '', phone: '', password: '' });
 
     useEffect(() => { fetchCaretakers(); }, []);
 
@@ -32,14 +33,14 @@ export default function CaretakersPage() {
 
     function handleEdit(ct: Caretaker) {
         setEditingId(ct.id);
-        setForm({ name: ct.name, email: ct.email, phone: ct.phone || '', password: '' });
+        setForm({ name: ct.name, username: ct.username || '', email: ct.email || '', phone: ct.phone || '', password: '' });
         setShowModal(true);
     }
 
     function handleCloseModal() {
         setShowModal(false);
         setEditingId(null);
-        setForm({ name: '', email: '', phone: '', password: '' });
+        setForm({ name: '', username: '', email: '', phone: '', password: '' });
         setError('');
     }
 
@@ -67,7 +68,14 @@ export default function CaretakersPage() {
             res = await fetch('/api/admin/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...form, role: 'caretaker' }),
+                body: JSON.stringify({
+                    username: form.username,
+                    email: form.email || undefined,
+                    name: form.name,
+                    phone: form.phone || undefined,
+                    password: form.password,
+                    role: 'caretaker',
+                }),
             });
         }
 
@@ -123,12 +131,31 @@ export default function CaretakersPage() {
                                 <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
                                     className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
                             </div>
+                            {!editingId && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                                    <input type="text" required value={form.username}
+                                        onChange={e => setForm({ ...form, username: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })}
+                                        placeholder="e.g. john_caretaker"
+                                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
+                                    <p className="text-xs text-gray-400 mt-1">Used to log in. Letters, numbers, _ and - only.</p>
+                                </div>
+                            )}
+                            {editingId && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                                    <input type="text" value={form.username} disabled
+                                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm opacity-50 cursor-not-allowed" />
+                                    <p className="text-xs text-gray-400 mt-1">Username cannot be changed.</p>
+                                </div>
+                            )}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                                <input type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-                                    disabled={!!editingId}
-                                    className={`w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 ${editingId ? 'opacity-50 cursor-not-allowed' : ''}`} />
-                                {editingId && <p className="text-xs text-gray-400 mt-1">Email cannot be changed after creation.</p>}
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Email <span className="text-gray-400 font-normal">(optional)</span>
+                                </label>
+                                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
+                                    placeholder="For password reset and notifications"
+                                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
@@ -142,7 +169,7 @@ export default function CaretakersPage() {
                                         className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
                                 </div>
                             )}
-                            {!editingId && <p className="text-xs text-gray-400">This creates a login account. The caretaker can sign in and manage assigned properties.</p>}
+                            {!editingId && <p className="text-xs text-gray-400">They log in with their username and password.</p>}
                             <button type="submit" disabled={saving}
                                 className="w-full py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-medium disabled:opacity-50">
                                 {saving ? 'Saving...' : (editingId ? 'Save Changes' : 'Create Caretaker Account')}
@@ -159,6 +186,7 @@ export default function CaretakersPage() {
                         <thead>
                             <tr className="text-left text-gray-500 border-b border-gray-100">
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Name</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Username</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Email</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Phone</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Joined</th>
@@ -176,7 +204,12 @@ export default function CaretakersPage() {
                                             <span className="font-medium text-gray-900">{ct.name}</span>
                                         </div>
                                     </td>
-                                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{ct.email}</td>
+                                    <td className="px-5 py-3 whitespace-nowrap">
+                                        <span className="font-mono text-sm text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                                            {ct.username || '—'}
+                                        </span>
+                                    </td>
+                                    <td className="px-5 py-3 text-gray-500 whitespace-nowrap text-sm">{ct.email || <span className="text-gray-300">not set</span>}</td>
                                     <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{ct.phone || '—'}</td>
                                     <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">
                                         {new Date(ct.created_at).toLocaleDateString()}
@@ -190,7 +223,7 @@ export default function CaretakersPage() {
                                 </tr>
                             ))}
                             {caretakers.length === 0 && (
-                                <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">No caretakers yet. Click &quot;Add Caretaker&quot; to create one.</td></tr>
+                                <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">No caretakers yet. Click &quot;Add Caretaker&quot; to create one.</td></tr>
                             )}
                         </tbody>
                     </table>
