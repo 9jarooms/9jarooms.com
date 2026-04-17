@@ -10,6 +10,7 @@ import {
     LogOut,
     Menu,
     Briefcase,
+    UserCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -17,6 +18,7 @@ const navItems = [
     { href: '/owner', label: 'Overview', icon: LayoutDashboard },
     { href: '/owner/properties', label: 'My Properties', icon: Building2 },
     { href: '/owner/financials', label: 'Financials', icon: DollarSign },
+    { href: '/owner/account', label: 'My Account', icon: UserCircle },
 ];
 
 export default function OwnerShell({ children, userName }: { children: React.ReactNode; userName?: string }) {

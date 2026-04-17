@@ -10,6 +10,7 @@ import {
     LogOut,
     Menu,
     X,
+    UserCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { User } from '@supabase/supabase-js';
@@ -18,6 +19,7 @@ const navItems = [
     { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
     { href: '/dashboard/properties', label: 'Properties', icon: Building2 },
     { href: '/dashboard/bookings', label: 'Bookings', icon: CalendarDays },
+    { href: '/dashboard/account', label: 'My Account', icon: UserCircle },
 ];
 
 interface Props {

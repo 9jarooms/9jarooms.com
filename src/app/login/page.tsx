@@ -155,7 +155,7 @@ export default function LoginPage() {
                                     value={loginId}
                                     onChange={(e) => setLoginId(e.target.value)}
                                     className="w-full px-5 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all font-medium text-gray-900 placeholder-gray-400"
-                                    placeholder="your_username or name@example.com"
+                                    placeholder="Username or email address"
                                     autoComplete="username"
                                     required
                                 />
