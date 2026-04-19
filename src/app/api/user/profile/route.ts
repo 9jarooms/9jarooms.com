@@ -10,7 +10,7 @@ function getServiceSupabase() {
     );
 }
 
-// GET — fetch current profile (name, username, email)
+// GET — fetch current profile (name, username, email, phone)
 export async function GET() {
     const authClient = await createAuthClient();
     const { data: { user } } = await authClient.auth.getUser();
@@ -18,10 +18,9 @@ export async function GET() {
 
     const supabase = getServiceSupabase();
 
-    // Try caretaker first, then owner
     const { data: caretaker } = await supabase
         .from('caretakers')
-        .select('name, username, email')
+        .select('name, username, email, phone')
         .eq('id', user.id)
         .single();
 
@@ -29,7 +28,7 @@ export async function GET() {
 
     const { data: owner } = await supabase
         .from('owners')
-        .select('name, username, email')
+        .select('name, username, email, phone')
         .eq('user_id', user.id)
         .single();
 
@@ -38,21 +37,24 @@ export async function GET() {
     return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 }
 
-// PATCH — update optional email on the user's own profile
+// PATCH — update email and/or phone on the user's own profile
 export async function PATCH(request: NextRequest) {
     const authClient = await createAuthClient();
     const { data: { user } } = await authClient.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { email } = await request.json();
+    const body = await request.json();
+    const { email, phone } = body;
+
     if (email !== undefined && email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
     }
 
     const supabase = getServiceSupabase();
-    const newEmail = email?.trim() || null;
+    const updates: Record<string, string | null> = {};
+    if (email !== undefined) updates.email = email?.trim() || null;
+    if (phone !== undefined) updates.phone = phone?.trim() || null;
 
-    // Try caretaker
     const { data: caretaker } = await supabase
         .from('caretakers')
         .select('id')
@@ -60,21 +62,17 @@ export async function PATCH(request: NextRequest) {
         .single();
 
     if (caretaker) {
-        const { error } = await supabase
-            .from('caretakers')
-            .update({ email: newEmail })
-            .eq('id', user.id);
+        const { error } = await supabase.from('caretakers').update(updates).eq('id', user.id);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-        // Keep auth metadata in sync
-        await supabase.auth.admin.updateUserById(user.id, {
-            user_metadata: { ...user.user_metadata, real_email: newEmail },
-        });
-
+        if (updates.email !== undefined) {
+            await supabase.auth.admin.updateUserById(user.id, {
+                user_metadata: { ...user.user_metadata, real_email: updates.email },
+            });
+        }
         return NextResponse.json({ success: true });
     }
 
-    // Try owner
     const { data: owner } = await supabase
         .from('owners')
         .select('id')
@@ -82,16 +80,14 @@ export async function PATCH(request: NextRequest) {
         .single();
 
     if (owner) {
-        const { error } = await supabase
-            .from('owners')
-            .update({ email: newEmail })
-            .eq('user_id', user.id);
+        const { error } = await supabase.from('owners').update(updates).eq('user_id', user.id);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-        await supabase.auth.admin.updateUserById(user.id, {
-            user_metadata: { ...user.user_metadata, real_email: newEmail },
-        });
-
+        if (updates.email !== undefined) {
+            await supabase.auth.admin.updateUserById(user.id, {
+                user_metadata: { ...user.user_metadata, real_email: updates.email },
+            });
+        }
         return NextResponse.json({ success: true });
     }
 
