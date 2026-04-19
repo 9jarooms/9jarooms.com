@@ -155,7 +155,6 @@ export interface Caretaker {
     name: string;
     email: string;
     phone: string | null;
-    telegram_chat_id: string | null;
     created_at: string;
     updated_at: string;
 }

@@ -1,10 +1,50 @@
 import { createServerClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import Header from '@/components/Header';
 import PropertyDetailClient from './PropertyDetailClient';
 
 interface Props {
     params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+    const { id } = await params;
+    const supabase = await createServerClient();
+
+    const { data: p } = await supabase
+        .from('properties')
+        .select('name, description, area, city, price_per_night, thumbnail, images, type')
+        .eq('id', id)
+        .single();
+
+    if (!p) return {};
+
+    const title = `${p.name} in ${p.area}, ${p.city}`;
+    const description = p.description
+        ? p.description.slice(0, 160)
+        : `Book ${p.name} — a ${p.type?.toLowerCase() || 'shortlet'} in ${p.area}, Abuja. From ₦${p.price_per_night?.toLocaleString()} per night.`;
+    const image = p.thumbnail || p.images?.[0];
+
+    return {
+        title,
+        description,
+        openGraph: {
+            title,
+            description,
+            type: 'website',
+            images: image ? [{ url: image, alt: p.name }] : [],
+        },
+        twitter: {
+            card: 'summary_large_image',
+            title,
+            description,
+            images: image ? [image] : [],
+        },
+        alternates: {
+            canonical: `/property/${id}`,
+        },
+    };
 }
 
 export default async function PropertyPage({ params }: Props) {
@@ -69,8 +109,32 @@ export default async function PropertyPage({ params }: Props) {
         settings[row.key] = row.value as string;
     }
 
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://9jarooms.com';
+
     return (
         <>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify({
+                        "@context": "https://schema.org",
+                        "@type": "LodgingBusiness",
+                        "name": property.name,
+                        "description": property.description || `Shortlet in ${property.area}, Abuja`,
+                        "image": property.thumbnail || property.images?.[0],
+                        "url": `${baseUrl}/property/${property.id}`,
+                        "address": {
+                            "@type": "PostalAddress",
+                            "addressLocality": property.area,
+                            "addressRegion": "Abuja, FCT",
+                            "addressCountry": "NG",
+                        },
+                        "priceRange": property.price_per_night
+                            ? `From ₦${property.price_per_night.toLocaleString()} per night`
+                            : undefined,
+                    }),
+                }}
+            />
             <Header />
             <main className="pt-20 page-enter">
                 <PropertyDetailClient

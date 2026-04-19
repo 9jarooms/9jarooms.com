@@ -13,15 +13,37 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "9jaRooms — The Right Room, Every Time",
-  description: "9jaRooms: The Right Room, Every Time. Book clean, comfortable serviced apartments in Abuja. Short-let stays in Maitama, Wuse II, Asokoro, and more.",
-  keywords: ["Abuja apartments", "short-let Abuja", "serviced apartments Nigeria", "9jaRooms", "Maitama apartments", "Wuse II"],
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://9jarooms.com'),
+  title: {
+    default: "9jaRooms — Shortlets & Serviced Apartments in Abuja",
+    template: "%s | 9jaRooms",
+  },
+  description: "Book clean, affordable shortlets and serviced apartments in Abuja. Find fully furnished stays in Maitama, Wuse II, Asokoro, Gwarinpa, Jabi and more. Instant booking, pay with Paystack.",
+  keywords: [
+    "shortlets in Abuja", "short let Abuja", "shortlet Abuja",
+    "serviced apartments Abuja", "furnished apartments Abuja",
+    "short stay Abuja", "Abuja accommodation", "apartments in Maitama",
+    "apartments in Wuse II", "apartments in Asokoro", "apartments in Gwarinpa",
+    "Abuja shortlet booking", "9jaRooms", "shortlets Nigeria",
+  ],
   openGraph: {
-    title: "9jaRooms — The Right Room, Every Time",
-    description: "Book clean, comfortable serviced apartments in Abuja.",
+    title: "9jaRooms — Shortlets & Serviced Apartments in Abuja",
+    description: "Book clean, affordable shortlets in Abuja. Maitama, Wuse II, Asokoro, Gwarinpa and more. Instant booking.",
     type: "website",
+    siteName: "9jaRooms",
+    locale: "en_NG",
+    images: [{ url: '/logo.png', width: 1200, height: 630, alt: '9jaRooms — Shortlets in Abuja' }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "9jaRooms — Shortlets & Serviced Apartments in Abuja",
+    description: "Book clean, affordable shortlets in Abuja. Instant booking, pay with Paystack.",
+    images: ['/logo.png'],
   },
   manifest: '/site.webmanifest',
+  alternates: {
+    canonical: '/',
+  },
 };
 
 export const viewport = {
@@ -39,6 +61,32 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased bg-gray-50 text-gray-900`}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "LocalBusiness",
+              "name": "9jaRooms",
+              "description": "Shortlets and serviced apartments in Abuja, Nigeria. Find fully furnished stays in Maitama, Wuse II, Asokoro, Gwarinpa and more.",
+              "url": process.env.NEXT_PUBLIC_SITE_URL || "https://9jarooms.com",
+              "logo": `${process.env.NEXT_PUBLIC_SITE_URL || "https://9jarooms.com"}/logo.png`,
+              "image": `${process.env.NEXT_PUBLIC_SITE_URL || "https://9jarooms.com"}/logo.png`,
+              "address": {
+                "@type": "PostalAddress",
+                "addressLocality": "Abuja",
+                "addressRegion": "FCT",
+                "addressCountry": "NG",
+              },
+              "areaServed": {
+                "@type": "City",
+                "name": "Abuja",
+              },
+              "priceRange": "₦₦",
+              "sameAs": [],
+            }),
+          }}
+        />
         {children}
       </body>
     </html>
