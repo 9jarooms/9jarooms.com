@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
     const { adminClient, error: authError, status: authStatus } = await requireAdmin();
     if (authError || !adminClient) return NextResponse.json({ error: authError }, { status: authStatus });
     const supabase = adminClient;
-    
+
     const body = await request.json();
     const { property_id, check_in, check_out } = body;
 
@@ -13,13 +13,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // A block requires a room. Get the first room for this property.
     const { data: properties, error: dbError } = await supabase
         .from('properties')
         .select('rooms(id)')
         .eq('id', property_id)
         .single();
-        
+
     if (dbError || !properties || !properties.rooms || properties.rooms.length === 0) {
         return NextResponse.json({ error: 'Failed to find a room for this property' }, { status: 404 });
     }
@@ -39,11 +38,35 @@ export async function POST(request: NextRequest) {
             price_per_night: 0,
             total_amount: 0,
             status: 'confirmed',
-            notes: 'Dates blocked by admin for drafted property.'
+            notes: 'Dates blocked by admin.'
         })
         .select()
         .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true, data });
+}
+
+// Release all admin-blocked dates for a property
+export async function DELETE(request: NextRequest) {
+    const { adminClient, error: authError, status: authStatus } = await requireAdmin();
+    if (authError || !adminClient) return NextResponse.json({ error: authError }, { status: authStatus });
+    const supabase = adminClient;
+
+    const { searchParams } = new URL(request.url);
+    const property_id = searchParams.get('property_id');
+
+    if (!property_id) {
+        return NextResponse.json({ error: 'property_id is required' }, { status: 400 });
+    }
+
+    const { error, count } = await supabase
+        .from('bookings')
+        .delete({ count: 'exact' })
+        .eq('property_id', property_id)
+        .eq('guest_email', 'admin@9jarooms.com')
+        .eq('guest_name', 'Admin Block');
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, released: count ?? 0 });
 }

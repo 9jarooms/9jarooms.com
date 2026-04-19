@@ -49,6 +49,9 @@ export default function AdminPropertiesPage() {
     const [showBlockDates, setShowBlockDates] = useState(false);
     const [blockPropertyId, setBlockPropertyId] = useState<string | null>(null);
     const [blockDatesForm, setBlockDatesForm] = useState({ check_in: '', check_out: '' });
+    const [blockMode, setBlockMode] = useState<'range' | 'days'>('range');
+    const [blockDays, setBlockDays] = useState('30');
+    const [releasing, setReleasing] = useState(false);
 
     const initialFormState = {
         name: '', description: '', address: '', area: '', city: 'Abuja',
@@ -281,28 +284,60 @@ export default function AdminPropertiesPage() {
         e.preventDefault();
         setCreating(true);
         setError('');
-        
+
         try {
+            let check_in: string;
+            let check_out: string;
+
+            if (blockMode === 'days') {
+                const days = Math.max(1, parseInt(blockDays) || 1);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const end = new Date(today);
+                end.setDate(end.getDate() + days);
+                check_in = today.toISOString().split('T')[0];
+                check_out = end.toISOString().split('T')[0];
+            } else {
+                check_in = blockDatesForm.check_in;
+                check_out = blockDatesForm.check_out;
+            }
+
             const res = await fetch('/api/admin/properties/block-dates', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    property_id: blockPropertyId,
-                    check_in: blockDatesForm.check_in,
-                    check_out: blockDatesForm.check_out,
-                }),
+                body: JSON.stringify({ property_id: blockPropertyId, check_in, check_out }),
             });
             const data = await res.json();
             if (data.error) throw new Error(data.error);
-            
+
             setSuccess('Dates blocked successfully');
             setShowBlockDates(false);
             setBlockPropertyId(null);
             setBlockDatesForm({ check_in: '', check_out: '' });
+            setBlockDays('30');
+            setBlockMode('range');
         } catch (err: any) {
             setError(err.message || 'Failed to block dates');
         }
         setCreating(false);
+    }
+
+    async function handleReleaseDates() {
+        if (!blockPropertyId) return;
+        if (!window.confirm('Release all admin-blocked dates for this property?')) return;
+        setReleasing(true);
+        setError('');
+        try {
+            const res = await fetch(`/api/admin/properties/block-dates?property_id=${blockPropertyId}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            setSuccess(`Released ${data.released} blocked date range(s)`);
+            setShowBlockDates(false);
+            setBlockPropertyId(null);
+        } catch (err: any) {
+            setError(err.message || 'Failed to release dates');
+        }
+        setReleasing(false);
     }
 
 
@@ -334,25 +369,72 @@ export default function AdminPropertiesPage() {
             {showBlockDates && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl max-w-md w-full p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-bold">Block Calendar Dates</h2>
-                            <button onClick={() => { setShowBlockDates(false); setBlockPropertyId(null); }}><X size={20} className="text-gray-400" /></button>
-                        </div>
-                        <form onSubmit={handleBlockDates} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                                <input type="date" required value={blockDatesForm.check_in} onChange={e => setBlockDatesForm({ ...blockDatesForm, check_in: e.target.value })}
-                                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                                <input type="date" required value={blockDatesForm.check_out} onChange={e => setBlockDatesForm({ ...blockDatesForm, check_out: e.target.value })}
-                                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
-                            </div>
-                            <button type="submit" disabled={creating} className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-medium disabled:opacity-50 mt-4">
-                                {creating ? 'Saving...' : 'Block Dates'}
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold">Manage Blocked Dates</h2>
+                            <button onClick={() => { setShowBlockDates(false); setBlockPropertyId(null); setBlockMode('range'); setBlockDays('30'); }}>
+                                <X size={20} className="text-gray-400" />
                             </button>
-                        </form>
+                        </div>
+
+                        {/* Release All */}
+                        <button
+                            onClick={handleReleaseDates}
+                            disabled={releasing}
+                            className="w-full mb-5 py-2.5 border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-sm font-medium disabled:opacity-50 transition-colors"
+                        >
+                            {releasing ? 'Releasing...' : '↩ Release All Blocked Dates'}
+                        </button>
+
+                        <div className="border-t border-gray-100 pt-4">
+                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Block New Dates</p>
+
+                            {/* Mode toggle */}
+                            <div className="flex gap-2 mb-4">
+                                <button type="button"
+                                    onClick={() => setBlockMode('range')}
+                                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${blockMode === 'range' ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+                                    Date Range
+                                </button>
+                                <button type="button"
+                                    onClick={() => setBlockMode('days')}
+                                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${blockMode === 'days' ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+                                    Next N Days
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleBlockDates} className="space-y-3">
+                                {blockMode === 'range' ? (
+                                    <>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                            <input type="date" required value={blockDatesForm.check_in}
+                                                onChange={e => setBlockDatesForm({ ...blockDatesForm, check_in: e.target.value })}
+                                                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                            <input type="date" required value={blockDatesForm.check_out}
+                                                onChange={e => setBlockDatesForm({ ...blockDatesForm, check_out: e.target.value })}
+                                                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Number of Days (from today)</label>
+                                        <input type="number" min="1" max="365" required value={blockDays}
+                                            onChange={e => setBlockDays(e.target.value)}
+                                            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+                                        <p className="text-xs text-gray-400 mt-1">
+                                            Blocks today → {(() => { const d = new Date(); d.setDate(d.getDate() + (parseInt(blockDays) || 0)); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); })()}
+                                        </p>
+                                    </div>
+                                )}
+                                <button type="submit" disabled={creating}
+                                    className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-medium disabled:opacity-50 transition-colors">
+                                    {creating ? 'Blocking...' : 'Block Dates'}
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             )}
