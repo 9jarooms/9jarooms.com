@@ -478,6 +478,35 @@ function PropertiesContent() {
                     </div>
                 </div>
 
+                {/* Book Directly Banner */}
+                <div className="mb-8 rounded-2xl bg-gradient-to-br from-green-600 to-green-700 p-6 text-white shadow-md">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-widest text-green-200 mb-1">Book Directly</p>
+                            <h2 className="text-lg font-bold leading-snug">Prefer to speak with someone first?</h2>
+                            <p className="text-sm text-green-100 mt-1 max-w-md">Call or WhatsApp our team — we'll confirm availability, answer your questions, and handle your booking for you.</p>
+                        </div>
+                        <div className="flex gap-3 shrink-0">
+                            <a
+                                href="tel:+2349111101012"
+                                className="flex items-center gap-2 px-4 py-3 bg-white/20 hover:bg-white/30 border border-white/20 rounded-xl text-sm font-semibold transition-all whitespace-nowrap"
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.41 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.61a16 16 0 0 0 6.29 6.29l.97-.97a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                Call Now
+                            </a>
+                            <a
+                                href={`https://wa.me/2349111101012?text=${encodeURIComponent("Hi, I'd like to book a shortlet. Please help me find availability and confirm a booking.")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 px-4 py-3 bg-white text-green-700 hover:bg-green-50 rounded-xl text-sm font-semibold transition-all shadow-sm whitespace-nowrap"
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                WhatsApp Us
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Results Grid */}
                 {loading ? (
                     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-6">

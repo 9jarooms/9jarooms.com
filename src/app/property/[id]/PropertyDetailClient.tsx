@@ -232,8 +232,8 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div>
                             <p className="text-xs font-semibold uppercase tracking-widest text-green-200 mb-1">Book Directly</p>
-                            <h2 className="text-lg font-bold leading-snug">No forms, no long thing.</h2>
-                            <p className="text-sm text-green-100 mt-1">Call or WhatsApp us — we'll confirm availability and sort everything for you.</p>
+                            <h2 className="text-lg font-bold leading-snug">Prefer to speak with someone first?</h2>
+                            <p className="text-sm text-green-100 mt-1">Call or WhatsApp our team — we'll confirm availability and handle your booking for you.</p>
                         </div>
                         <div className="flex gap-3 shrink-0">
                             {contactPhone && (
