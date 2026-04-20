@@ -6,6 +6,8 @@ declare global {
     }
 }
 
+export const CONVERSION_CONTACT = 'MxfHCJPaxp8cEL2AnK1D';
+
 export function trackConversion(label: string, value?: number) {
     if (typeof window === 'undefined' || !window.gtag) return;
     window.gtag('event', 'conversion', {

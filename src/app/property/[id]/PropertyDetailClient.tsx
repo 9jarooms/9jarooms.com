@@ -27,6 +27,7 @@ import {
     Sparkles,
 } from 'lucide-react';
 import BookingCalendar from '@/components/BookingCalendar';
+import { trackConversion, CONVERSION_CONTACT } from '@/lib/gtag';
 import PropertyGallery from '@/components/PropertyGallery';
 import PropertyCard from '@/components/PropertyCard';
 import type { Property, Room, Availability, DiscountRule } from '@/types/database';
@@ -239,6 +240,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                             {contactPhone && (
                                 <a
                                     href={`tel:${contactPhone}`}
+                                    onClick={() => trackConversion(CONVERSION_CONTACT)}
                                     className="flex items-center gap-2 px-4 py-3 bg-white/15 hover:bg-white/25 border border-white/20 rounded-xl text-sm font-semibold transition-all"
                                 >
                                     <Phone size={16} />
@@ -250,6 +252,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                                     href={`https://wa.me/${waNumber}?text=${waMessage}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
+                                    onClick={() => trackConversion(CONVERSION_CONTACT)}
                                     className="flex items-center gap-2 px-4 py-3 bg-white text-green-700 hover:bg-green-50 rounded-xl text-sm font-semibold transition-all shadow-sm"
                                 >
                                     <MessageCircle size={16} />
@@ -591,6 +594,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                     {contactPhone && (
                         <a
                             href={`tel:${contactPhone}`}
+                            onClick={() => trackConversion(CONVERSION_CONTACT)}
                             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-800 hover:bg-gray-50 transition-colors"
                         >
                             <Phone size={16} className="text-green-600" />
