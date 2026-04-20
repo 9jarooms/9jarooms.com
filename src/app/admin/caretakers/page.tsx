@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, X, UserCog, Pencil } from 'lucide-react';
+import { Plus, X, UserCog, Pencil, Home, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Caretaker {
     id: string;
@@ -12,8 +12,19 @@ interface Caretaker {
     created_at: string;
 }
 
+interface PropertySummary {
+    id: string;
+    name: string;
+    area: string | null;
+    city: string;
+    is_active: boolean;
+    caretaker_id: string | null;
+}
+
 export default function CaretakersPage() {
     const [caretakers, setCaretakers] = useState<Caretaker[]>([]);
+    const [properties, setProperties] = useState<PropertySummary[]>([]);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -22,13 +33,24 @@ export default function CaretakersPage() {
     const [success, setSuccess] = useState('');
     const [form, setForm] = useState({ name: '', username: '', email: '', phone: '', password: '' });
 
-    useEffect(() => { fetchCaretakers(); }, []);
+    useEffect(() => { fetchAll(); }, []);
 
-    async function fetchCaretakers() {
-        const res = await fetch('/api/admin/users?role=caretaker');
-        const data = await res.json();
-        setCaretakers(data.data || []);
+    async function fetchAll() {
+        const [ctRes, propRes] = await Promise.all([
+            fetch('/api/admin/users?role=caretaker'),
+            fetch('/api/admin/properties'),
+        ]);
+        const ctData = await ctRes.json();
+        const propData = await propRes.json();
+        setCaretakers(ctData.data || []);
+        setProperties(propData.data || []);
         setLoading(false);
+    }
+
+    function fetchCaretakers() { fetchAll(); }
+
+    function propertiesFor(caretakerId: string) {
+        return properties.filter(p => p.caretaker_id === caretakerId);
     }
 
     function handleEdit(ct: Caretaker) {
@@ -189,39 +211,75 @@ export default function CaretakersPage() {
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Username</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Email</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Phone</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap">Properties</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Joined</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {caretakers.map(ct => (
-                                <tr key={ct.id} className="border-b border-gray-50 last:border-0">
-                                    <td className="px-5 py-3 whitespace-nowrap">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 text-sm font-bold">
-                                                {ct.name[0]}
-                                            </div>
-                                            <span className="font-medium text-gray-900">{ct.name}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-5 py-3 whitespace-nowrap">
-                                        <span className="font-mono text-sm text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
-                                            {ct.username || '—'}
-                                        </span>
-                                    </td>
-                                    <td className="px-5 py-3 text-gray-500 whitespace-nowrap text-sm">{ct.email || <span className="text-gray-300">not set</span>}</td>
-                                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{ct.phone || '—'}</td>
-                                    <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">
-                                        {new Date(ct.created_at).toLocaleDateString()}
-                                    </td>
-                                    <td className="px-5 py-3 whitespace-nowrap">
-                                        <button onClick={() => handleEdit(ct)}
-                                            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
-                                            <Pencil size={14} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                            {caretakers.map(ct => {
+                                const ctProps = propertiesFor(ct.id);
+                                const isExpanded = expandedId === ct.id;
+                                return (
+                                    <>
+                                        <tr key={ct.id} className="border-b border-gray-50">
+                                            <td className="px-5 py-3 whitespace-nowrap">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 text-sm font-bold">
+                                                        {ct.name[0]}
+                                                    </div>
+                                                    <span className="font-medium text-gray-900">{ct.name}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-5 py-3 whitespace-nowrap">
+                                                <span className="font-mono text-sm text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                                                    {ct.username || '—'}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-3 text-gray-500 whitespace-nowrap text-sm">{ct.email || <span className="text-gray-300">not set</span>}</td>
+                                            <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{ct.phone || '—'}</td>
+                                            <td className="px-5 py-3 whitespace-nowrap">
+                                                {ctProps.length === 0 ? (
+                                                    <span className="text-gray-400 text-xs">None assigned</span>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => setExpandedId(isExpanded ? null : ct.id)}
+                                                        className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+                                                    >
+                                                        <Home size={13} />
+                                                        {ctProps.length} {ctProps.length === 1 ? 'property' : 'properties'}
+                                                        {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                                    </button>
+                                                )}
+                                            </td>
+                                            <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">
+                                                {new Date(ct.created_at).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-5 py-3 whitespace-nowrap">
+                                                <button onClick={() => handleEdit(ct)}
+                                                    className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                                                    <Pencil size={14} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        {isExpanded && ctProps.length > 0 && (
+                                            <tr key={`${ct.id}-props`} className="border-b border-gray-50 bg-gray-50/50">
+                                                <td colSpan={7} className="px-5 py-3">
+                                                    <div className="flex flex-wrap gap-2 pl-11">
+                                                        {ctProps.map(p => (
+                                                            <span key={p.id} className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium ${p.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                                <span className={`w-1.5 h-1.5 rounded-full ${p.is_active ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                                                                {p.name}
+                                                                {p.area && <span className="text-xs opacity-60">· {p.area}</span>}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </>
+                                );
+                            })}
                             {caretakers.length === 0 && (
                                 <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">No caretakers yet. Click &quot;Add Caretaker&quot; to create one.</td></tr>
                             )}
