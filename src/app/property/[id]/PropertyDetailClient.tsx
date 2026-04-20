@@ -200,8 +200,11 @@ export default function PropertyDetailClient({ property, rooms, availability, co
     // Has any discount rules to show
     const hasDiscounts = discountRules && discountRules.length > 0;
 
+    const waNumber = contactWhatsapp?.replace(/\D/g, '') || '';
+    const waMessage = encodeURIComponent(`Hi, I'd like to book ${property.name}. Please confirm availability and price.`);
+
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28 lg:pb-8">
             {/* Discovery Banner */}
             <a
                 href="/properties"
@@ -218,10 +221,45 @@ export default function PropertyDetailClient({ property, rooms, availability, co
 
             {/* Breadcrumb */}
             <nav className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-                <a href="/" className="hover:text-gray-900 transition-colors">Properties</a>
+                <a href="/properties" className="hover:text-gray-900 transition-colors">Properties</a>
                 <ChevronRight size={14} />
                 <span className="text-gray-900 font-medium">{property.name}</span>
             </nav>
+
+            {/* Book Directly Banner */}
+            {(contactPhone || contactWhatsapp) && (
+                <div className="mb-8 rounded-2xl bg-gradient-to-br from-green-600 to-green-700 p-5 sm:p-6 text-white shadow-md">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-widest text-green-200 mb-1">Book Directly</p>
+                            <h2 className="text-lg font-bold leading-snug">No forms, no long thing.</h2>
+                            <p className="text-sm text-green-100 mt-1">Call or WhatsApp us — we'll confirm availability and sort everything for you.</p>
+                        </div>
+                        <div className="flex gap-3 shrink-0">
+                            {contactPhone && (
+                                <a
+                                    href={`tel:${contactPhone}`}
+                                    className="flex items-center gap-2 px-4 py-3 bg-white/15 hover:bg-white/25 border border-white/20 rounded-xl text-sm font-semibold transition-all"
+                                >
+                                    <Phone size={16} />
+                                    Call Now
+                                </a>
+                            )}
+                            {contactWhatsapp && (
+                                <a
+                                    href={`https://wa.me/${waNumber}?text=${waMessage}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 px-4 py-3 bg-white text-green-700 hover:bg-green-50 rounded-xl text-sm font-semibold transition-all shadow-sm"
+                                >
+                                    <MessageCircle size={16} />
+                                    WhatsApp Us
+                                </a>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Left Column - Property Details */}
@@ -543,48 +581,35 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                             )}
                         </div>
 
-                        {/* Contact Card - Call or WhatsApp us directly */}
-                        {(contactPhone || contactWhatsapp) && (
-                            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                                <h3 className="text-sm font-semibold text-gray-900 mb-3">Or contact us directly</h3>
-                                <p className="text-xs text-gray-500 mb-4">If you prefer to book by call or WhatsApp, reach out to us and we&apos;ll book for you right away.</p>
-                                <div className="space-y-2">
-                                    {contactPhone && (
-                                        <a
-                                            href={`tel:${contactPhone}`}
-                                            className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all"
-                                        >
-                                            <div className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center">
-                                                <Phone size={16} className="text-green-600" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-gray-900">Call Us</p>
-                                                <p className="text-xs text-gray-500">{contactPhone}</p>
-                                            </div>
-                                        </a>
-                                    )}
-                                    {contactWhatsapp && (
-                                        <a
-                                            href={`https://wa.me/${contactWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi, I'm interested in booking ${property.name}`)}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all"
-                                        >
-                                            <div className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center">
-                                                <MessageCircle size={16} className="text-green-600" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-gray-900">WhatsApp Us</p>
-                                                <p className="text-xs text-gray-500">{contactWhatsapp}</p>
-                                            </div>
-                                        </a>
-                                    )}
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
+
+            {/* Sticky mobile bottom bar */}
+            {(contactPhone || contactWhatsapp) && (
+                <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-white border-t border-gray-100 px-4 py-3 flex gap-3 shadow-lg">
+                    {contactPhone && (
+                        <a
+                            href={`tel:${contactPhone}`}
+                            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-800 hover:bg-gray-50 transition-colors"
+                        >
+                            <Phone size={16} className="text-green-600" />
+                            Call Now
+                        </a>
+                    )}
+                    {contactWhatsapp && (
+                        <a
+                            href={`https://wa.me/${waNumber}?text=${waMessage}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition-colors"
+                        >
+                            <MessageCircle size={16} />
+                            WhatsApp Us
+                        </a>
+                    )}
+                </div>
+            )}
 
             {/* Similar Properties */}
             {similarProperties.length > 0 && (
