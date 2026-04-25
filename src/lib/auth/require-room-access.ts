@@ -10,12 +10,12 @@ export async function requireRoomAccess(roomId: string) {
 
     const adminClient = createAdminClient();
     
-    // Check admin
+    // Check admin or call_operator (operators can access all properties)
     const { data: roleData } = await adminClient
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
-        .eq('role', 'admin')
+        .in('role', ['admin', 'call_operator'])
         .single();
         
     if (roleData) return { authorized: true, adminClient };

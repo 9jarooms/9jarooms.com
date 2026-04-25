@@ -149,53 +149,33 @@ export default function PropertyDetailClient({ property, rooms, availability, co
         setError('');
     };
 
-    const handleBooking = async () => {
-        if (!selectedRoom || !checkIn || !checkOut || !guestName || !guestEmail || !guestPhone) {
-            setError('Please fill in all required fields');
-            return;
-        }
+    const handleWhatsAppEnquiry = () => {
+        if (!checkIn || !checkOut) return;
+        const whatsappNumber = (contactWhatsapp || '2349067779344').replace(/\D/g, '');
+        const message = [
+            `Hi, I'd like to book *${property.name}*`,
+            ``,
+            `📅 Check-in: ${format(checkIn, 'EEE, MMM d yyyy')}`,
+            `📅 Check-out: ${format(checkOut, 'EEE, MMM d yyyy')}`,
+            `🌙 ${nights} night${nights !== 1 ? 's' : ''}`,
+            `💰 Total: ₦${totalAmount.toLocaleString()}`,
+            ``,
+            `Is it available?`,
+        ].join('\n');
 
-        // Validate minimum stay
-        if (property.minimum_stay && nights < property.minimum_stay) {
-            setError(`Minimum stay is ${property.minimum_stay} nights`);
-            return;
-        }
-
-        setIsBooking(true);
-        setError('');
-
-        try {
-            const response = await fetch('/api/bookings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    roomId: selectedRoom.id,
-                    propertyId: property.id,
-                    guestName,
-                    guestEmail, 
-                    guestPhone,
-                    checkIn: format(checkIn, 'yyyy-MM-dd'),
-                    checkOut: format(checkOut, 'yyyy-MM-dd'),
-                }),
+        // Meta Pixel — fire when user taps WhatsApp enquiry button
+        // Paste your pixel snippet in /app/layout.tsx, then this event auto-tracks
+        if (typeof window !== 'undefined' && (window as any).fbq) {
+            (window as any).fbq('track', 'InitiateCheckout', {
+                content_name: property.name,
+                content_type: 'shortlet',
+                value: totalAmount,
+                currency: 'NGN',
+                num_nights: nights,
             });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to initialize payment');
-            }
-
-            // Redirect to Paystack
-            if (data.paystackUrl) {
-                window.location.href = data.paystackUrl;
-            } else {
-                throw new Error('No payment URL returned');
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Something went wrong');
-        } finally {
-            setIsBooking(false);
         }
+
+        window.open(\`https://wa.me/\${whatsappNumber}?text=\${encodeURIComponent(message)}\`, '_blank');
     };
 
     // Has any discount rules to show
@@ -511,76 +491,25 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                                 </div>
                             )}
 
-                            {/* Book Now Button */}
-                            {checkIn && checkOut && !showBookingForm && (
+                            {/* WhatsApp Enquiry Button */}
+                            {checkIn && checkOut ? (
                                 <button
-                                    onClick={() => setShowBookingForm(true)}
-                                    className="w-full mt-6 bg-green-500 hover:bg-green-600 text-white py-3.5 rounded-xl font-semibold transition-colors"
+                                    onClick={handleWhatsAppEnquiry}
+                                    className="w-full mt-6 bg-[#25D366] hover:bg-[#1ebe5d] text-white py-3.5 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
                                 >
-                                    Book Now
+                                    <MessageCircle size={18} />
+                                    Enquire on WhatsApp
+                                </button>
+                            ) : (
+                                <button
+                                    disabled
+                                    className="w-full mt-6 bg-gray-100 text-gray-400 py-3.5 rounded-xl font-semibold cursor-not-allowed"
+                                >
+                                    Select dates to enquire
                                 </button>
                             )}
-
-                            {/* Booking Form */}
-                            {showBookingForm && (
-                                <div className="mt-6 space-y-4">
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-700 mb-1 block">Full Name *</label>
-                                        <input
-                                            type="text"
-                                            value={guestName}
-                                            onChange={(e) => setGuestName(e.target.value)}
-                                            placeholder="John Doe"
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-700 mb-1 block">Email Address *</label>
-                                        <input
-                                            type="email"
-                                            value={guestEmail}
-                                            onChange={(e) => setGuestEmail(e.target.value)}
-                                            placeholder="john@example.com"
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-700 mb-1 block">Phone Number *</label>
-                                        <input
-                                            type="tel"
-                                            value={guestPhone}
-                                            onChange={(e) => setGuestPhone(e.target.value)}
-                                            placeholder="+234..."
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
-                                        />
-                                    </div>
-
-                                    {/* Secure Payment Notice */}
-                                    <div className="p-3 bg-green-50 border border-green-100 rounded-xl text-xs text-green-700 flex items-start gap-2">
-                                        <CheckCircle size={14} className="mt-0.5 shrink-0" />
-                                        <p>Payments are securely processed via <strong>Paystack</strong>. You will be redirected to complete your booking.</p>
-                                    </div>
-
-                                    {error && (
-                                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
-                                            {error}
-                                        </div>
-                                    )}
-
-                                    <button
-                                        onClick={handleBooking}
-                                        disabled={isBooking}
-                                        className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white py-3.5 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
-                                    >
-                                        {isBooking ? (
-                                            <>Processing...</>
-                                        ) : (
-                                            <>Pay ₦{formatPrice(totalAmount)}</>
-                                        )}
-                                    </button>
-                                </div>
+                            {checkIn && checkOut && (
+                                <p className="text-center text-xs text-gray-400 mt-2">Our team will confirm availability and send your payment link</p>
                             )}
                         </div>
 

@@ -302,8 +302,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 6. Initialize Paystack (ONLY if NOT internal and NOT operator)
-        if (!isInternalBooking && bookingSource !== 'operator') {
+        // 6. Initialize Paystack for public bookings AND operator bookings (operator sends link to client)
+        if (!isInternalBooking || bookingSource === 'operator') {
             try {
                 // Secure the origin against Host Header Injection
                 let origin = request.nextUrl.origin;
@@ -350,13 +350,6 @@ export async function POST(request: NextRequest) {
                     { status: 400 }
                 );
             }
-        } else if (bookingSource === 'operator') {
-            // Operator dashboard manual booking (Pending payment)
-            return NextResponse.json({
-                success: true,
-                bookingId: booking.id,
-                message: 'Booking created successfully. Pending manual payment confirmation.',
-            });
         } else {
             // Return success for internal booking immediately
             return NextResponse.json({

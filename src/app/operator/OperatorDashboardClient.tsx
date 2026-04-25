@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { format, addDays, subDays } from 'date-fns';
+import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths } from 'date-fns';
 import { Copy, Plus, CheckCircle, RefreshCw, Search, CalendarDays,
     MapPin, Building2, Phone, Mail, User, ArrowRight, MessageCircle,
-    Clock, AlertCircle, ChevronRight
+    Clock, AlertCircle, ChevronRight, CalendarX2, ChevronLeft
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import BookingCalendar from '@/components/BookingCalendar';
@@ -21,10 +21,18 @@ interface Props {
 }
 
 type Step = 'dates' | 'property' | 'details';
+type Tab = 'new' | 'pending' | 'availability';
 
 export default function OperatorDashboardClient({ properties, availability, pendingRequests: initialPending }: Props) {
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<'new' | 'pending'>('new');
+    const [activeTab, setActiveTab] = useState<Tab>('new');
+
+    // Availability management state
+    const [availPropertyId, setAvailPropertyId] = useState<string>('');
+    const [availMonth, setAvailMonth] = useState(new Date());
+    const [availSelection, setAvailSelection] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
+    const [availUpdating, setAvailUpdating] = useState(false);
+    const [availSuccess, setAvailSuccess] = useState('');
     const [pendingRequests, setPendingRequests] = useState(initialPending);
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
@@ -357,6 +365,13 @@ export default function OperatorDashboardClient({ properties, availability, pend
                             {pendingRequests.length}
                         </span>
                     )}
+                </button>
+                <button
+                    onClick={() => setActiveTab('availability')}
+                    className={`pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'availability' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                >
+                    <CalendarX2 size={14} />
+                    Manage Availability
                 </button>
             </div>
 
@@ -842,6 +857,175 @@ export default function OperatorDashboardClient({ properties, availability, pend
             )}
                 </div>
             )}
+            {activeTab === 'availability' && (() => {
+                const availProperty = properties.find(p => p.id === availPropertyId);
+                const availRoom = availProperty?.rooms?.[0];
+                const propAvailability = availability.filter(a => availRoom && a.room_id === availRoom.id);
+                const statusMap: Record<string, string> = {};
+                propAvailability.forEach(a => { statusMap[a.date] = a.status; });
+
+                const monthStart = startOfMonth(availMonth);
+                const monthEnd = endOfMonth(availMonth);
+                const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+                const startPadding = getDay(monthStart);
+                const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+                const STATUS_COLORS: Record<string, string> = {
+                    available: 'bg-gray-50 text-gray-700',
+                    booked: 'bg-red-100 text-red-800',
+                    held: 'bg-purple-100 text-purple-800',
+                    cleaning: 'bg-blue-100 text-blue-800',
+                    maintenance: 'bg-amber-100 text-amber-800',
+                };
+
+                const handleAvailDateClick = (dateStr: string) => {
+                    if (!availSelection.start || (availSelection.start && availSelection.end)) {
+                        setAvailSelection({ start: dateStr, end: null });
+                    } else if (dateStr < availSelection.start) {
+                        setAvailSelection({ start: dateStr, end: null });
+                    } else {
+                        setAvailSelection({ start: availSelection.start, end: dateStr });
+                    }
+                };
+
+                const handleAvailUpdate = async (status: string) => {
+                    if (!availRoom || !availSelection.start) return;
+                    setAvailUpdating(true);
+                    setAvailSuccess('');
+                    try {
+                        const start = new Date(availSelection.start);
+                        const end = availSelection.end ? new Date(availSelection.end) : start;
+                        const dates: string[] = [];
+                        let cur = new Date(start);
+                        while (cur <= end) {
+                            dates.push(format(cur, 'yyyy-MM-dd'));
+                            cur = addDays(cur, 1);
+                        }
+                        await Promise.all(dates.map(date =>
+                            fetch('/api/availability/update', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ roomId: availRoom.id, date, status }),
+                            })
+                        ));
+                        setAvailSelection({ start: null, end: null });
+                        setAvailSuccess(`${dates.length} date${dates.length > 1 ? 's' : ''} marked as ${status}`);
+                        router.refresh();
+                    } finally {
+                        setAvailUpdating(false);
+                    }
+                };
+
+                return (
+                    <div className="space-y-4">
+                        {/* Property selector */}
+                        <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Select Property</label>
+                            <select
+                                value={availPropertyId}
+                                onChange={e => { setAvailPropertyId(e.target.value); setAvailSelection({ start: null, end: null }); setAvailSuccess(''); }}
+                                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
+                            >
+                                <option value="">Choose a property...</option>
+                                {properties.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name} — {p.area || p.city}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {availProperty && availRoom && (
+                            <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6">
+                                {/* Month nav */}
+                                <div className="flex items-center justify-between mb-4">
+                                    <button onClick={() => setAvailMonth(subMonths(availMonth, 1))} className="p-2 rounded-lg hover:bg-gray-100"><ChevronLeft size={18} /></button>
+                                    <h3 className="font-semibold text-gray-900">{format(availMonth, 'MMMM yyyy')}</h3>
+                                    <button onClick={() => setAvailMonth(addMonths(availMonth, 1))} className="p-2 rounded-lg hover:bg-gray-100"><ChevronRight size={18} /></button>
+                                </div>
+
+                                {/* Day headers */}
+                                <div className="grid grid-cols-7 gap-1 mb-2">
+                                    {DAYS.map(d => <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>)}
+                                </div>
+
+                                {/* Calendar grid */}
+                                <div className="grid grid-cols-7 gap-1">
+                                    {Array.from({ length: startPadding }).map((_, i) => <div key={`pad-${i}`} className="aspect-square" />)}
+                                    {days.map(day => {
+                                        const dateStr = format(day, 'yyyy-MM-dd');
+                                        const status = statusMap[dateStr] || 'available';
+                                        const isStart = availSelection.start === dateStr;
+                                        const isEnd = availSelection.end === dateStr;
+                                        const inRange = availSelection.start && availSelection.end && dateStr > availSelection.start && dateStr < availSelection.end;
+                                        return (
+                                            <button
+                                                key={dateStr}
+                                                onClick={() => handleAvailDateClick(dateStr)}
+                                                className={`aspect-square rounded-md flex flex-col items-center justify-center transition-all text-xs border
+                                                    ${isStart || isEnd ? 'border-green-600 ring-1 ring-green-400' : 'border-transparent'}
+                                                    ${inRange ? 'bg-green-50' : (STATUS_COLORS[status] || 'bg-gray-50 text-gray-700')}
+                                                `}
+                                            >
+                                                <span className="font-medium">{format(day, 'd')}</span>
+                                                <span className="hidden sm:block text-[9px] opacity-60 truncate w-full text-center px-0.5">
+                                                    {status === 'maintenance' ? 'Maint' : status === 'available' ? '' : status}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Action panel */}
+                                {availSelection.start && (
+                                    <div className="mt-4 p-3 bg-gray-50 rounded-xl">
+                                        <p className="text-sm text-gray-700 font-medium mb-3">
+                                            {availSelection.start}{availSelection.end ? ` → ${availSelection.end}` : ' (select end date or apply to single day)'}
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {[
+                                                { value: 'available', label: 'Mark Available', color: 'bg-green-100 text-green-700 hover:bg-green-200' },
+                                                { value: 'maintenance', label: 'Maintenance', color: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
+                                                { value: 'cleaning', label: 'Cleaning', color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.value}
+                                                    onClick={() => handleAvailUpdate(opt.value)}
+                                                    disabled={availUpdating}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${opt.color}`}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                            <button
+                                                onClick={() => setAvailSelection({ start: null, end: null })}
+                                                className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-200 transition-colors"
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {availSuccess && (
+                                    <div className="mt-3 px-3 py-2 bg-green-50 border border-green-100 rounded-lg text-sm text-green-700 flex items-center gap-2">
+                                        <CheckCircle size={14} />
+                                        {availSuccess}
+                                    </div>
+                                )}
+
+                                {/* Legend */}
+                                <div className="flex flex-wrap gap-3 mt-4 text-xs text-gray-500">
+                                    {[['bg-gray-100', 'Available'], ['bg-red-100', 'Booked'], ['bg-amber-100', 'Maintenance'], ['bg-blue-100', 'Cleaning']].map(([color, label]) => (
+                                        <span key={label} className="flex items-center gap-1.5">
+                                            <span className={`w-3 h-3 rounded ${color}`} />
+                                            {label}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
         </div>
     );
 }
