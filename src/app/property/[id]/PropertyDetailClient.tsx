@@ -149,9 +149,49 @@ export default function PropertyDetailClient({ property, rooms, availability, co
         setError('');
     };
 
+    const handleBooking = async () => {
+        if (!selectedRoom || !checkIn || !checkOut || !guestName || !guestEmail || !guestPhone) {
+            setError('Please fill in all required fields');
+            return;
+        }
+        if (property.minimum_stay && nights < property.minimum_stay) {
+            setError(`Minimum stay is ${property.minimum_stay} nights`);
+            return;
+        }
+        setIsBooking(true);
+        setError('');
+        try {
+            const response = await fetch('/api/bookings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId: selectedRoom.id,
+                    propertyId: property.id,
+                    guestName,
+                    guestEmail,
+                    guestPhone,
+                    checkIn: format(checkIn, 'yyyy-MM-dd'),
+                    checkOut: format(checkOut, 'yyyy-MM-dd'),
+                }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to initialize payment');
+            if (data.paystackUrl) {
+                window.location.href = data.paystackUrl;
+            } else {
+                throw new Error('No payment URL returned');
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong');
+        } finally {
+            setIsBooking(false);
+        }
+    };
+
     const handleWhatsAppEnquiry = () => {
         if (!checkIn || !checkOut) return;
         const whatsappNumber = (contactWhatsapp || '2349067779344').replace(/\D/g, '');
+        const propertyUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://9jarooms.com'}/property/${property.id}`;
         const message = [
             `Hi, I'd like to book *${property.name}*`,
             ``,
@@ -159,6 +199,8 @@ export default function PropertyDetailClient({ property, rooms, availability, co
             `📅 Check-out: ${format(checkOut, 'EEE, MMM d yyyy')}`,
             `🌙 ${nights} night${nights !== 1 ? 's' : ''}`,
             `💰 Total: ₦${totalAmount.toLocaleString()}`,
+            ``,
+            `🔗 ${propertyUrl}`,
             ``,
             `Is it available?`,
         ].join('\n');
@@ -519,6 +561,74 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                             )}
                             {checkIn && checkOut && (
                                 <p className="text-center text-xs text-gray-400 mt-2">Our team will confirm availability and send your payment link</p>
+                            )}
+
+                            {/* Direct Payment Option */}
+                            {checkIn && checkOut && (
+                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                    <p className="text-xs text-gray-400 text-center mb-3">
+                                        We apologise for the inconvenience — you can also pay directly below.
+                                    </p>
+                                    {!showBookingForm ? (
+                                        <button
+                                            onClick={() => setShowBookingForm(true)}
+                                            className="w-full py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                                        >
+                                            Pay Directly — ₦{formatPrice(totalAmount)}
+                                        </button>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="text-xs font-medium text-gray-600 mb-1 block">Full Name *</label>
+                                                <input
+                                                    type="text"
+                                                    value={guestName}
+                                                    onChange={(e) => setGuestName(e.target.value)}
+                                                    placeholder="John Doe"
+                                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-medium text-gray-600 mb-1 block">Email *</label>
+                                                <input
+                                                    type="email"
+                                                    value={guestEmail}
+                                                    onChange={(e) => setGuestEmail(e.target.value)}
+                                                    placeholder="john@example.com"
+                                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-medium text-gray-600 mb-1 block">Phone *</label>
+                                                <input
+                                                    type="tel"
+                                                    value={guestPhone}
+                                                    onChange={(e) => setGuestPhone(e.target.value)}
+                                                    placeholder="+234..."
+                                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400"
+                                                />
+                                            </div>
+                                            {error && (
+                                                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600">{error}</div>
+                                            )}
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => setShowBookingForm(false)}
+                                                    className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    onClick={handleBooking}
+                                                    disabled={isBooking}
+                                                    className="flex-1 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
+                                                >
+                                                    {isBooking ? 'Processing...' : `Pay ₦${formatPrice(totalAmount)}`}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </div>
 
