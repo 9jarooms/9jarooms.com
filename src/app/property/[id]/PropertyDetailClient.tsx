@@ -563,71 +563,13 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                                 <p className="text-center text-xs text-gray-400 mt-2">Our team will confirm availability and send your payment link</p>
                             )}
 
-                            {/* Direct Payment Option */}
+                            {/* Direct Pay Coming Soon */}
                             {checkIn && checkOut && (
                                 <div className="mt-4 pt-4 border-t border-gray-100">
-                                    <p className="text-xs text-gray-400 text-center mb-3">
-                                        We apologise for the inconvenience — you can also pay directly below.
-                                    </p>
-                                    {!showBookingForm ? (
-                                        <button
-                                            onClick={() => setShowBookingForm(true)}
-                                            className="w-full py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                                        >
-                                            Pay Directly — ₦{formatPrice(totalAmount)}
-                                        </button>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            <div>
-                                                <label className="text-xs font-medium text-gray-600 mb-1 block">Full Name *</label>
-                                                <input
-                                                    type="text"
-                                                    value={guestName}
-                                                    onChange={(e) => setGuestName(e.target.value)}
-                                                    placeholder="John Doe"
-                                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-xs font-medium text-gray-600 mb-1 block">Email *</label>
-                                                <input
-                                                    type="email"
-                                                    value={guestEmail}
-                                                    onChange={(e) => setGuestEmail(e.target.value)}
-                                                    placeholder="john@example.com"
-                                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-xs font-medium text-gray-600 mb-1 block">Phone *</label>
-                                                <input
-                                                    type="tel"
-                                                    value={guestPhone}
-                                                    onChange={(e) => setGuestPhone(e.target.value)}
-                                                    placeholder="+234..."
-                                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400"
-                                                />
-                                            </div>
-                                            {error && (
-                                                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600">{error}</div>
-                                            )}
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => setShowBookingForm(false)}
-                                                    className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    onClick={handleBooking}
-                                                    disabled={isBooking}
-                                                    className="flex-1 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
-                                                >
-                                                    {isBooking ? 'Processing...' : `Pay ₦${formatPrice(totalAmount)}`}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
+                                    <div className="w-full py-3 rounded-xl border border-dashed border-gray-200 text-center">
+                                        <p className="text-xs font-medium text-gray-400">Direct payment <span className="text-gray-500">coming soon</span></p>
+                                        <p className="text-[11px] text-gray-400 mt-0.5">For now, our team will handle your booking via WhatsApp</p>
+                                    </div>
                                 </div>
                             )}
                         </div>
