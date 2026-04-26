@@ -15,11 +15,28 @@ export async function PATCH(request: NextRequest, { params }: Props) {
         const supabase = adminClient;
 
         const body = await request.json();
-        const { check_in_instructions, house_rules } = body;
+        const {
+            check_in_instructions, house_rules,
+            name, description, area, city, amenities,
+            images, thumbnail, price_per_night, max_guests,
+        } = body;
+
+        const updates: Record<string, any> = {};
+        if (check_in_instructions !== undefined) updates.check_in_instructions = check_in_instructions;
+        if (house_rules !== undefined) updates.house_rules = house_rules;
+        if (name !== undefined) updates.name = name;
+        if (description !== undefined) updates.description = description;
+        if (area !== undefined) updates.area = area;
+        if (city !== undefined) updates.city = city;
+        if (amenities !== undefined) updates.amenities = amenities;
+        if (images !== undefined) updates.images = images;
+        if (thumbnail !== undefined) updates.thumbnail = thumbnail;
+        if (price_per_night !== undefined) updates.price_per_night = price_per_night;
+        if (max_guests !== undefined) updates.max_guests = max_guests;
 
         const { error } = await supabase
             .from('properties')
-            .update({ check_in_instructions, house_rules })
+            .update(updates)
             .eq('id', id);
 
         if (error) {
