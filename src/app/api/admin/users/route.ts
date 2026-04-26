@@ -8,10 +8,10 @@ export async function POST(request: NextRequest) {
         if (reqError || !adminClient) return NextResponse.json({ error: reqError }, { status });
         const supabase = adminClient;
         const body = await request.json();
-        // username is the new primary identifier; email is optional (for password reset)
-        const { username, email: realEmail, password, name, phone, role } = body;
+        // username is the primary identifier for caretakers/owners; operators use their real email
+        const { username: rawUsername, email: realEmail, password, name, phone, role } = body;
 
-        if (!username || !password || !name || !role) {
+        if (!password || !name || !role) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
@@ -19,24 +19,32 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
         }
 
-        // Sanitise username: lowercase, only alphanumeric + underscore/hyphen
+        // Operators log in with their real email — generate username from it if not provided
+        const isOperator = role === 'call_operator' || role === 'admin';
+        if (!isOperator && !rawUsername) {
+            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        const username = rawUsername || (realEmail ? realEmail.split('@')[0] : null);
+        if (!username) {
+            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        // Sanitise username
         const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-        if (cleanUsername !== username.toLowerCase()) {
-            return NextResponse.json({ error: 'Username can only contain letters, numbers, underscores and hyphens.' }, { status: 400 });
-        }
 
-        // Auth email is a fake internal address — Supabase requires an email but we never send mail to it
-        const authEmail = `${cleanUsername}@9jarooms.internal`;
+        // Operators use their real email for auth; caretakers/owners use fake internal email
+        const authEmail = isOperator && realEmail ? realEmail : `${cleanUsername}@9jarooms.internal`;
 
-        // 1. Check username isn't already taken
+        // 1. Check email/username isn't already taken
         const { data: existingUsers } = await supabase.auth.admin.listUsers();
-        const taken = existingUsers?.users?.some(u => u.email?.toLowerCase() === authEmail);
+        const taken = existingUsers?.users?.some(u => u.email?.toLowerCase() === authEmail.toLowerCase());
         if (taken) {
-            return NextResponse.json({ error: 'Username is already taken.' }, { status: 400 });
+            return NextResponse.json({ error: isOperator ? 'That email address is already registered.' : 'Username is already taken.' }, { status: 400 });
         }
 
-        // If a real email was provided, check it isn't already in use
-        if (realEmail) {
+        // For non-operators: also check real_email metadata
+        if (!isOperator && realEmail) {
             const realEmailTaken = existingUsers?.users?.some(
                 u => u.user_metadata?.real_email?.toLowerCase() === realEmail.toLowerCase()
             );
