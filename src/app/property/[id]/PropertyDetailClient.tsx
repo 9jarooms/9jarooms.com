@@ -175,7 +175,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
             });
         }
 
-        window.open(\`https://wa.me/\${whatsappNumber}?text=\${encodeURIComponent(message)}\`, '_blank');
+        window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
     const trackPixelContact = (method: 'call' | 'whatsapp') => {
