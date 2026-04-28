@@ -288,7 +288,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
 }
 
 // Main AI message handler with 1-minute batching
-export const aiMessageReceived = inngest.createFunction(
+export const aiMessageReceived = (inngest as any).createFunction(
     {
         id: 'ai-message-received',
         name: 'AI Message Received',
