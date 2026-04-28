@@ -292,11 +292,13 @@ export const aiMessageReceived = inngest.createFunction(
     {
         id: 'ai-message-received',
         name: 'AI Message Received',
+    },
+    { 
+        event: 'ai/message.received',
         debounce: {
             key: 'event.data.conversationId',
             period: '1m', // Wait 1 minute for additional messages
         },
-        on: { event: 'ai/message.received' }
     },
     async ({ event, step }: any) => {
         const { conversationId, message, senderPhone, senderName, channel, externalId } = event.data;
