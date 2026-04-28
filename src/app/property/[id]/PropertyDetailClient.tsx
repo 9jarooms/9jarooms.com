@@ -114,7 +114,22 @@ export default function PropertyDetailClient({ property, rooms, availability, co
             }
         };
         fetchUserForPrefill();
-    }, []);
+
+        // Fire page_view event
+        fetch('/api/analytics/event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event_type: 'page_view', property_id: property.id }),
+        }).catch(() => {});
+    }, [property.id]);
+
+    const trackEvent = (event_type: string) => {
+        fetch('/api/analytics/event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event_type, property_id: property.id }),
+        }).catch(() => {});
+    };
 
     const pricePerNight = selectedRoom?.price_per_night || property.price_per_night;
     const nights = checkIn && checkOut
@@ -147,6 +162,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
         setCheckIn(ci);
         setCheckOut(co);
         setError('');
+        if (co) trackEvent('dates_selected');
     };
 
     const handleBooking = async () => {
@@ -217,6 +233,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
             });
         }
 
+        trackEvent('whatsapp_click');
         window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
@@ -227,6 +244,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                 contact_method: method,
             });
         }
+        trackEvent(method === 'call' ? 'call_click' : 'whatsapp_click');
     };
 
     // Has any discount rules to show

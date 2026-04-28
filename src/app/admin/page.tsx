@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Building2, CalendarDays, Users, UserCog, DollarSign, TrendingUp, BarChart3, PieChart, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import Link from 'next/link';
+import FunnelWidget from './FunnelWidget';
 
 function getSupabase() {
     return createClient(
@@ -364,6 +365,11 @@ export default async function AdminOverview() {
                             </div>
                         </div>
                     </div>
+                </div>
+
+                {/* Funnel + Top Properties + Status */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
+                    <FunnelWidget />
                 </div>
 
                 {/* Top Properties + Status Breakdown */}

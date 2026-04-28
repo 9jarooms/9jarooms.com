@@ -10,12 +10,12 @@ export async function requirePropertyAccess(propertyId: string) {
 
     const adminClient = createAdminClient();
     
-    // Check if admin
+    // Check if admin or operator (both have full property access)
     const { data: roleData } = await adminClient
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
-        .eq('role', 'admin')
+        .in('role', ['admin', 'call_operator'])
         .single();
         
     if (roleData) return { authorized: true, adminClient };
