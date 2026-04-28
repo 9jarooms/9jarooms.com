@@ -5,10 +5,10 @@ import { Resend } from 'resend';
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Triggered by Paystack webhook when payment is confirmed
-export const paymentConfirmed = inngest.createFunction(
+export const paymentConfirmed = (inngest as any).createFunction(
     { id: 'payment-confirmed', name: 'Payment Confirmed' },
     { event: 'payment/confirmed' },
-    async ({ event, step }) => {
+    async ({ event, step }: any) => {
         const { reference, amount, paystackData } = event.data;
 
         const supabase = createAdminClient();

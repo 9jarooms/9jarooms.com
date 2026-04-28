@@ -561,10 +561,10 @@ You may see session gap notes in the conversation history showing how much time 
 // ============================================
 
 // Function 1: Buffer incoming messages (fast, lightweight)
-export const whatsappMessageBuffer = inngest.createFunction(
+export const whatsappMessageBuffer = (inngest as any).createFunction(
     { id: 'whatsapp-message-buffer' },
     { event: 'whatsapp.message.received' },
-    async ({ event, step }) => {
+    async ({ event, step }: any) => {
         const { from, text, contactName, messageId } = event.data;
 
         // Save the message to DB immediately
@@ -620,7 +620,7 @@ export const whatsappMessageBuffer = inngest.createFunction(
 );
 
 // Function 2: Process messages with 30s debounce
-export const whatsappMessageProcessor = inngest.createFunction(
+export const whatsappMessageProcessor = (inngest as any).createFunction(
     {
         id: 'whatsapp-message-processor',
         // Cancel previous pending runs for the same phone number
@@ -632,7 +632,7 @@ export const whatsappMessageProcessor = inngest.createFunction(
         ],
     },
     { event: 'whatsapp.message.process' },
-    async ({ event, step }) => {
+    async ({ event, step }: any) => {
         const { phone, contactName } = event.data;
 
         // Debounce wait to buffer multiple concurrent texts before replying
