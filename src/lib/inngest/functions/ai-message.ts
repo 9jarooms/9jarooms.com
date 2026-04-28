@@ -297,8 +297,8 @@ export const aiMessageReceived = inngest.createFunction(
             period: '1m', // Wait 1 minute for additional messages
         },
     },
-    { event: 'ai/message.received' },
-    async ({ event, step }) => {
+    { event: 'ai/message.received' as any },
+    async ({ event, step }: any) => {
         const { conversationId, message, senderPhone, senderName, channel, externalId } = event.data;
 
         const supabase = createAdminClient();
