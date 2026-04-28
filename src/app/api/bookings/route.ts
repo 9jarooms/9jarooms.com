@@ -99,12 +99,23 @@ export async function POST(request: NextRequest) {
                 if (owner) console.log("User verified as Owner:", owner.id);
                 if (ownerError && ownerError.code !== 'PGRST116') console.error("Owner check error:", ownerError);
 
-                if (caretaker || owner) {
+                // Check operator (call_operator role via user_roles)
+                const { data: operatorRole } = await supabase
+                    .from('user_roles')
+                    .select('role')
+                    .eq('user_id', user.id)
+                    .eq('role', 'call_operator')
+                    .single();
+
+                const operator = operatorRole ?? null;
+                if (operator) console.log("User verified as Operator:", user.id);
+
+                if (caretaker || owner || operator) {
                     isInternalBooking = true;
                 } else {
-                    console.warn(`Unauthorized Manual Booking Attempt: ${user.email} is neither Caretaker nor Owner.`);
+                    console.warn(`Unauthorized Manual Booking Attempt: ${user.email} is neither Caretaker, Owner, nor Operator.`);
                     return NextResponse.json({
-                        error: `Unauthorized: User ${user.email} is not registered as a Caretaker or Owner.`
+                        error: `Unauthorized: User ${user.email} is not registered as a Caretaker, Owner, or Operator.`
                     }, { status: 403 });
                 }
             } else {
