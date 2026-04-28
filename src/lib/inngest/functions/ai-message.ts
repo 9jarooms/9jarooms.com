@@ -129,10 +129,10 @@ async function executeSearchProperties(args: Record<string, unknown>) {
     // Filter by price if specified
     let filtered = properties;
     if (args.min_price) {
-        filtered = filtered.filter(p => p.price_per_night >= (args.min_price as number));
+        filtered = filtered.filter((p: any) => p.price_per_night >= (args.min_price as number));
     }
     if (args.max_price) {
-        filtered = filtered.filter(p => p.price_per_night <= (args.max_price as number));
+        filtered = filtered.filter((p: any) => p.price_per_night <= (args.max_price as number));
     }
 
     // If dates specified, check availability
@@ -171,7 +171,7 @@ async function executeSearchProperties(args: Record<string, unknown>) {
     }
 
     return JSON.stringify(
-        filtered.map(p => ({
+        filtered.map((p: any) => ({
             id: p.id,
             name: p.name,
             area: p.area,
@@ -214,7 +214,7 @@ async function executeCheckAvailability(args: Record<string, unknown>) {
 
     return JSON.stringify({
         available: false,
-        unavailable_dates: unavailable.map(a => ({ date: a.date, reason: a.status })),
+        unavailable_dates: unavailable.map((a: any) => ({ date: a.date, reason: a.status })),
     });
 }
 

@@ -665,7 +665,7 @@ export const whatsappMessageProcessor = (inngest as any).createFunction(
                 await supabase
                     .from('messages')
                     .update({ processed: true })
-                    .in('id', messages.map(m => m.id));
+                    .in('id', messages.map((m: any) => m.id));
             }
 
             return messages || [];
@@ -674,7 +674,7 @@ export const whatsappMessageProcessor = (inngest as any).createFunction(
         if (userMessages.length === 0) return { skipped: true, reason: 'No unprocessed messages' };
 
         // Combine all messages into one
-        const combinedMessage = userMessages.map(m => m.content).join('\n');
+        const combinedMessage = userMessages.map((m: any) => m.content).join('\n');
 
         // Rate limiting: check messages in the last hour
         const rateLimitOk = await step.run('rate-limit-check', async () => {
@@ -709,9 +709,9 @@ export const whatsappMessageProcessor = (inngest as any).createFunction(
                 .limit(20);
 
             // Build chat history with session boundary detection
-            const filteredHistory = (history || []).filter(m => m.content && m.content.trim() !== '');
+            const filteredHistory = (history || []).filter((m: any) => m.content && m.content.trim() !== '');
             // Exclude the current batch of messages we're about to send
-            const currentBatchContents = new Set(userMessages.map(m => m.content));
+            const currentBatchContents = new Set(userMessages.map((m: any) => m.content));
             let excludeRemaining = userMessages.length;
             const pastHistory = [];
             for (let i = filteredHistory.length - 1; i >= 0; i--) {
@@ -782,7 +782,7 @@ export const whatsappMessageProcessor = (inngest as any).createFunction(
                 const functionCalls = response.functionCalls();
                 if (!functionCalls || functionCalls.length === 0) break;
 
-                console.log(`[WhatsApp AI] Function calls requested: ${functionCalls.map(c => c.name).join(', ')}`);
+                console.log(`[WhatsApp AI] Function calls requested: ${functionCalls.map((c: any) => c.name).join(', ')}`);
 
                 // Execute each function call
                 const functionResponses = [];

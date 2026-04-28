@@ -29,7 +29,7 @@ export const expirePendingBookings = (inngest as any).createFunction(
 
         // Step 2: Mark bookings as expired
         await step.run('mark-expired', async () => {
-            const ids = expiredBookings.map(b => b.id);
+            const ids = expiredBookings.map((b: any) => b.id);
 
             const { error } = await supabase
                 .from('bookings')
@@ -41,7 +41,7 @@ export const expirePendingBookings = (inngest as any).createFunction(
 
         // Step 3: Release held dates
         await step.run('release-dates', async () => {
-            const ids = expiredBookings.map(b => b.id);
+            const ids = expiredBookings.map((b: any) => b.id);
 
             // Delete held availability entries (they go back to available)
             const { error } = await supabase
