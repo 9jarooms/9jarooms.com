@@ -1197,8 +1197,8 @@ export default function OperatorDashboardClient({ properties, allProperties, ava
                                     <div>
                                         <label className="text-sm font-medium text-gray-700 mb-2 block">Photos</label>
                                         <MediaUploader
-                                            images={editForm.images}
-                                            onChange={imgs => setEditForm(f => ({ ...f, images: imgs, thumbnail: imgs[0] || '' }))}
+                                            existingUrls={editForm.images}
+                                            onUpload={imgs => setEditForm(f => ({ ...f, images: imgs, thumbnail: imgs[0] || '' }))}
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
