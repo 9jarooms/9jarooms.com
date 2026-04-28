@@ -292,9 +292,7 @@ export const aiMessageReceived = (inngest as any).createFunction(
     {
         id: 'ai-message-received',
         name: 'AI Message Received',
-    },
-    { 
-        event: 'ai/message.received',
+        triggers: { event: 'ai/message.received' },
         debounce: {
             key: 'event.data.conversationId',
             period: '1m', // Wait 1 minute for additional messages

@@ -6,8 +6,8 @@ export const expirePendingBookings = (inngest as any).createFunction(
     {
         id: 'expire-pending-bookings',
         name: 'Expire Pending Bookings',
+        triggers: { cron: '*/5 * * * *' }, // Run every 5 minutes
     },
-    { cron: '*/5 * * * *' }, // Run every 5 minutes
     async ({ step }: any) => {
         const supabase = createAdminClient();
 

@@ -562,8 +562,10 @@ You may see session gap notes in the conversation history showing how much time 
 
 // Function 1: Buffer incoming messages (fast, lightweight)
 export const whatsappMessageBuffer = (inngest as any).createFunction(
-    { id: 'whatsapp-message-buffer' },
-    { event: 'whatsapp.message.received' },
+    { 
+        id: 'whatsapp-message-buffer',
+        triggers: { event: 'whatsapp.message.received' },
+    },
     async ({ event, step }: any) => {
         const { from, text, contactName, messageId } = event.data;
 
@@ -623,6 +625,7 @@ export const whatsappMessageBuffer = (inngest as any).createFunction(
 export const whatsappMessageProcessor = (inngest as any).createFunction(
     {
         id: 'whatsapp-message-processor',
+        triggers: { event: 'whatsapp.message.process' },
         // Cancel previous pending runs for the same phone number
         cancelOn: [
             {
@@ -631,7 +634,6 @@ export const whatsappMessageProcessor = (inngest as any).createFunction(
             },
         ],
     },
-    { event: 'whatsapp.message.process' },
     async ({ event, step }: any) => {
         const { phone, contactName } = event.data;
 
