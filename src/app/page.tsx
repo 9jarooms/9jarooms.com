@@ -109,18 +109,10 @@ export default async function HomePage() {
                             </Link>
                         </div>
 
-                        {/* Editorial: 1 large + stacked right */}
-                        <div className="grid grid-cols-3 gap-4" style={{ gridTemplateRows: 'auto' }}>
-                            {featured && (
-                                <div className="col-span-2">
-                                    <PropertyCard property={featured} featured className="h-full" />
-                                </div>
-                            )}
-                            <div className="flex flex-col gap-4">
-                                {rest.slice(0, 3).map((property: any) => (
-                                    <PropertyCard key={property.id} property={property} />
-                                ))}
-                            </div>
+                        <div className="grid grid-cols-4 gap-4">
+                            {top4Properties.map((property: any) => (
+                                <PropertyCard key={property.id} property={property} />
+                            ))}
                         </div>
                     </section>
                 )}

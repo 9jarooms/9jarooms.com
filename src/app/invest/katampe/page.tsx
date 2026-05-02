@@ -250,18 +250,22 @@ export default function KatampePage() {
                 {/* Financial table */}
                 <div className="rounded-3xl border border-gray-100 overflow-hidden mb-10">
                     <div className="bg-gray-50 px-5 py-3 border-b border-gray-100">
-                        <h3 className="font-semibold text-sm">Monthly Financials — Full Management (Projected)</h3>
+                        <h3 className="font-semibold text-sm">Monthly Financials (Projected)</h3>
                     </div>
                     <div className="divide-y divide-gray-50">
                         {[
-                            { label: 'Gross Monthly Revenue', value: '₦2,880,000', highlight: false },
-                            { label: 'Operating Expenses (caretakers, utilities, internet, maintenance)', value: '−₦400,000', highlight: false },
-                            { label: '9jaRooms Management Fee (15% of gross)', value: '−₦432,000', highlight: false },
-                            { label: 'Net Monthly Profit to Owner', value: '₦2,048,000', highlight: true },
+                            { label: 'Gross Monthly Revenue', value: '₦2,880,000', highlight: false, note: null },
+                            { label: 'Operating Expenses (caretakers, utilities, internet, maintenance)', value: '−₦400,000', highlight: false, note: null },
+                            { label: 'Net to Owner — Self-Managed', value: '₦2,480,000', highlight: false, note: 'If you run it independently' },
+                            { label: '9jaRooms Management Fee (15% of gross) — Optional', value: '−₦432,000', highlight: false, note: 'Only if you choose full management' },
+                            { label: 'Net to Owner — With 9jaRooms Management', value: '₦2,048,000', highlight: true, note: null },
                         ].map(row => (
-                            <div key={row.label} className={`flex justify-between items-center px-5 py-4 ${row.highlight ? 'bg-green-50' : 'bg-white'}`}>
-                                <span className={`text-sm ${row.highlight ? 'font-bold text-gray-900' : 'text-gray-600'}`}>{row.label}</span>
-                                <span className={`text-sm font-bold ${row.highlight ? 'text-green-700 text-base' : 'text-gray-800'}`}>{row.value}</span>
+                            <div key={row.label} className={`flex justify-between items-start gap-4 px-5 py-4 ${row.highlight ? 'bg-green-50' : 'bg-white'}`}>
+                                <div>
+                                    <span className={`text-sm block ${row.highlight ? 'font-bold text-gray-900' : 'text-gray-600'}`}>{row.label}</span>
+                                    {row.note && <span className="text-xs text-gray-400 mt-0.5 block">{row.note}</span>}
+                                </div>
+                                <span className={`text-sm font-bold shrink-0 ${row.highlight ? 'text-green-700 text-base' : 'text-gray-800'}`}>{row.value}</span>
                             </div>
                         ))}
                     </div>
@@ -298,19 +302,19 @@ export default function KatampePage() {
                             </div>
                         ))}
                     </div>
-                    <div className="mt-6 pt-6 border-t border-white/10 grid grid-cols-1 sm:grid-cols-3 gap-6">
-                        {[
-                            { label: 'Monthly Net to Owner', value: '₦2,048,000' },
-                            { label: 'Annual Net to Owner', value: '~₦24,600,000' },
-                            { label: 'Annual ROI', value: '~25%', highlight: true },
-                        ].map(r => (
-                            <div key={r.label}>
-                                <p className="text-white/40 text-xs mb-1">{r.label}</p>
-                                <p className={`text-xl font-bold ${r.highlight ? 'text-green-400' : ''}`}>{r.value}</p>
-                            </div>
-                        ))}
+                    <div className="mt-6 pt-6 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="bg-white/5 rounded-2xl p-4">
+                            <p className="text-white/40 text-[10px] uppercase tracking-widest mb-2">Self-Managed (No Fee)</p>
+                            <p className="text-2xl font-bold text-white tabular-nums">₦2,480,000<span className="text-sm font-normal text-white/40">/mo</span></p>
+                            <p className="text-green-400 text-sm font-semibold mt-1">~30% annual ROI</p>
+                        </div>
+                        <div className="bg-green-500/10 border border-green-400/20 rounded-2xl p-4">
+                            <p className="text-green-400 text-[10px] uppercase tracking-widest mb-2">With 9jaRooms Management</p>
+                            <p className="text-2xl font-bold text-white tabular-nums">₦2,048,000<span className="text-sm font-normal text-white/40">/mo</span></p>
+                            <p className="text-green-400 text-sm font-semibold mt-1">~25% annual ROI</p>
+                        </div>
                     </div>
-                    <p className="text-white/30 text-xs mt-4">Projections based on 80% occupancy and ₦30,000/night. Numbers are conservative and verifiable.</p>
+                    <p className="text-white/30 text-xs mt-4">Projections based on 80% occupancy and ₦30,000/night. Management is optional — you can run it independently.</p>
                 </div>
             </section>
 

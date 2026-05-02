@@ -26,18 +26,9 @@ export default function Header() {
 
     useEffect(() => { setMenuOpen(false); }, [pathname]);
 
-    const isHome = pathname === '/';
-    const transparent = isHome && !scrolled && !menuOpen;
-
     return (
         <>
-            <header
-                className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-                    transparent
-                        ? 'bg-transparent border-transparent'
-                        : 'bg-white/95 backdrop-blur-md border-b border-black/[0.06] shadow-sm'
-                }`}
-            >
+            <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-b border-black/[0.06] shadow-sm transition-all duration-300">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
                     <div className="flex items-center justify-between h-[60px]">
 
@@ -46,7 +37,7 @@ export default function Header() {
                             <img
                                 src="/WHITE.jpg"
                                 alt="9jaRooms"
-                                className={`h-11 w-auto object-contain transition-all duration-300 ${transparent ? 'brightness-0 invert' : ''}`}
+                                className="h-11 w-auto object-contain"
                             />
                         </Link>
 
@@ -59,11 +50,9 @@ export default function Header() {
                                         key={link.href}
                                         href={link.href}
                                         className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-150 ${
-                                            transparent
-                                                ? 'text-white/80 hover:text-white hover:bg-white/10'
-                                                : active
-                                                    ? 'text-green-700 bg-green-50'
-                                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
+                                            active
+                                                ? 'text-green-700 bg-green-50'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
                                         }`}
                                     >
                                         {link.label}
@@ -76,9 +65,7 @@ export default function Header() {
                         <div className="flex items-center gap-3">
                             <a
                                 href="tel:+2349111101012"
-                                className={`hidden md:flex items-center gap-1.5 text-sm transition-colors ${
-                                    transparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-800'
-                                }`}
+                                className="hidden md:flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
                             >
                                 <Phone size={13} />
                                 +234 911 110 1012
@@ -86,11 +73,7 @@ export default function Header() {
 
                             <Link
                                 href="/account"
-                                className={`w-9 h-9 flex items-center justify-center rounded-full border transition-all duration-150 btn-press ${
-                                    transparent
-                                        ? 'border-white/30 text-white hover:bg-white/10'
-                                        : 'border-gray-200 text-gray-700 hover:bg-gray-900 hover:text-white hover:border-gray-900'
-                                }`}
+                                className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-700 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all duration-150 btn-press"
                             >
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -101,9 +84,7 @@ export default function Header() {
                             {/* Mobile hamburger */}
                             <button
                                 onClick={() => setMenuOpen(v => !v)}
-                                className={`md:hidden w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
-                                    transparent ? 'text-white hover:bg-white/10' : 'text-gray-700 hover:bg-gray-100'
-                                }`}
+                                className="md:hidden w-9 h-9 flex items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 transition-colors"
                                 aria-label="Toggle menu"
                             >
                                 {menuOpen ? <X size={20} strokeWidth={1.5} /> : <Menu size={20} strokeWidth={1.5} />}
