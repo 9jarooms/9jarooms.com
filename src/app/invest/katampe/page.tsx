@@ -3,11 +3,11 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
     title: 'Katampe 2-Bedroom — ₦80M | 9jaRooms',
-    description: 'Premium 2-bedroom apartment in Katampe Main, Abuja. Buy as a home or convert into 4 shortlet studios generating ₦2M+ monthly. Managed by 9jaRooms.',
+    description: 'Premium 2-bedroom apartment in Katampe Main, Abuja. Buy as a home or convert into 4 shortlet studios generating ₦2M+ monthly.',
     robots: { index: true, follow: true },
     openGraph: {
         title: 'Katampe 2-Bedroom — ₦80M | Buy or Invest',
-        description: 'Own a premium home or generate ₦2M+ monthly. 9jaRooms has already done this in Garki. Now we are doing it again in Katampe.',
+        description: 'Own a premium home or generate ₦2.48M monthly net. We have already done this in Garki. The numbers are real.',
         siteName: '9jaRooms',
     },
 };
@@ -38,7 +38,7 @@ export default function KatampePage() {
             <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100">
                 <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
                     <Link href="/">
-                        <img src="/WHITE.jpg" alt="9jaRooms" className="h-8 w-auto object-contain brightness-0" />
+                        <img src="/WHITE.jpg" alt="9jaRooms" className="h-8 w-auto object-contain" />
                     </Link>
                     <a
                         href={generalWA}
@@ -53,9 +53,7 @@ export default function KatampePage() {
 
             {/* ─── HERO ─── */}
             <section className="pt-14 bg-[#0c1a0e] text-white relative overflow-hidden min-h-[90vh] flex flex-col justify-end">
-                {/* Background gradient */}
                 <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-[#0c1a0e]" />
-                {/* Decorative circle */}
                 <div className="absolute top-10 right-[-100px] w-[400px] h-[400px] bg-green-700/10 rounded-full blur-3xl" />
 
                 <div className="relative z-10 max-w-5xl mx-auto px-4 pb-16 pt-24">
@@ -65,7 +63,7 @@ export default function KatampePage() {
                     <h1 className="text-3xl sm:text-5xl font-bold leading-tight mb-4 max-w-2xl">
                         A Premium 2-Bedroom.<br />
                         Or an Asset That Pays<br />
-                        <span className="text-green-400">₦2M Every Month.</span>
+                        <span className="text-green-400">₦2M+ Every Month.</span>
                     </h1>
                     <p className="text-white/70 text-base sm:text-lg max-w-xl mb-10">
                         Minutes from Wuse 2. Ready to move in — or ready to convert into 4 fully-furnished shortlet studios. We have done this before. The numbers are real.
@@ -81,12 +79,11 @@ export default function KatampePage() {
                             href="#investment-plan"
                             className="flex-1 sm:flex-none text-center bg-green-500 hover:bg-green-400 text-white font-semibold px-6 py-4 rounded-2xl transition-colors text-sm"
                         >
-                            Show me the investment plan ↓
+                            Show me the numbers ↓
                         </a>
                     </div>
                 </div>
 
-                {/* Bottom fade */}
                 <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white to-transparent" />
             </section>
 
@@ -130,15 +127,15 @@ export default function KatampePage() {
                         <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-xl mb-4">📈</div>
                         <h3 className="text-lg font-bold mb-2">The Investor</h3>
                         <p className="text-gray-600 text-sm mb-4">
-                            You want your money working for you. Convert this 2-bedroom into 4 fully-furnished shortlet studios. Let 9jaRooms manage it. Collect monthly profit while you focus on other things.
+                            You want your money working for you. Convert this 2-bedroom into 4 fully-furnished shortlet studios. Earn ₦2.48M+ net every month. The conversion playbook is already proven.
                         </p>
                         <ul className="space-y-2 text-sm text-gray-700">
                             {[
                                 '4 studios after conversion',
-                                '₦2.17M+ net monthly profit',
+                                '₦2.05M+ net monthly to owner',
                                 'Conversion CapEx payback in ~9 months',
-                                '9jaRooms handles guests, cleaning, marketing',
-                                'We have done this before in Garki',
+                                '~25% annual ROI on total investment',
+                                'Already working in Garki — we run that too',
                             ].map(i => (
                                 <li key={i} className="flex items-start gap-2">
                                     <span className="text-green-600 mt-0.5">✓</span>
@@ -150,7 +147,7 @@ export default function KatampePage() {
                             href="#investment-plan"
                             className="mt-6 w-full block text-center bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
                         >
-                            Show me the plan ↓
+                            Show me the numbers ↓
                         </a>
                     </div>
                 </div>
@@ -167,7 +164,7 @@ export default function KatampePage() {
                         <span className="text-green-400">Here Is What Happened.</span>
                     </h2>
                     <p className="text-white/70 text-base sm:text-lg max-w-2xl mb-12">
-                        A few years ago, there was a 4-bedroom house in Garki. The owner was collecting ₦12 million a year in rent — about ₦1 million a month. Standard landlord income. Nothing remarkable.
+                        A few years ago, there was a 4-bedroom house in Garki. The owner was collecting ₦12 million a year in rent — about ₦1 million a month. Standard landlord income. Then they handed it to us.
                     </p>
 
                     {/* Before / After */}
@@ -183,13 +180,13 @@ export default function KatampePage() {
                             </div>
                         </div>
                         <div className="bg-green-500/10 border border-green-400/30 rounded-2xl p-6">
-                            <p className="text-green-400 text-xs font-bold tracking-widest uppercase mb-4">After — 9 Shortlet Studios</p>
+                            <p className="text-green-400 text-xs font-bold tracking-widest uppercase mb-4">After — 9jaRooms Full Management</p>
                             <p className="text-4xl font-bold text-green-400 mb-1">₦7M</p>
                             <p className="text-green-300/60 text-sm">per month, every month</p>
                             <div className="mt-4 pt-4 border-t border-green-400/20 space-y-2 text-sm text-white/70">
-                                <p>9 fully-furnished single studio rooms</p>
-                                <p>Daily bookings via 9jaRooms</p>
-                                <p>After all expenses paid</p>
+                                <p>9 fully-furnished studio rooms</p>
+                                <p>We fill them — marketing, ads, platform</p>
+                                <p>After all expenses paid, to the owner</p>
                             </div>
                         </div>
                     </div>
@@ -201,7 +198,7 @@ export default function KatampePage() {
                             <p className="text-xl sm:text-2xl font-bold">
                                 ₦12M/year <span className="text-green-400">→ ₦84M/year</span>
                             </p>
-                            <p className="text-white/50 text-sm mt-1">That is a 7x increase in income. Same property. Same land.</p>
+                            <p className="text-white/50 text-sm mt-1">7x the income. Same property. Same land. We filled the rooms.</p>
                         </div>
                         <div className="w-full sm:w-px sm:h-16 h-px sm:w-px bg-white/10" />
                         <div className="shrink-0">
@@ -227,11 +224,11 @@ export default function KatampePage() {
             {/* ─── KATAMPE CONVERSION PLAN ─── */}
             <section id="investment-plan" className="max-w-5xl mx-auto px-4 py-20 scroll-mt-16">
                 <span className="inline-block text-green-600 text-xs font-bold tracking-widest uppercase mb-4 bg-green-50 px-3 py-1 rounded-full border border-green-100">
-                    The Investment Plan — Katampe
+                    The Plan — Katampe
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-bold mb-3">Convert It. Collect Monthly.</h2>
+                <h2 className="text-2xl sm:text-3xl font-bold mb-3">You Buy It. We Run It. You Collect.</h2>
                 <p className="text-gray-500 mb-10 max-w-xl">
-                    This 2-bedroom becomes 4 fully self-contained studio shortlet units. Each with its own bathroom, AC, Smart TV, kitchen appliances, and furniture. Ready to book on day one.
+                    We convert the 2-bedroom into 4 fully self-contained studio shortlet units. We handle marketing, fill the rooms, manage guests and operations. Every month, you collect the profit.
                 </p>
 
                 {/* Numbers grid */}
@@ -240,7 +237,7 @@ export default function KatampePage() {
                         { label: 'Studios After Conversion', value: '4', sub: 'self-contained units', color: 'bg-gray-50' },
                         { label: 'Nightly Rate', value: '₦30K', sub: 'per studio per night', color: 'bg-gray-50' },
                         { label: 'Projected Monthly Revenue', value: '₦2.88M', sub: 'at 80% occupancy', color: 'bg-green-50 border border-green-100' },
-                        { label: 'Net Monthly Profit', value: '₦2.17M', sub: 'after all expenses', color: 'bg-green-50 border border-green-100' },
+                        { label: 'Net Monthly to Owner', value: '₦2.05M', sub: 'after all expenses + management', color: 'bg-green-50 border border-green-100' },
                     ].map(s => (
                         <div key={s.label} className={`rounded-2xl p-4 ${s.color}`}>
                             <p className="text-2xl sm:text-3xl font-bold text-gray-900">{s.value}</p>
@@ -253,13 +250,13 @@ export default function KatampePage() {
                 {/* Financial table */}
                 <div className="rounded-3xl border border-gray-100 overflow-hidden mb-10">
                     <div className="bg-gray-50 px-5 py-3 border-b border-gray-100">
-                        <h3 className="font-semibold text-sm">Monthly Financials (Projected)</h3>
+                        <h3 className="font-semibold text-sm">Monthly Financials — Full Management (Projected)</h3>
                     </div>
                     <div className="divide-y divide-gray-50">
                         {[
                             { label: 'Gross Monthly Revenue', value: '₦2,880,000', highlight: false },
                             { label: 'Operating Expenses (caretakers, utilities, internet, maintenance)', value: '−₦400,000', highlight: false },
-                            { label: '9jaRooms Management Fee (15%)', value: '−₦432,000', highlight: false },
+                            { label: '9jaRooms Management Fee (15% of gross)', value: '−₦432,000', highlight: false },
                             { label: 'Net Monthly Profit to Owner', value: '₦2,048,000', highlight: true },
                         ].map(row => (
                             <div key={row.label} className={`flex justify-between items-center px-5 py-4 ${row.highlight ? 'bg-green-50' : 'bg-white'}`}>
@@ -281,7 +278,7 @@ export default function KatampePage() {
                         <div className="flex-1 sm:border-l sm:border-amber-200 sm:pl-8">
                             <p className="text-amber-800 text-xs font-bold tracking-widest uppercase mb-2">Payback Period on CapEx</p>
                             <p className="text-3xl font-bold text-gray-900 mb-1">~9 months</p>
-                            <p className="text-gray-600 text-sm">At ₦2M/month profit, the ₦18.5M conversion cost pays for itself in under a year — then it is pure income.</p>
+                            <p className="text-gray-600 text-sm">At ₦2.05M/month net, the ₦18.5M conversion cost pays for itself in under a year — then it is pure income.</p>
                         </div>
                     </div>
                 </div>
@@ -303,8 +300,8 @@ export default function KatampePage() {
                     </div>
                     <div className="mt-6 pt-6 border-t border-white/10 grid grid-cols-1 sm:grid-cols-3 gap-6">
                         {[
-                            { label: 'Monthly Net Profit', value: '₦2,048,000' },
-                            { label: 'Annual Net Profit', value: '~₦24,600,000' },
+                            { label: 'Monthly Net to Owner', value: '₦2,048,000' },
+                            { label: 'Annual Net to Owner', value: '~₦24,600,000' },
                             { label: 'Annual ROI', value: '~25%', highlight: true },
                         ].map(r => (
                             <div key={r.label}>
@@ -317,129 +314,55 @@ export default function KatampePage() {
                 </div>
             </section>
 
-            {/* ─── 9JAROOMS MANAGEMENT ─── */}
-            <section className="bg-gray-50 py-20 px-4">
+            {/* ─── PROPERTY DETAILS ─── */}
+            <section id="property-details" className="bg-gray-50 py-20 px-4 scroll-mt-16">
                 <div className="max-w-5xl mx-auto">
-                    <span className="inline-block text-green-600 text-xs font-bold tracking-widest uppercase mb-4 bg-white px-3 py-1 rounded-full border border-green-100">
-                        What Happens After You Buy
-                    </span>
-                    <h2 className="text-2xl sm:text-3xl font-bold mb-3">You Choose How Involved You Want to Be</h2>
-                    <p className="text-gray-500 mb-10 max-w-xl">
-                        9jaRooms manages 60+ properties in Abuja. You can hand everything to us, use us just for marketing, or go completely independent.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        {[
-                            {
-                                tier: 'Full Management',
-                                price: '15%',
-                                sub: 'of monthly gross revenue',
-                                desc: 'We handle everything. Guest communications, check-ins, cleaning scheduling, maintenance, booking management, and marketing on 9jaRooms and Meta ads. You collect monthly profit.',
-                                items: ['Guest management', 'Booking + payments', 'Cleaning coordination', 'Maintenance oversight', 'Marketing & ads', 'Monthly reports'],
-                                cta: 'This Is What I Want',
-                                ctaWa: investorWA,
-                                highlight: true,
-                            },
-                            {
-                                tier: 'Marketing Only',
-                                price: '10%',
-                                sub: 'of monthly gross revenue',
-                                desc: 'We list your property on 9jaRooms and run Meta ads to drive bookings. You manage operations yourself.',
-                                items: ['Listed on 9jaRooms', 'Meta ads campaigns', 'Booking leads sent to you', 'You manage guests & ops'],
-                                cta: 'Learn More',
-                                ctaWa: investorWA,
-                                highlight: false,
-                            },
-                            {
-                                tier: 'Independent',
-                                price: '0%',
-                                sub: 'No fee',
-                                desc: 'Buy the property, convert it, and run it completely on your own. We build it, hand it over, and step back.',
-                                items: ['Full ownership control', 'List anywhere you like', 'No ongoing commitment', 'Advisory support available'],
-                                cta: 'I Will Run It Myself',
-                                ctaWa: homeBuyerWA,
-                                highlight: false,
-                            },
-                        ].map(tier => (
-                            <div
-                                key={tier.tier}
-                                className={`rounded-3xl p-6 flex flex-col ${tier.highlight ? 'bg-green-600 text-white' : 'bg-white border border-gray-100'}`}
-                            >
-                                {tier.highlight && (
-                                    <span className="self-start text-[10px] font-bold bg-white text-green-700 px-2.5 py-0.5 rounded-full mb-3">RECOMMENDED</span>
-                                )}
-                                <p className={`text-xs font-bold tracking-widest uppercase mb-2 ${tier.highlight ? 'text-green-200' : 'text-gray-400'}`}>{tier.tier}</p>
-                                <p className={`text-3xl font-bold mb-0.5 ${tier.highlight ? 'text-white' : 'text-gray-900'}`}>{tier.price}</p>
-                                <p className={`text-xs mb-4 ${tier.highlight ? 'text-green-200' : 'text-gray-500'}`}>{tier.sub}</p>
-                                <p className={`text-sm mb-6 flex-1 ${tier.highlight ? 'text-green-100' : 'text-gray-600'}`}>{tier.desc}</p>
-                                <ul className="space-y-1.5 mb-6">
-                                    {tier.items.map(item => (
-                                        <li key={item} className={`text-xs flex items-center gap-2 ${tier.highlight ? 'text-green-100' : 'text-gray-600'}`}>
-                                            <span className={tier.highlight ? 'text-green-300' : 'text-green-500'}>✓</span>
+                    <h2 className="text-2xl sm:text-3xl font-bold mb-10">Property Details</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                        <div className="space-y-4">
+                            {[
+                                { label: 'Location', value: 'Katampe Main, Abuja' },
+                                { label: 'Type', value: '2-Bedroom Apartment' },
+                                { label: 'After Conversion', value: '4 Studio Shortlet Units' },
+                                { label: 'Proximity', value: 'Minutes from Wuse 2 & Maitama' },
+                                { label: 'Asking Price', value: '₦80,000,000' },
+                                { label: 'Conversion Cost', value: '₦18,495,000 (one-time)' },
+                                { label: 'Estimated Build Time', value: '4–7 weeks' },
+                            ].map(d => (
+                                <div key={d.label} className="flex justify-between items-center py-3 border-b border-gray-200">
+                                    <span className="text-sm text-gray-500">{d.label}</span>
+                                    <span className="text-sm font-semibold text-gray-900 text-right max-w-[55%]">{d.value}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="bg-white rounded-3xl p-6 flex flex-col justify-between border border-gray-100">
+                            <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Each Studio Will Have</p>
+                                <ul className="grid grid-cols-2 gap-2">
+                                    {[
+                                        'Private bathroom', 'Air conditioning',
+                                        'Smart TV', 'Mini fridge',
+                                        'Microwave', 'Electric kettle',
+                                        'Bed & wardrobe', 'Work desk',
+                                        'Fast internet', 'Solar power backup',
+                                        'Decor & curtains', 'Standing fan',
+                                    ].map(item => (
+                                        <li key={item} className="flex items-center gap-1.5 text-xs text-gray-700">
+                                            <span className="text-green-500">✓</span>
                                             {item}
                                         </li>
                                     ))}
                                 </ul>
-                                <a
-                                    href={tier.ctaWa}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`text-center text-sm font-semibold py-3 rounded-xl transition-colors ${tier.highlight ? 'bg-white text-green-700 hover:bg-green-50' : 'bg-gray-900 text-white hover:bg-gray-700'}`}
-                                >
-                                    {tier.cta}
-                                </a>
                             </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* ─── PROPERTY DETAILS ─── */}
-            <section id="property-details" className="max-w-5xl mx-auto px-4 py-20 scroll-mt-16">
-                <h2 className="text-2xl sm:text-3xl font-bold mb-10">Property Details</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                    <div className="space-y-4">
-                        {[
-                            { label: 'Location', value: 'Katampe Main, Abuja' },
-                            { label: 'Type', value: '2-Bedroom Apartment' },
-                            { label: 'After Conversion', value: '4 Studio Shortlet Units' },
-                            { label: 'Proximity', value: 'Minutes from Wuse 2 & Maitama' },
-                            { label: 'Asking Price', value: '₦80,000,000' },
-                            { label: 'Conversion Cost', value: '₦18,495,000 (one-time)' },
-                            { label: 'Estimated Build Time', value: '4–7 weeks' },
-                        ].map(d => (
-                            <div key={d.label} className="flex justify-between items-center py-3 border-b border-gray-50">
-                                <span className="text-sm text-gray-500">{d.label}</span>
-                                <span className="text-sm font-semibold text-gray-900 text-right max-w-[55%]">{d.value}</span>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="bg-gray-50 rounded-3xl p-6 flex flex-col justify-between">
-                        <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Each Studio Will Have</p>
-                            <ul className="grid grid-cols-2 gap-2">
-                                {[
-                                    'Private bathroom', 'Air conditioning',
-                                    'Smart TV', 'Mini fridge',
-                                    'Microwave', 'Electric kettle',
-                                    'Bed & wardrobe', 'Work desk',
-                                    'Fast internet', 'Solar power backup',
-                                    'Decor & curtains', 'Standing fan',
-                                ].map(item => (
-                                    <li key={item} className="flex items-center gap-1.5 text-xs text-gray-700">
-                                        <span className="text-green-500">✓</span>
-                                        {item}
-                                    </li>
-                                ))}
-                            </ul>
+                            <a
+                                href={investorWA}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-6 block text-center bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
+                            >
+                                Request Full Proposal on WhatsApp
+                            </a>
                         </div>
-                        <a
-                            href={investorWA}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-6 block text-center bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
-                        >
-                            Request Full Proposal on WhatsApp
-                        </a>
                     </div>
                 </div>
             </section>
@@ -455,7 +378,7 @@ export default function KatampePage() {
                         <span className="text-green-400">We Are Ready to Talk.</span>
                     </h2>
                     <p className="text-white/60 mb-10 max-w-lg mx-auto">
-                        This property is not listed on any public platform. We do not entertain time-wasters or tyre-kickers. When you message us, come ready to have a real conversation about the numbers.
+                        This property is not listed on any public platform. When you message us, come ready to have a real conversation about the numbers.
                     </p>
 
                     <div className="bg-white/5 border border-white/10 rounded-3xl p-6 sm:p-8 mb-10 text-left">
@@ -465,7 +388,7 @@ export default function KatampePage() {
                                 'Are you buying as a home or as an investment?',
                                 'Are you ready to move within 30–60 days of agreement?',
                                 'Do you want to see the Garki conversion numbers first-hand?',
-                                'Would you like us to manage the property after purchase?',
+                                'Would you like help converting and operating the property after purchase?',
                             ].map((q, i) => (
                                 <li key={i} className="flex items-start gap-3 text-sm text-white/70">
                                     <span className="text-green-400 font-bold shrink-0">{i + 1}.</span>
@@ -493,14 +416,97 @@ export default function KatampePage() {
                             I Want the Investment
                         </a>
                     </div>
-                    <p className="text-white/30 text-xs mt-6">Managed by 9jaRooms — Shortlet management in Abuja since 2022</p>
+                </div>
+            </section>
+
+            {/* ─── MANAGEMENT OPTIONS (revealed after engagement) ─── */}
+            <section className="bg-white py-20 px-4 border-t border-gray-100">
+                <div className="max-w-5xl mx-auto">
+                    <span className="inline-block text-green-600 text-xs font-bold tracking-widest uppercase mb-4 bg-green-50 px-3 py-1 rounded-full border border-green-100">
+                        After You Buy — Your Options
+                    </span>
+                    <h2 className="text-2xl sm:text-3xl font-bold mb-3">You Choose How Involved You Want to Be</h2>
+                    <p className="text-gray-500 mb-10 max-w-xl">
+                        We manage 60+ properties in Abuja. You can hand everything to us, use us only for marketing, or go completely independent. The numbers above apply to all three paths.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {[
+                            {
+                                tier: 'Full Management',
+                                price: '15%',
+                                sub: 'of monthly gross revenue',
+                                desc: 'We handle everything. Guest communications, check-ins, cleaning scheduling, maintenance, booking management, and marketing. You collect monthly profit.',
+                                items: ['Guest management', 'Booking + payments', 'Cleaning coordination', 'Maintenance oversight', 'Marketing & ads', 'Monthly reports'],
+                                cta: 'This Is What I Want',
+                                ctaWa: investorWA,
+                                highlight: true,
+                                note: null,
+                            },
+                            {
+                                tier: 'Marketing Only',
+                                price: '10%',
+                                sub: 'of bookings we bring you',
+                                desc: 'We list your property and run ads to drive bookings. You manage operations yourself. We earn nothing until guests start paying.',
+                                items: ['Listed on 9jaRooms', 'Meta ads campaigns', 'Booking leads sent to you', 'You manage guests & ops'],
+                                cta: 'Tell Me More',
+                                ctaWa: investorWA,
+                                highlight: false,
+                                note: 'We earn nothing until you earn.',
+                            },
+                            {
+                                tier: 'Independent',
+                                price: '0%',
+                                sub: 'No ongoing fee',
+                                desc: 'Buy the property, convert it, and run it completely on your own. We build it, hand it over, and step back.',
+                                items: ['Full ownership control', 'List anywhere you like', 'No ongoing commitment', 'Advisory support available'],
+                                cta: 'I Will Run It Myself',
+                                ctaWa: homeBuyerWA,
+                                highlight: false,
+                                note: null,
+                            },
+                        ].map(tier => (
+                            <div
+                                key={tier.tier}
+                                className={`rounded-3xl p-6 flex flex-col ${tier.highlight ? 'bg-green-600 text-white' : 'bg-gray-50 border border-gray-100'}`}
+                            >
+                                {tier.highlight && (
+                                    <span className="self-start text-[10px] font-bold bg-white text-green-700 px-2.5 py-0.5 rounded-full mb-3">RECOMMENDED</span>
+                                )}
+                                <p className={`text-xs font-bold tracking-widest uppercase mb-2 ${tier.highlight ? 'text-green-200' : 'text-gray-400'}`}>{tier.tier}</p>
+                                <p className={`text-3xl font-bold mb-0.5 ${tier.highlight ? 'text-white' : 'text-gray-900'}`}>{tier.price}</p>
+                                <p className={`text-xs mb-4 ${tier.highlight ? 'text-green-200' : 'text-gray-500'}`}>{tier.sub}</p>
+                                {tier.note && (
+                                    <p className={`text-xs font-semibold mb-3 ${tier.highlight ? 'text-green-100' : 'text-green-700'} bg-green-50 border border-green-100 px-2.5 py-1.5 rounded-lg`}>
+                                        {tier.note}
+                                    </p>
+                                )}
+                                <p className={`text-sm mb-6 flex-1 ${tier.highlight ? 'text-green-100' : 'text-gray-600'}`}>{tier.desc}</p>
+                                <ul className="space-y-1.5 mb-6">
+                                    {tier.items.map(item => (
+                                        <li key={item} className={`text-xs flex items-center gap-2 ${tier.highlight ? 'text-green-100' : 'text-gray-600'}`}>
+                                            <span className={tier.highlight ? 'text-green-300' : 'text-green-500'}>✓</span>
+                                            {item}
+                                        </li>
+                                    ))}
+                                </ul>
+                                <a
+                                    href={tier.ctaWa}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`text-center text-sm font-semibold py-3 rounded-xl transition-colors ${tier.highlight ? 'bg-white text-green-700 hover:bg-green-50' : 'bg-gray-900 text-white hover:bg-gray-700'}`}
+                                >
+                                    {tier.cta}
+                                </a>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </section>
 
             {/* ─── FOOTER ─── */}
             <footer className="bg-white border-t border-gray-100 py-8 px-4 text-center">
                 <Link href="/">
-                    <img src="/WHITE.jpg" alt="9jaRooms" className="h-8 w-auto object-contain brightness-0 mx-auto mb-3" />
+                    <img src="/WHITE.jpg" alt="9jaRooms" className="h-8 w-auto object-contain mx-auto mb-3" />
                 </Link>
                 <p className="text-xs text-gray-400">
                     All projections are based on conservative estimates and are not guaranteed. Numbers are verifiable on request.
