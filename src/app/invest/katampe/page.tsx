@@ -70,13 +70,13 @@ export default function KatampePage() {
                     </p>
                     <div className="flex flex-col sm:flex-row gap-3">
                         <a
-                            href="#property-details"
+                            href="#proof"
                             className="flex-1 sm:flex-none text-center bg-white text-gray-900 hover:bg-gray-100 font-semibold px-6 py-4 rounded-2xl transition-colors text-sm"
                         >
                             Show me the property ↓
                         </a>
                         <a
-                            href="#investment-plan"
+                            href="#proof"
                             className="flex-1 sm:flex-none text-center bg-green-500 hover:bg-green-400 text-white font-semibold px-6 py-4 rounded-2xl transition-colors text-sm"
                         >
                             Show me the numbers ↓
@@ -114,7 +114,7 @@ export default function KatampePage() {
                             ))}
                         </ul>
                         <a
-                            href="#property-details"
+                            href="#proof"
                             className="mt-6 w-full block text-center bg-gray-900 hover:bg-gray-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
                         >
                             Tell me more ↓
@@ -144,7 +144,7 @@ export default function KatampePage() {
                             ))}
                         </ul>
                         <a
-                            href="#investment-plan"
+                            href="#proof"
                             className="mt-6 w-full block text-center bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
                         >
                             Show me the numbers ↓
@@ -154,7 +154,7 @@ export default function KatampePage() {
             </section>
 
             {/* ─── GARKI PROOF STORY ─── */}
-            <section className="bg-[#0c1a0e] text-white py-20 px-4">
+            <section id="proof" className="bg-[#0c1a0e] text-white py-20 px-4 scroll-mt-14">
                 <div className="max-w-5xl mx-auto">
                     <span className="inline-block text-green-400 text-xs font-bold tracking-widest uppercase mb-4 bg-green-400/10 px-3 py-1 rounded-full border border-green-400/20">
                         Proof of Concept — Garki, Abuja
