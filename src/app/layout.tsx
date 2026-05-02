@@ -45,6 +45,15 @@ export const metadata: Metadata = {
   alternates: {
     canonical: '/',
   },
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: '/apple-icon.png',
+    shortcut: '/favicon.ico',
+  },
 };
 
 export const viewport = {
@@ -65,7 +74,15 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: JSON.stringify([
+              {
+                "@context": "https://schema.org",
+                "@type": "WebSite",
+                "name": "9jaRooms",
+                "alternateName": "9ja Rooms",
+                "url": process.env.NEXT_PUBLIC_SITE_URL || "https://9jarooms.com",
+              },
+              {
               "@context": "https://schema.org",
               "@type": "LocalBusiness",
               "name": "9jaRooms",
@@ -85,7 +102,8 @@ export default function RootLayout({
               },
               "priceRange": "₦₦",
               "sameAs": [],
-            }),
+            }
+            ]),
           }}
         />
         {children}
