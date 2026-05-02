@@ -49,15 +49,15 @@ export default function KatampeAdsPage() {
 
 After we converted it into 9 self-contained shortlet studios — it now generates ₦7 million every single month. After all expenses.
 
-We are doing it again. This time in Katampe Main.
+The same opportunity is now available in Katampe Main. A 2-bedroom apartment. ₦80M.
 
-A 2-bedroom apartment. ₦80M. Convert to 4 studios. Net profit: ₦2M+ monthly. Payback on conversion: ~9 months.
+Buy it. We convert it into 4 shortlet studios for you. You own the property. You collect ₦2M+ every month. We manage it — or you do it yourself. Either way, the playbook is proven.
 
 Tap the link. See the full numbers. Message us on WhatsApp — we will show you the Garki rooms, the bookings, and every naira.`}
                     description="9jaRooms — Shortlet Investment, Abuja"
                     cta="Learn More"
                     visual="Show Garki rooms on screen — clean, furnished, occupied. Then show text overlay: '₦12M/year → ₦7M/month. Same property.' End with 9jaRooms logo and link."
-                    notes="Lead with the Garki story. The proof of concept does the heavy lifting. Do not over-explain Katampe — the link handles that."
+                    notes="The pivot is 'this is yours to take' — not 9jaRooms doing another project. Lead with the Garki proof, then make clear the buyer owns it and 9jaRooms is the operator/partner if they want."
                 />
 
                 {/* ─── AD 2 ─── */}
@@ -128,8 +128,8 @@ Message us. We will arrange a viewing and walk you through both options.`}
                             {[
                                 { time: '0–5s', visual: 'Show Garki room — clean, furnished, occupied. Music: calm, confident.', voiceover: '"This house in Garki was making one million naira a month in rent."' },
                                 { time: '5–12s', visual: 'Cut to multiple room shots — different units, guests checking in, 9jaRooms booking page.', voiceover: '"We converted it into 9 shortlet rooms. Now it makes seven million. Every month. After all expenses."' },
-                                { time: '12–20s', visual: 'Text overlay on dark background: "Same thing. Katampe Main. 2BR → 4 Studios. ₦2M/month."', voiceover: '"We are doing it again. A 2-bedroom in Katampe. Selling for 80 million. We convert it, manage it, and you collect the money."' },
-                                { time: '20–27s', visual: '9jaRooms logo. Link on screen.', voiceover: '"One property. Serious buyers only. Link in bio — or message us directly on WhatsApp."' },
+                                { time: '12–20s', visual: 'Text overlay on dark background: "Same playbook. Now available in Katampe Main. 2BR → 4 Studios. ₦2M/month."', voiceover: '"There is a 2-bedroom in Katampe for sale at 80 million. Buy it. We convert it for you. You own it. You earn from it — we manage, or you do it yourself."' },
+                                { time: '20–27s', visual: '9jaRooms logo. Link on screen.', voiceover: '"One property. Serious buyers only. See the full numbers — link in bio."' },
                                 { time: '27–30s', visual: 'End card: 9jaRooms logo + wa.me link', voiceover: '(silence or brand music)' },
                             ].map(s => (
                                 <div key={s.time} className="grid grid-cols-[60px_1fr] gap-3">
