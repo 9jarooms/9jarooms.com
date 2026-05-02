@@ -15,7 +15,7 @@ export default function Footer() {
                         </Link>
                         <p className="text-white/40 text-sm italic mb-4">The Right Room, Every Time.</p>
                         <p className="text-white/50 text-sm leading-relaxed max-w-xs">
-                            Redefining short-let living in Abuja. Curated apartments across Maitama, Wuse II, Asokoro, Gwarinpa, and more.
+                            Redefining short-let living in Abuja. Curated shortlets and serviced apartments, fully managed.
                         </p>
                     </div>
 
