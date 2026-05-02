@@ -72,20 +72,16 @@ export default function KatampePage() {
                     </p>
                     <div className="flex flex-col sm:flex-row gap-3">
                         <a
-                            href={homeBuyerWA}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href="#property-details"
                             className="flex-1 sm:flex-none text-center bg-white text-gray-900 hover:bg-gray-100 font-semibold px-6 py-4 rounded-2xl transition-colors text-sm"
                         >
-                            I want to buy it as a home
+                            Show me the property ↓
                         </a>
                         <a
-                            href={investorWA}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href="#investment-plan"
                             className="flex-1 sm:flex-none text-center bg-green-500 hover:bg-green-400 text-white font-semibold px-6 py-4 rounded-2xl transition-colors text-sm"
                         >
-                            I want to invest and earn monthly
+                            Show me the investment plan ↓
                         </a>
                     </div>
                 </div>
@@ -121,12 +117,10 @@ export default function KatampePage() {
                             ))}
                         </ul>
                         <a
-                            href={homeBuyerWA}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href="#property-details"
                             className="mt-6 w-full block text-center bg-gray-900 hover:bg-gray-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
                         >
-                            Enquire About the Home
+                            Tell me more ↓
                         </a>
                     </div>
 
@@ -153,12 +147,10 @@ export default function KatampePage() {
                             ))}
                         </ul>
                         <a
-                            href={investorWA}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href="#investment-plan"
                             className="mt-6 w-full block text-center bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
                         >
-                            Show Me the Investment Plan
+                            Show me the plan ↓
                         </a>
                     </div>
                 </div>
@@ -233,7 +225,7 @@ export default function KatampePage() {
             </section>
 
             {/* ─── KATAMPE CONVERSION PLAN ─── */}
-            <section className="max-w-5xl mx-auto px-4 py-20">
+            <section id="investment-plan" className="max-w-5xl mx-auto px-4 py-20 scroll-mt-16">
                 <span className="inline-block text-green-600 text-xs font-bold tracking-widest uppercase mb-4 bg-green-50 px-3 py-1 rounded-full border border-green-100">
                     The Investment Plan — Katampe
                 </span>
@@ -402,7 +394,7 @@ export default function KatampePage() {
             </section>
 
             {/* ─── PROPERTY DETAILS ─── */}
-            <section className="max-w-5xl mx-auto px-4 py-20">
+            <section id="property-details" className="max-w-5xl mx-auto px-4 py-20 scroll-mt-16">
                 <h2 className="text-2xl sm:text-3xl font-bold mb-10">Property Details</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                     <div className="space-y-4">
