@@ -5,219 +5,266 @@ import PropertyCard from '@/components/PropertyCard';
 import HomeSearch from '@/components/HomeSearch';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, Heart, User } from 'lucide-react';
+import { Search, User } from 'lucide-react';
 
-const CATEGORIES = [
-  { key: 'budget', label: 'Budget', color: 'from-emerald-800 to-emerald-600' },
-  { key: 'standard', label: 'Standard', color: 'from-gray-800 to-gray-600' },
-  { key: 'luxury', label: 'Luxury', color: 'from-amber-800 to-amber-600' },
-] as const;
+const TRUST_ITEMS = [
+    '60+ Properties Across Abuja',
+    '80% Average Occupancy',
+    'Instant Booking Confirmation',
+    'Verified & Inspected Rooms',
+    'Maitama · Wuse II · Asokoro · Gwarinpa · Jabi',
+    'Nigerian Hospitality, Every Stay',
+];
 
 export default async function HomePage() {
-  const supabase = await createServerClient();
+    const supabase = await createServerClient();
 
-  // Fetch all active and non-deleted properties with their booking counts to find the most booked
-  const [propertiesRes, settingsRes] = await Promise.all([
-    supabase.from('properties').select('*, bookings(count)').eq('is_active', true).neq('is_deleted', true),
-    supabase.from('site_settings').select('value').eq('key', 'category_thumbnails').maybeSingle(),
-  ]);
+    const [propertiesRes, settingsRes] = await Promise.all([
+        supabase.from('properties').select('*, bookings(count)').eq('is_active', true).neq('is_deleted', true),
+        supabase.from('site_settings').select('value').eq('key', 'category_thumbnails').maybeSingle(),
+    ]);
 
-  // Sort by booking count descending, then take top 4
-  const allProperties = propertiesRes.data || [];
-  const top4Properties = allProperties
-    .sort((a: any, b: any) => {
-      const aCount = a.bookings?.[0]?.count || 0;
-      const bCount = b.bookings?.[0]?.count || 0;
-      return bCount - aCount;
-    })
-    .slice(0, 4);
+    const allProperties = propertiesRes.data || [];
+    const top4Properties = allProperties
+        .sort((a: any, b: any) => (b.bookings?.[0]?.count || 0) - (a.bookings?.[0]?.count || 0))
+        .slice(0, 4);
 
-  // Group by category just to extract thumbnails for the mobile category tiles
-  const categoryData = {
-    budget: allProperties.filter((p) => p.category === 'budget'),
-    standard: allProperties.filter((p) => p.category === 'standard'),
-    luxury: allProperties.filter((p) => p.category === 'luxury'),
-  };
+    const savedThumbs = (settingsRes.data?.value as Record<string, string> | null) || {};
+    const categoryHero: Record<string, string> = {
+        budget: savedThumbs.budget || allProperties.find((p: any) => p.category === 'budget')?.thumbnail || '',
+        standard: savedThumbs.standard || allProperties.find((p: any) => p.category === 'standard')?.thumbnail || '',
+        luxury: savedThumbs.luxury || allProperties.find((p: any) => p.category === 'luxury')?.thumbnail || '',
+    };
 
-  // Category thumbnails — admin-set images take priority, then fall back to first property image
-  const savedThumbs = (settingsRes.data?.value as Record<string, string> | null) || {};
-  const categoryHero: Record<string, string> = {
-    budget: savedThumbs.budget || categoryData.budget[0]?.thumbnail || categoryData.budget[0]?.images?.[0] || '',
-    standard: savedThumbs.standard || categoryData.standard[0]?.thumbnail || categoryData.standard[0]?.images?.[0] || '',
-    luxury: savedThumbs.luxury || categoryData.luxury[0]?.thumbnail || categoryData.luxury[0]?.images?.[0] || '',
-  };
+    const [featured, ...rest] = top4Properties;
+    const hasProperties = top4Properties.length > 0;
 
-  const hasAnyProperties = top4Properties.length > 0;
+    const trustRepeated = [...TRUST_ITEMS, ...TRUST_ITEMS];
 
-  return (
-    <>
-      <Header />
+    return (
+        <>
+            <Header />
 
-      {/* Extra top padding for 2-row header (desktop ~104px, mobile ~56px) */}
-      <main className="page-enter min-h-screen bg-white" style={{ paddingTop: 0 }}>
+            <main className="page-enter min-h-[100dvh] bg-[#fafaf8]">
 
-        {/* ─── HERO ──────────────────────────────────────── */}
-        <section className="relative min-h-[500px] md:min-h-[580px] flex flex-col justify-end pb-12 md:pb-16 pt-14 md:pt-[104px]">
-          <div className="absolute inset-0 select-none overflow-hidden">
-            <Image
-              src="/hero-abuja.jpg"
-              alt="Luxury apartment in Abuja"
-              fill
-              className="object-cover"
-              priority
-              quality={75}
-              sizes="100vw"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" />
-          </div>
+                {/* ─── HERO ──────────────────────────── */}
+                <section className="relative min-h-[100dvh] flex flex-col justify-end pt-[60px]">
+                    {/* Full-bleed background */}
+                    <div className="absolute inset-0 select-none overflow-hidden">
+                        <Image
+                            src="/hero-abuja.jpg"
+                            alt="Luxury apartment in Abuja"
+                            fill
+                            className="object-cover"
+                            priority
+                            quality={80}
+                            sizes="100vw"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/20" />
+                        {/* Right vignette — keeps text readable on left */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-transparent" />
+                    </div>
 
-          <div className="relative z-10 max-w-4xl mx-auto w-full px-4 sm:px-6 text-center flex flex-col items-center">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-sans tracking-tight font-extrabold text-white leading-[1.1] mb-4">
-              The Right Room,<br />Every Time.
-            </h1>
-            <p className="text-white/75 text-sm md:text-base mb-8 md:mb-10">
-              Discover hand-picked short-let apartments across Abuja.
-            </p>
-            <div className="w-full max-w-2xl">
-              <HomeSearch />
-            </div>
-          </div>
-        </section>
+                    {/* Content — left-aligned */}
+                    <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-10 pb-14 sm:pb-20">
+                        <div className="max-w-2xl">
+                            <p className="text-green-400 text-xs font-semibold uppercase tracking-widest mb-5">
+                                Abuja's Premier Short-Let Platform
+                            </p>
+                            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-white leading-[1.05] tracking-tight mb-5">
+                                The Right Room,<br />Every Time.
+                            </h1>
+                            <p className="text-white/65 text-base sm:text-lg mb-8 max-w-lg leading-relaxed">
+                                Hand-picked shortlets and serviced apartments across Abuja. Instant booking, transparent pricing, no surprises.
+                            </p>
+                            <div className="max-w-xl">
+                                <HomeSearch />
+                            </div>
+                        </div>
+                    </div>
 
-        {/* ─── DESKTOP: Most Booked Properties ──────────── */}
-        {hasAnyProperties ? (
-          <div className="hidden md:block max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-20">
-            <section>
-              {/* Section header — clean, minimal */}
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-2xl font-bold tracking-tight text-gray-900">
-                  Most Booked Properties
-                </h2>
-                <Link
-                  href="/properties"
-                  className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
-                >
-                  View all →
-                </Link>
-              </div>
+                    {/* Stats strip — anchored to bottom of hero */}
+                    <div className="relative z-10 border-t border-white/10 bg-black/40 backdrop-blur-sm">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-8 overflow-x-auto scrollbar-hide text-white/60 text-xs font-medium">
+                            <span className="whitespace-nowrap">60+ Properties</span>
+                            <span className="w-px h-3 bg-white/20 shrink-0" />
+                            <span className="whitespace-nowrap">80% Avg Occupancy</span>
+                            <span className="w-px h-3 bg-white/20 shrink-0" />
+                            <span className="whitespace-nowrap">Instant Confirmation</span>
+                            <span className="w-px h-3 bg-white/20 shrink-0" />
+                            <span className="whitespace-nowrap">Maitama · Wuse II · Asokoro · Gwarinpa</span>
+                        </div>
+                    </div>
+                </section>
 
-              {/* 4-column grid-lock */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {top4Properties.map((property: any) => (
-                  <PropertyCard key={property.id} property={property} />
-                ))}
-              </div>
-            </section>
-          </div>
-        ) : (
-          <div className="hidden md:flex max-w-7xl mx-auto px-4 sm:px-6 py-24 flex-col items-center text-center">
-            <div className="w-14 h-14 bg-gray-50 rounded-full flex items-center justify-center mb-5 border border-gray-100">
-              <Search size={22} className="text-gray-400" />
-            </div>
-            <h3 className="text-base font-medium text-gray-900">No properties yet</h3>
-            <p className="text-gray-400 text-sm mt-1">Our collection is being updated. Check back soon.</p>
-          </div>
-        )}
+                {/* ─── TRUST MARQUEE ─────────────────── */}
+                <div className="bg-[#008737] overflow-hidden py-3.5">
+                    <div className="marquee-track">
+                        {trustRepeated.map((item, i) => (
+                            <span key={i} className="flex items-center shrink-0">
+                                <span className="text-white text-[11px] font-semibold uppercase tracking-widest px-8 whitespace-nowrap">
+                                    {item}
+                                </span>
+                                <span className="text-white/30 text-sm">·</span>
+                            </span>
+                        ))}
+                    </div>
+                </div>
 
-        {/* ─── MOBILE: Category Tiles + Most Booked ──── */}
-        <div className="md:hidden">
-          {/* Category tiles (image cards) */}
-          <div className="px-4 pt-6 pb-4">
-            <p className="text-xs font-semibold text-gray-400 tracking-widest uppercase mb-4">Categories</p>
-            <div className="grid grid-cols-3 gap-3">
-              {CATEGORIES.map((cat) => {
-                const img = categoryHero[cat.key];
-                return (
-                  <Link
-                    key={cat.key}
-                    href={`/properties?category=${cat.key}`}
-                    className="relative aspect-square rounded-xl overflow-hidden group"
-                  >
-                    {img ? (
-                      <Image src={img} alt={cat.label} fill sizes="33vw" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                    ) : (
-                      <div className={`w-full h-full bg-gradient-to-br ${cat.color}`} />
+                {/* ─── FEATURED — Desktop editorial grid ── */}
+                {hasProperties && (
+                    <section className="hidden md:block max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-20">
+                        <div className="flex items-end justify-between mb-10">
+                            <div>
+                                <p className="text-green-600 text-xs font-semibold uppercase tracking-widest mb-2">Our Collection</p>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight">Most Booked Properties</h2>
+                            </div>
+                            <Link href="/properties" className="text-sm text-gray-500 hover:text-gray-900 transition-colors flex items-center gap-1">
+                                View all rooms →
+                            </Link>
+                        </div>
+
+                        {/* Editorial grid: 1 large + 3 stacked */}
+                        <div className="grid grid-cols-3 gap-4">
+                            {/* Featured large card */}
+                            {featured && (
+                                <div className="col-span-2 row-span-2">
+                                    <PropertyCard property={featured} featured className="h-full" />
+                                </div>
+                            )}
+                            {/* Stacked small cards */}
+                            <div className="flex flex-col gap-4">
+                                {rest.slice(0, 2).map((property: any) => (
+                                    <PropertyCard key={property.id} property={property} className="flex-1" />
+                                ))}
+                                {rest[2] && (
+                                    <PropertyCard property={rest[2]} className="flex-1" />
+                                )}
+                            </div>
+                        </div>
+                    </section>
+                )}
+
+                {/* ─── MOBILE: Category tiles + scroll ── */}
+                <div className="md:hidden pt-8 pb-4">
+                    {/* Category tiles */}
+                    <div className="px-4 mb-6">
+                        <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-3">Browse by Category</p>
+                        <div className="grid grid-cols-3 gap-2.5">
+                            {(['budget', 'standard', 'luxury'] as const).map((cat) => {
+                                const img = categoryHero[cat];
+                                const labels = { budget: 'Budget', standard: 'Standard', luxury: 'Luxury' };
+                                return (
+                                    <Link
+                                        key={cat}
+                                        href={`/properties?category=${cat}`}
+                                        className="relative aspect-[3/4] rounded-2xl overflow-hidden group"
+                                    >
+                                        {img ? (
+                                            <Image src={img} alt={labels[cat]} fill sizes="33vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                                        ) : (
+                                            <div className="w-full h-full bg-gray-200" />
+                                        )}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                        <div className="absolute bottom-0 left-0 right-0 p-3">
+                                            <p className="text-white text-xs font-semibold">{labels[cat]}</p>
+                                        </div>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Most booked horizontal scroll */}
+                    {hasProperties && (
+                        <div>
+                            <div className="flex items-center justify-between px-4 mb-3">
+                                <h3 className="text-base font-semibold text-gray-900">Most Booked</h3>
+                                <Link href="/properties" className="text-xs text-gray-400">View all →</Link>
+                            </div>
+                            <div className="px-4 flex gap-3 overflow-x-auto scrollbar-hide pb-2">
+                                {top4Properties.map((property: any) => (
+                                    <div key={property.id} className="shrink-0 w-[200px]">
+                                        <PropertyCard property={property} />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     )}
-                    {/* Dark overlay */}
-                    <div className="absolute inset-0 bg-black/35" />
-                    {/* Label */}
-                    <div className="absolute bottom-0 left-0 right-0 p-2">
-                      <p className="text-white text-xs font-semibold text-center">{cat.label}</p>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Mobile properties: Most Booked Properties */}
-          {hasAnyProperties && (
-            <div className="py-6 space-y-8">
-              <div>
-                <div className="flex items-center justify-between px-4 mb-3">
-                  <h3 className="text-base font-semibold text-gray-900">Most Booked</h3>
-                  <Link href="/properties" className="text-xs text-gray-400">View all →</Link>
                 </div>
-                <div className="-mx-0 px-4 flex gap-3 overflow-x-auto scrollbar-hide pb-1">
-                  {top4Properties.map((property: any) => (
-                    <div key={property.id} className="shrink-0 w-[200px]">
-                      <PropertyCard property={property} />
+
+                {/* ─── STATS STRIP ─────────────────────── */}
+                <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-12 md:py-16">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {[
+                            { value: '60+', label: 'Properties Listed' },
+                            { value: '80%', label: 'Average Occupancy' },
+                            { value: '4.8★', label: 'Guest Rating' },
+                            { value: '2022', label: 'Serving Abuja Since' },
+                        ].map((stat) => (
+                            <div key={stat.label} className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
+                                <p className="text-2xl sm:text-3xl font-bold text-gray-900 tabular-nums">{stat.value}</p>
+                                <p className="text-xs text-gray-400 font-medium mt-1 uppercase tracking-wide">{stat.label}</p>
+                            </div>
+                        ))}
                     </div>
-                  ))}
+                </section>
+
+                {/* ─── FOR PROPERTY OWNERS ───────────────── */}
+                <section className="py-20 md:py-28 bg-[#0c1a0e] text-white overflow-hidden relative mx-4 sm:mx-6 lg:mx-10 rounded-3xl mb-10">
+                    <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-green-900/20 rounded-full blur-[100px] translate-x-1/3 -translate-y-1/3 pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-green-800/10 rounded-full blur-[80px] -translate-x-1/4 translate-y-1/4 pointer-events-none" />
+
+                    <div className="relative z-10 max-w-5xl mx-auto px-6 sm:px-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-12">
+                        <div className="max-w-lg">
+                            <span className="text-green-400 font-semibold tracking-widest uppercase text-xs mb-4 block">For Property Owners</span>
+                            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-5 leading-[1.1]">
+                                Let 9jaRooms<br />Manage Your Bookings.
+                            </h2>
+                            <p className="text-white/50 text-sm sm:text-base leading-relaxed mb-8 max-w-md">
+                                We handle photography, marketing, and guest management — so you earn more without the headache. Over 60 properties already trust us.
+                            </p>
+                            <Link
+                                href="/partner"
+                                className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white px-7 py-3.5 rounded-full text-sm font-semibold transition-colors duration-150 btn-press"
+                            >
+                                Learn More →
+                            </Link>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row md:flex-col gap-4 shrink-0">
+                            {[
+                                { value: '80%+', label: 'Average occupancy\nfor managed properties' },
+                                { value: '15%', label: 'Management fee —\nno upfront costs' },
+                            ].map(s => (
+                                <div key={s.label} className="p-6 border border-white/10 rounded-2xl bg-white/[0.04] backdrop-blur-sm min-w-[180px]">
+                                    <p className="text-3xl font-bold text-white mb-1.5 tabular-nums">{s.value}</p>
+                                    <p className="text-white/40 text-xs leading-relaxed whitespace-pre-line">{s.label}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+
+            <Footer />
+
+            {/* ─── MOBILE FIXED BOTTOM NAV ────────────── */}
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-100" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+                <div className="flex items-center justify-around py-2">
+                    <Link href="/properties" className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-400 hover:text-green-600 transition-colors">
+                        <Search size={22} strokeWidth={1.5} />
+                        <span className="text-[10px] font-medium">Search</span>
+                    </Link>
+                    <Link href="/account" className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-400 hover:text-green-600 transition-colors">
+                        <User size={22} strokeWidth={1.5} />
+                        <span className="text-[10px] font-medium">Account</span>
+                    </Link>
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
+            </nav>
 
-        {/* ─── FOR PROPERTY OWNERS ───────────────────────── */}
-        <section className="py-16 md:py-24 bg-gray-900 text-white overflow-hidden relative mt-4 md:mt-0">
-          <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-green-900/30 rounded-full blur-[80px] translate-x-1/2 -translate-y-1/2" />
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-10">
-            <div className="max-w-xl">
-              <span className="text-green-400 font-medium tracking-widest uppercase text-xs mb-3 block">For Property Owners</span>
-              <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-4 leading-[1.1]">
-                Let 9jaRooms Manage<br />Your Bookings.
-              </h2>
-              <p className="text-gray-400 text-sm md:text-base font-light leading-relaxed mb-6">
-                We handle photography, marketing, and guest management—so you earn more without the headache.
-              </p>
-              <Link href="/partner" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-7 py-3 rounded-full text-sm font-medium transition-all">
-                Learn More
-              </Link>
-            </div>
-            <div className="hidden md:block shrink-0">
-              <div className="p-7 border border-white/10 rounded-2xl bg-white/5 backdrop-blur-sm">
-                <div className="text-5xl font-extrabold text-white mb-2 tracking-tight">80%+</div>
-                <div className="text-gray-400 text-sm font-medium">Average occupancy rate<br />for our managed properties.</div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <Footer />
-
-      {/* ─── MOBILE FIXED BOTTOM NAV ──────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-        <div className="flex items-center justify-around py-2">
-          <Link href="/properties" className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-400 hover:text-green-600 transition-colors">
-            <Search size={22} strokeWidth={1.5} />
-            <span className="text-[10px] font-medium">Search</span>
-          </Link>
-          <Link href="/properties?category=budget" className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-400 hover:text-green-600 transition-colors">
-            <Heart size={22} strokeWidth={1.5} />
-            <span className="text-[10px] font-medium">Saved</span>
-          </Link>
-          <Link href="/account" className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-400 hover:text-green-600 transition-colors">
-            <User size={22} strokeWidth={1.5} />
-            <span className="text-[10px] font-medium">Account</span>
-          </Link>
-        </div>
-      </nav>
-
-      {/* Mobile bottom padding so content doesn't sit behind fixed nav */}
-      <div className="md:hidden h-16" />
-    </>
-  );
+            <div className="md:hidden h-16" />
+        </>
+    );
 }

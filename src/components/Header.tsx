@@ -2,138 +2,165 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Menu, X, ChevronDown, Phone } from 'lucide-react';
+import { Menu, X, Phone } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 
-const CATEGORIES = [
-    { label: 'Budget', value: 'budget' },
-    { label: 'Standard', value: 'standard' },
-    { label: 'Luxury', value: 'luxury' },
+const NAV_LINKS = [
+    { label: 'All Rooms', href: '/properties' },
+    { label: 'Budget', href: '/properties?category=budget' },
+    { label: 'Standard', href: '/properties?category=standard' },
+    { label: 'Luxury', href: '/properties?category=luxury' },
+    { label: 'Partner With Us', href: '/partner' },
 ];
 
 export default function Header() {
     const [menuOpen, setMenuOpen] = useState(false);
-    const [isScrolled, setIsScrolled] = useState(false);
-    const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+    const [scrolled, setScrolled] = useState(false);
     const pathname = usePathname();
 
     useEffect(() => {
-        const handleScroll = () => setIsScrolled(window.scrollY > 0);
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
+        const onScroll = () => setScrolled(window.scrollY > 50);
+        window.addEventListener('scroll', onScroll, { passive: true });
+        return () => window.removeEventListener('scroll', onScroll);
     }, []);
 
-    useEffect(() => {
-        setMenuOpen(false);
-        setOpenDropdown(null);
-    }, [pathname]);
+    useEffect(() => { setMenuOpen(false); }, [pathname]);
+
+    const isHome = pathname === '/';
+    const transparent = isHome && !scrolled && !menuOpen;
 
     return (
-        <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-white shadow-sm' : 'bg-white'}`}>
-            {/* ── ROW 1: Logo | Phone + Login ── */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
-                <div className="flex items-center justify-between h-14 md:h-16">
-                    {/* Logo - Using icon instead of full text logo as requested */}
-                    <Link href="/" className="flex items-center z-50 relative shrink-0">
-                        <img src="/WHITE.jpg" alt="9jaRooms Logo" className="h-[3.125rem] md:h-[3.75rem] w-auto object-contain" />
-                    </Link>
+        <>
+            <header
+                className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+                    transparent
+                        ? 'bg-transparent border-transparent'
+                        : 'bg-white/95 backdrop-blur-md border-b border-black/[0.06] shadow-sm'
+                }`}
+            >
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
+                    <div className="flex items-center justify-between h-[60px]">
 
-                    {/* Desktop right: Phone + Login */}
-                    <div className="hidden md:flex items-center gap-5">
-                        <a href="tel:+2349111101012" className="text-sm text-gray-500 hover:text-gray-800 transition-colors flex items-center gap-1.5">
+                        {/* Logo */}
+                        <Link href="/" className="shrink-0 flex items-center">
+                            <img
+                                src="/WHITE.jpg"
+                                alt="9jaRooms"
+                                className={`h-11 w-auto object-contain transition-all duration-300 ${transparent ? 'brightness-0 invert' : ''}`}
+                            />
+                        </Link>
+
+                        {/* Desktop nav */}
+                        <nav className="hidden md:flex items-center gap-1">
+                            {NAV_LINKS.map(link => {
+                                const active = pathname === link.href || (link.href !== '/properties' && pathname.startsWith(link.href.split('?')[0]) && link.href.includes(pathname));
+                                return (
+                                    <Link
+                                        key={link.href}
+                                        href={link.href}
+                                        className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-150 ${
+                                            transparent
+                                                ? 'text-white/80 hover:text-white hover:bg-white/10'
+                                                : active
+                                                    ? 'text-green-700 bg-green-50'
+                                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
+                                        }`}
+                                    >
+                                        {link.label}
+                                    </Link>
+                                );
+                            })}
+                        </nav>
+
+                        {/* Right actions */}
+                        <div className="flex items-center gap-3">
+                            <a
+                                href="tel:+2349111101012"
+                                className={`hidden md:flex items-center gap-1.5 text-sm transition-colors ${
+                                    transparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-800'
+                                }`}
+                            >
+                                <Phone size={13} />
+                                +234 911 110 1012
+                            </a>
+
+                            <Link
+                                href="/account"
+                                className={`w-9 h-9 flex items-center justify-center rounded-full border transition-all duration-150 btn-press ${
+                                    transparent
+                                        ? 'border-white/30 text-white hover:bg-white/10'
+                                        : 'border-gray-200 text-gray-700 hover:bg-gray-900 hover:text-white hover:border-gray-900'
+                                }`}
+                            >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                    <circle cx="12" cy="7" r="4" />
+                                </svg>
+                            </Link>
+
+                            {/* Mobile hamburger */}
+                            <button
+                                onClick={() => setMenuOpen(v => !v)}
+                                className={`md:hidden w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+                                    transparent ? 'text-white hover:bg-white/10' : 'text-gray-700 hover:bg-gray-100'
+                                }`}
+                                aria-label="Toggle menu"
+                            >
+                                {menuOpen ? <X size={20} strokeWidth={1.5} /> : <Menu size={20} strokeWidth={1.5} />}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            {/* Mobile menu — full overlay */}
+            <div
+                className={`fixed inset-0 z-40 md:hidden transition-all duration-300 ${
+                    menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+                }`}
+            >
+                {/* Backdrop */}
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
+
+                {/* Panel */}
+                <div
+                    className={`absolute top-0 right-0 bottom-0 w-72 bg-white shadow-2xl transition-transform duration-300 ${
+                        menuOpen ? 'translate-x-0' : 'translate-x-full'
+                    }`}
+                    style={{ transitionTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)' }}
+                >
+                    <div className="flex items-center justify-between px-5 h-[60px] border-b border-gray-100">
+                        <img src="/WHITE.jpg" alt="9jaRooms" className="h-9 w-auto object-contain" />
+                        <button onClick={() => setMenuOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
+                            <X size={18} />
+                        </button>
+                    </div>
+
+                    <nav className="px-4 py-5 flex flex-col gap-1">
+                        {NAV_LINKS.map((link, i) => (
+                            <Link
+                                key={link.href}
+                                href={link.href}
+                                onClick={() => setMenuOpen(false)}
+                                className={`flex items-center px-4 py-3 rounded-xl text-base font-medium transition-colors ${
+                                    i === NAV_LINKS.length - 1
+                                        ? 'mt-3 bg-green-600 text-white hover:bg-green-700'
+                                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                                }`}
+                            >
+                                {link.label}
+                            </Link>
+                        ))}
+                    </nav>
+
+                    <div className="absolute bottom-8 left-0 right-0 px-8">
+                        <a href="tel:+2349111101012" className="flex items-center gap-2 text-sm text-gray-400">
                             <Phone size={13} />
                             +234 911 110 1012
                         </a>
-                        <Link
-                            href="/account"
-                            className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all duration-200"
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                <circle cx="12" cy="7" r="4" />
-                            </svg>
-                        </Link>
-                    </div>
-
-                    {/* Mobile right: Phone + hamburger */}
-                    <div className="md:hidden flex items-center gap-2">
-                        <a href="tel:+2349111101012" className="p-2 text-gray-500">
-                            <Phone size={19} />
-                        </a>
-                        <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 text-gray-600">
-                            {menuOpen ? <X size={22} strokeWidth={1.5} /> : <Menu size={22} strokeWidth={1.5} />}
-                        </button>
                     </div>
                 </div>
             </div>
-
-            {/* ── ROW 2: Category tabs (Desktop only) ── */}
-            <div className="hidden md:block border-t border-gray-100">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
-                    <div className="flex items-center justify-center gap-1 h-10">
-                        {CATEGORIES.map((cat) => (
-                            <div key={cat.value} className="relative">
-                                <button
-                                    onMouseEnter={() => setOpenDropdown(cat.value)}
-                                    onMouseLeave={() => setOpenDropdown(null)}
-                                    className={`flex items-center gap-1.5 px-5 py-2 text-sm font-medium transition-colors rounded-full ${openDropdown === cat.value ? 'text-gray-900 bg-gray-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    {cat.label}
-                                    <ChevronDown size={12} className={`transition-transform duration-200 ${openDropdown === cat.value ? 'rotate-180' : ''}`} />
-                                </button>
-
-                                {openDropdown === cat.value && (
-                                    <div
-                                        className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-[60]"
-                                        onMouseEnter={() => setOpenDropdown(cat.value)}
-                                        onMouseLeave={() => setOpenDropdown(null)}
-                                    >
-                                        <Link href={`/properties?category=${cat.value}`} className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors">
-                                            Browse {cat.label} rooms
-                                        </Link>
-                                        <Link href="/properties" className="block px-4 py-2.5 text-sm text-gray-400 hover:bg-gray-50 hover:text-gray-700 transition-colors">
-                                            View all rooms
-                                        </Link>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            {/* Mobile menu */}
-            {menuOpen && (
-                <nav className="md:hidden border-t border-gray-100 bg-white px-4 py-4">
-                    <div className="grid grid-cols-3 gap-2 mb-4">
-                        {CATEGORIES.map((cat) => (
-                            <Link
-                                key={cat.value}
-                                href={`/properties?category=${cat.value}`}
-                                onClick={() => setMenuOpen(false)}
-                                className="text-center py-3 px-2 bg-gray-50 rounded-xl text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors"
-                            >
-                                {cat.label}
-                            </Link>
-                        ))}
-                    </div>
-                    <div className="flex flex-col gap-1 pt-3 border-t border-gray-50">
-                        {[
-                            { label: 'All Rooms', href: '/properties' },
-                            { label: 'About', href: '/about' },
-                            { label: 'Partner With Us', href: '/partner' },
-                        ].map((item) => (
-                            <Link key={item.label} href={item.href} className="py-3 px-2 text-base font-medium text-gray-800 border-b border-gray-50 last:border-0" onClick={() => setMenuOpen(false)}>
-                                {item.label}
-                            </Link>
-                        ))}
-                        <Link href="/account" className="mt-3 text-sm font-medium text-center text-green-600 border border-green-500 rounded-full px-5 py-3 hover:bg-green-500 hover:text-white transition-all" onClick={() => setMenuOpen(false)}>
-                            My Account
-                        </Link>
-                    </div>
-                </nav>
-            )}
-        </header>
+        </>
     );
 }
