@@ -190,9 +190,9 @@ function PropertiesContent() {
         <div className="min-h-screen bg-[#f7f7f7]">
             <Header />
 
-            <main className="pt-20 md:pt-[105px] pb-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
+            <main className="pt-[60px] pb-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
                 {/* Search & Filters */}
-                <div className="lg:sticky lg:top-[105px] z-40 bg-[#f7f7f7] pt-3 pb-2 mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+                <div className="lg:sticky lg:top-[60px] z-40 bg-[#f7f7f7] pt-3 pb-2 mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
 
                     {/* Desktop: Horizontal search bar */}
                     <div className="hidden lg:flex items-center gap-3 p-2 border border-gray-200 rounded-full shadow-sm hover:shadow-lg transition-all duration-300 bg-white">
