@@ -35,9 +35,9 @@ export default function Header() {
                         {/* Logo */}
                         <Link href="/" className="shrink-0 flex items-center">
                             <img
-                                src="/WHITE.jpg"
+                                src="/logo-transparent.png"
                                 alt="9jaRooms"
-                                className="h-11 w-auto object-contain"
+                                className="h-[1.925rem] w-auto object-contain"
                             />
                         </Link>
 
@@ -111,7 +111,7 @@ export default function Header() {
                     style={{ transitionTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)' }}
                 >
                     <div className="flex items-center justify-between px-5 h-[60px] border-b border-gray-100">
-                        <img src="/WHITE.jpg" alt="9jaRooms" className="h-9 w-auto object-contain" />
+                        <img src="/logo-transparent.png" alt="9jaRooms" className="h-[1.575rem] w-auto object-contain" />
                         <button onClick={() => setMenuOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
                             <X size={18} />
                         </button>

@@ -12,7 +12,7 @@ const TRUST_ITEMS = [
     '80% Average Occupancy',
     'Instant Booking Confirmation',
     'Verified & Inspected Rooms',
-    'Maitama · Wuse II · Asokoro · Gwarinpa · Jabi',
+    'Wuye · Wuse · Guzape · Asokoro · Garki',
     'Nigerian Hospitality, Every Stay',
 ];
 
@@ -64,9 +64,6 @@ export default async function HomePage() {
 
                     {/* Centered content */}
                     <div className="relative z-10 w-full max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14 flex flex-col items-center">
-                        <p className="text-green-400 text-[10px] sm:text-xs font-bold uppercase tracking-widest mb-4">
-                            Abuja's Premier Short-Let Platform
-                        </p>
                         <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-[1.1] tracking-tight mb-4">
                             The Right Room,<br className="hidden sm:block" /> Every Time.
                         </h1>
