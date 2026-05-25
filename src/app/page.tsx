@@ -25,9 +25,16 @@ export default async function HomePage() {
     ]);
 
     const allProperties = propertiesRes.data || [];
-    const top4Properties = allProperties
-        .sort((a: any, b: any) => (b.bookings?.[0]?.count || 0) - (a.bookings?.[0]?.count || 0))
-        .slice(0, 4);
+    const featuredProperties = allProperties.filter((p: any) => p.is_featured);
+    const byBookings = (a: any, b: any) => (b.bookings?.[0]?.count || 0) - (a.bookings?.[0]?.count || 0);
+    const top4Properties = (
+        featuredProperties.length > 0
+            ? [
+                  ...featuredProperties.sort(byBookings),
+                  ...allProperties.filter((p: any) => !p.is_featured).sort(byBookings),
+              ]
+            : [...allProperties].sort(byBookings)
+    ).slice(0, 4);
 
     const savedThumbs = (settingsRes.data?.value as Record<string, string> | null) || {};
     const categoryHero: Record<string, string> = {
