@@ -4,10 +4,12 @@ import { initializePayment, generateReference } from '@/lib/paystack';
 import { addDays, format } from 'date-fns';
 import { Resend } from 'resend';
 import { z } from 'zod';
+import { computeOptions, type ApartmentLite, type RoomLite } from '@/lib/booking/options';
 
 const bookingSchema = z.object({
-    roomId: z.string().uuid(),
+    roomId: z.string().uuid().optional(),
     propertyId: z.string().uuid(),
+    mode: z.enum(['single', 'two_bed', 'whole']).default('single'),
     guestName: z.string().trim().min(2).max(100),
     guestEmail: z.string().trim().email().optional().nullable().or(z.literal('')),
     guestPhone: z.string().trim().max(20).optional().nullable().or(z.literal('')),
@@ -20,6 +22,57 @@ const bookingSchema = z.object({
     bookingType: z.string().optional().nullable(),
     notes: z.string().max(1000).optional().nullable()
 });
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+// Atomically reserve `dates` across all `roomIds` for this booking, then verify
+// that every room+date now belongs to us. Returns the conflicting cells (empty
+// = we won the race). On conflict the caller rolls back. Shared by the
+// single-room and bundle (whole/2-bed) paths so both use one correct impl.
+async function reserveAndVerify(
+    supabase: AdminClient,
+    roomIds: string[],
+    dates: string[],
+    status: string,
+    bookingId: string,
+): Promise<{ date: string; booking_id: string | null; status: string }[]> {
+    const availabilityRows = roomIds.flatMap(room_id =>
+        dates.map(date => ({ room_id, date, status, booking_id: bookingId }))
+    );
+
+    await supabase
+        .from('availability')
+        .upsert(availabilityRows, { onConflict: 'room_id,date' });
+
+    const { data: verifyRows } = await supabase
+        .from('availability')
+        .select('date, booking_id, status')
+        .in('room_id', roomIds)
+        .in('date', dates);
+
+    return (verifyRows || []).filter(
+        row => row.booking_id !== bookingId && row.status !== 'available'
+    );
+}
+
+// Undo a reservation: remove every availability row this booking claimed and
+// mark the booking cancelled. Mirrors the original single-room rollback.
+async function rollbackReservation(
+    supabase: AdminClient,
+    roomIds: string[],
+    bookingId: string,
+) {
+    await supabase
+        .from('availability')
+        .delete()
+        .in('room_id', roomIds)
+        .eq('booking_id', bookingId);
+
+    await supabase
+        .from('bookings')
+        .update({ status: 'cancelled', notes: 'Auto-cancelled: dates taken by another booking' })
+        .eq('id', bookingId);
+}
 
 const rateLimitStore = new Map<string, { count: number, resetAt: number }>();
 
@@ -56,7 +109,11 @@ export async function POST(request: NextRequest) {
         }
         
         const body = validation.data;
-        const { roomId, propertyId, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
+        const { roomId, propertyId, mode, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
+
+        if (mode === 'single' && !roomId) {
+            return NextResponse.json({ error: 'roomId is required for single-room bookings' }, { status: 400 });
+        }
 
         const supabase = createAdminClient(); // Explicit Admin client for DB ops to enable safe guest inserts
         const sessionSupabase = await createSessionClient(); // Session client for Auth
@@ -139,6 +196,252 @@ export async function POST(request: NextRequest) {
         while (current < checkOutDate) {
             dates.push(format(current, 'yyyy-MM-dd'));
             current = addDays(current, 1);
+        }
+
+        // ============================================================
+        // BUNDLE PATH (whole-apartment / 2-bedroom) — occupies ALL rooms.
+        // Single-room bookings skip this entirely and use the path below.
+        // ============================================================
+        if (mode === 'two_bed' || mode === 'whole') {
+            // 1. Load the property bundle config + ALL its active rooms.
+            const { data: propertyRow } = await supabase
+                .from('properties')
+                .select('*, owner:owners(*)')
+                .eq('id', propertyId)
+                .single();
+
+            if (!propertyRow) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+
+            const property = propertyRow as {
+                id: string;
+                name: string;
+                is_apartment: boolean | null;
+                whole_apartment_price: number | null;
+                two_bed_price: number | null;
+                price_per_night: number | null;
+                minimum_stay: number | null;
+                owner?: { paystack_subaccount_code?: string | null } | null;
+            };
+
+            const { data: roomRows } = await supabase
+                .from('rooms')
+                .select('id, name, room_type, price_per_night')
+                .eq('property_id', propertyId)
+                .eq('is_active', true);
+
+            const rooms = (roomRows || []) as RoomLite[];
+
+            const bundlePrice = mode === 'whole'
+                ? property.whole_apartment_price
+                : property.two_bed_price;
+
+            if (!property.is_apartment || bundlePrice == null) {
+                return NextResponse.json(
+                    { error: 'This property is not available as an apartment bundle.' },
+                    { status: 400 }
+                );
+            }
+
+            // 2. Build the unavailable Set using the same expired-hold rule the
+            //    apartment availability map uses (held + future expiry, or
+            //    booked/cleaning/maintenance = unavailable).
+            const roomIds = rooms.map(r => r.id);
+            const { data: rawAvailability } = await supabase
+                .from('availability')
+                .select('room_id, date, status, booking:bookings(expires_at)')
+                .in('room_id', roomIds)
+                .in('date', dates);
+
+            const now = new Date();
+            const unavailableSet = new Set<string>();
+            for (const slot of (rawAvailability || []) as unknown as Array<{
+                room_id: string;
+                date: string;
+                status: string;
+                booking?: { expires_at: string | null } | null;
+            }>) {
+                let blocked = false;
+                if (slot.status === 'booked' || slot.status === 'cleaning' || slot.status === 'maintenance') {
+                    blocked = true;
+                } else if (slot.status === 'held') {
+                    const expiresAt = slot.booking?.expires_at ? new Date(slot.booking.expires_at) : null;
+                    if (!expiresAt || expiresAt >= now) blocked = true;
+                }
+                if (blocked) unavailableSet.add(`${slot.room_id}|${slot.date}`);
+            }
+
+            // 3. Run the booking engine and pick the requested bundle option.
+            const apt: ApartmentLite = {
+                id: property.id,
+                is_apartment: !!property.is_apartment,
+                property_price: property.price_per_night ?? 0,
+                whole_apartment_price: property.whole_apartment_price ?? null,
+                two_bed_price: property.two_bed_price ?? null,
+                rooms,
+            };
+            const option = computeOptions(apt, unavailableSet, checkIn, checkOut, dates)
+                .find(o => o.type === mode);
+
+            if (!option || !option.available) {
+                return NextResponse.json(
+                    { error: 'Those dates are no longer available for this option.' },
+                    { status: 409 }
+                );
+            }
+
+            const consumedRoomIds = [...option.roomIds, ...option.lockedRoomIds];
+            const nightCount = dates.length;
+
+            // Validate minimum stay (same rule as single path).
+            if (property.minimum_stay && nightCount < property.minimum_stay) {
+                return NextResponse.json(
+                    { error: `Minimum stay is ${property.minimum_stay} nights. You selected ${nightCount}.` },
+                    { status: 400 }
+                );
+            }
+
+            const subaccount = property.owner?.paystack_subaccount_code;
+            if (!isInternalBooking && !subaccount) {
+                console.error(`[Booking API] Owner has no Paystack subaccount for property ${propertyId}`);
+                return NextResponse.json(
+                    { error: 'Property not configured for online payments. Please contact support.' },
+                    { status: 400 }
+                );
+            }
+
+            // Bundles use FIXED bundle pricing — no discount_rules applied.
+            const totalAmount = option.price;
+            const pricePerNight = option.pricePerNight;
+            const bookingType = body.bookingType || 'guest';
+
+            // 4. Create the booking (representative room = first sold room).
+            const initialStatus = isInternalBooking ? 'confirmed' : 'pending';
+            const reference = generateReference();
+            const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+            let source = bookingSource || 'website';
+            if (!bookingSource) {
+                if (isInternalBooking && bookingType === 'maintenance') source = 'maintenance';
+                else if (isInternalBooking) source = 'caretaker';
+                else if (whatsappUserPhone) source = 'whatsapp';
+            }
+
+            const bookingNotes = body.notes || (isInternalBooking
+                ? (bookingType === 'maintenance' ? 'Blocked for Maintenance' : 'Manual Booking (Caretaker/Agent)')
+                : null);
+
+            const finalGuestEmail = guestEmail || (user?.email ? user.email : null);
+
+            const { data: booking, error: bookingError } = await supabase
+                .from('bookings')
+                .insert({
+                    room_id: option.roomIds[0],
+                    property_id: propertyId,
+                    guest_name: guestName,
+                    guest_email: finalGuestEmail,
+                    guest_phone: guestPhone || null,
+                    user_id: user?.id || null,
+                    check_in: checkIn,
+                    check_out: checkOut,
+                    nights: nightCount,
+                    price_per_night: pricePerNight,
+                    total_amount: totalAmount,
+                    status: initialStatus,
+                    booking_mode: mode,
+                    paystack_reference: reference,
+                    expires_at: initialStatus === 'pending' ? expiresAt.toISOString() : null,
+                    notes: bookingNotes,
+                    booking_source: source
+                })
+                .select()
+                .single();
+
+            if (bookingError) throw new Error(bookingError.message);
+
+            // 5. Atomic reservation across ALL consumed rooms (sold + locked).
+            let availabilityStatus = isInternalBooking ? 'booked' : 'held';
+            if (isInternalBooking && bookingType === 'maintenance') {
+                availabilityStatus = 'booked';
+            }
+
+            const conflictDates = await reserveAndVerify(
+                supabase, consumedRoomIds, dates, availabilityStatus, booking.id
+            );
+
+            if (conflictDates.length > 0) {
+                console.warn(`[Race Condition] Bundle booking ${booking.id} lost race for dates: ${conflictDates.map(d => d.date).join(', ')}`);
+                await rollbackReservation(supabase, consumedRoomIds, booking.id);
+                return NextResponse.json(
+                    { error: 'Sorry, those dates were just booked by someone else. Please try different dates.' },
+                    { status: 409 }
+                );
+            }
+
+            // 6. Record the full room set: sold rooms carry their own price,
+            //    locked rooms (the held-empty room of a 2-bed) carry price 0.
+            const priceById = new Map(rooms.map(r => [r.id, r.price_per_night]));
+            const soldSet = new Set(option.roomIds);
+            const bookingRoomRows = consumedRoomIds.map(room_id => ({
+                booking_id: booking.id,
+                room_id,
+                price_per_night: soldSet.has(room_id) ? (priceById.get(room_id) ?? 0) : 0,
+                is_locked: !soldSet.has(room_id),
+            }));
+            await supabase.from('booking_rooms').insert(bookingRoomRows);
+
+            // 7. Payment — same branch logic as the single path, bundle total.
+            if (!isInternalBooking || bookingSource === 'operator') {
+                try {
+                    let origin = request.nextUrl.origin;
+                    const allowedOrigins = ['https://9jarooms.com', 'https://www.9jarooms.com', 'http://localhost:3000'];
+                    if (!allowedOrigins.includes(origin) && !origin.endsWith('.vercel.app')) {
+                        origin = process.env.NEXT_PUBLIC_APP_URL || 'https://9jarooms.com';
+                    }
+
+                    const payment = await initializePayment({
+                        email: finalGuestEmail ? finalGuestEmail.trim() : 'booking@9jarooms.com',
+                        amount: totalAmount * 100,
+                        reference: reference,
+                        subaccount: subaccount as string,
+                        callbackUrl: `${origin}/booking/confirm`,
+                        metadata: {
+                            booking_id: booking.id,
+                            property_name: property.name,
+                            room_name: option.label,
+                            guest_name: guestName,
+                            whatsapp_user_phone: whatsappUserPhone,
+                        },
+                    });
+
+                    await supabase
+                        .from('bookings')
+                        .update({
+                            paystack_access_code: payment.data.access_code,
+                            paystack_authorization_url: payment.data.authorization_url,
+                        })
+                        .eq('id', booking.id);
+
+                    return NextResponse.json({
+                        success: true,
+                        bookingId: booking.id,
+                        paystackUrl: payment.data.authorization_url,
+                        reference: reference,
+                    });
+                } catch (payError) {
+                    console.error('Paystack Init Error:', payError);
+                    const message = payError instanceof Error ? payError.message : null;
+                    return NextResponse.json(
+                        { error: message || 'Payment initialization failed with Paystack. Please try again or contact support.' },
+                        { status: 400 }
+                    );
+                }
+            } else {
+                return NextResponse.json({
+                    success: true,
+                    bookingId: booking.id,
+                    message: 'Booking confirmed successfully (Manual Block)',
+                });
+            }
         }
 
         // Quick pre-check: fast-fail if dates are obviously unavailable
@@ -248,6 +551,7 @@ export async function POST(request: NextRequest) {
                 price_per_night: pricePerNight,
                 total_amount: totalAmount,
                 status: initialStatus,
+                booking_mode: 'single',
                 paystack_reference: reference,
                 expires_at: initialStatus === 'pending' ? expiresAt.toISOString() : null,
                 notes: bookingNotes,
@@ -258,6 +562,14 @@ export async function POST(request: NextRequest) {
 
         if (bookingError) throw new Error(bookingError.message);
 
+        // Record the single room in booking_rooms (mirrors the bundle path).
+        await supabase.from('booking_rooms').insert({
+            booking_id: booking.id,
+            room_id: roomId,
+            price_per_night: pricePerNight,
+            is_locked: false,
+        });
+
         // 4. Atomic date reservation with race-condition protection
         // Strategy: INSERT availability rows. If a row already exists for a date
         // with a non-available status, upsert will overwrite — so we verify after.
@@ -266,29 +578,12 @@ export async function POST(request: NextRequest) {
             availabilityStatus = 'booked';
         }
 
-        const availabilityRows = dates.map(date => ({
-            room_id: roomId,
-            date,
-            status: availabilityStatus,
-            booking_id: booking.id,
-        }));
-
-        await supabase
-            .from('availability')
-            .upsert(availabilityRows, { onConflict: 'room_id,date' });
-
         // 5. VERIFY: Check that ALL dates now belong to OUR booking
         // This catches the race condition: if another booking snuck in
         // between our check and our upsert, some dates will have a
         // different booking_id
-        const { data: verifyRows } = await supabase
-            .from('availability')
-            .select('date, booking_id, status')
-            .eq('room_id', roomId)
-            .in('date', dates);
-
-        const conflictDates = (verifyRows || []).filter(
-            row => row.booking_id !== booking.id && row.status !== 'available'
+        const conflictDates = await reserveAndVerify(
+            supabase, [roomId as string], dates, availabilityStatus, booking.id
         );
 
         if (conflictDates.length > 0) {
@@ -296,16 +591,7 @@ export async function POST(request: NextRequest) {
             // Roll back: delete our availability rows and cancel booking
             console.warn(`[Race Condition] Booking ${booking.id} lost race for dates: ${conflictDates.map(d => d.date).join(', ')}`);
 
-            await supabase
-                .from('availability')
-                .delete()
-                .eq('room_id', roomId)
-                .eq('booking_id', booking.id);
-
-            await supabase
-                .from('bookings')
-                .update({ status: 'cancelled', notes: 'Auto-cancelled: dates taken by another booking' })
-                .eq('id', booking.id);
+            await rollbackReservation(supabase, [roomId as string], booking.id);
 
             return NextResponse.json(
                 { error: 'Sorry, those dates were just booked by someone else. Please try different dates.' },
