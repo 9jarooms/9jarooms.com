@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
         type, images, thumbnail,
         is_featured, category,
         minimum_stay, discount_rules,
+        is_apartment, whole_apartment_price, two_bed_price,
         rooms
     } = body;
 
@@ -59,6 +60,9 @@ export async function POST(request: NextRequest) {
             category: category || 'standard',
             minimum_stay: minimum_stay ? Number(minimum_stay) : null,
             discount_rules: discount_rules || null,
+            is_apartment: Boolean(is_apartment),
+            whole_apartment_price: whole_apartment_price != null ? Number(whole_apartment_price) : null,
+            two_bed_price: two_bed_price != null ? Number(two_bed_price) : null,
         })
         .select()
         .single();
@@ -70,6 +74,7 @@ export async function POST(request: NextRequest) {
         const roomsToInsert = rooms.map((r: any) => ({
             property_id: property.id,
             name: r.name,
+            room_type: r.room_type || null,
             price_per_night: Number(r.price_per_night) || Number(price_per_night),
             max_guests: Number(r.max_guests) || Number(max_guests),
             description: r.description,
@@ -78,7 +83,7 @@ export async function POST(request: NextRequest) {
 
         const { error: roomError } = await supabase.from('rooms').insert(roomsToInsert);
         if (roomError) console.error('Error creating rooms:', roomError);
-    } else {
+    } else if (!is_apartment) {
         // Default Room
         await supabase.from('rooms').insert({
             property_id: property.id,
