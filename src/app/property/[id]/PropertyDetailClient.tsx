@@ -31,6 +31,7 @@ import { trackConversion, CONVERSION_CONTACT } from '@/lib/gtag';
 import PropertyGallery from '@/components/PropertyGallery';
 import PropertyCard from '@/components/PropertyCard';
 import type { Property, Room, Availability, DiscountRule } from '@/types/database';
+import { computeOptions, type ApartmentLite, type RoomLite } from '@/lib/booking/options';
 
 const amenityIconMap: Record<string, React.ReactNode> = {
     'WiFi': <Wifi size={20} strokeWidth={1.5} />,
@@ -69,14 +70,20 @@ interface Props {
     property: Property;
     rooms: Room[];
     availability: Availability[];
+    unavailable?: string[];
+    isApartment?: boolean;
+    wholeApartmentPrice?: number | null;
+    twoBedPrice?: number | null;
     contactPhone?: string;
     contactWhatsapp?: string;
     similarProperties?: any[];
 }
 
-export default function PropertyDetailClient({ property, rooms, availability, contactPhone, contactWhatsapp, similarProperties = [] }: Props) {
+export default function PropertyDetailClient({ property, rooms, availability, unavailable = [], isApartment = false, wholeApartmentPrice = null, twoBedPrice = null, contactPhone, contactWhatsapp, similarProperties = [] }: Props) {
     const router = useRouter();
-    const [selectedRoom, setSelectedRoom] = useState<Room | null>(rooms.length === 1 ? rooms[0] : null);
+    const [selectedRoom, setSelectedRoom] = useState<Room | null>(rooms.length === 1 && !isApartment ? rooms[0] : null);
+    const [selectedOptionKey, setSelectedOptionKey] = useState<string | null>(null);
+    const [bookingMode, setBookingMode] = useState<'single' | 'two_bed' | 'whole'>('single');
     const [checkIn, setCheckIn] = useState<Date | null>(null);
     const [checkOut, setCheckOut] = useState<Date | null>(null);
     const [guestName, setGuestName] = useState('');
@@ -154,6 +161,67 @@ export default function PropertyDetailClient({ property, rooms, availability, co
     const formatPrice = (price: number) =>
         new Intl.NumberFormat('en-NG').format(price);
 
+    // --- Apartment booking options (single / 2-bed / whole) ---
+    const unavailableSet = useMemo(() => new Set(unavailable), [unavailable]);
+
+    const stayDates = useMemo(() => {
+        if (!checkIn || !checkOut) return [] as string[];
+        const out: string[] = [];
+        const current = new Date(checkIn);
+        while (current < checkOut) {
+            out.push(format(current, 'yyyy-MM-dd'));
+            current.setDate(current.getDate() + 1);
+        }
+        return out;
+    }, [checkIn, checkOut]);
+
+    const apartmentOptions = useMemo(() => {
+        if (!isApartment || !checkIn || !checkOut || stayDates.length === 0) return [];
+        const apt: ApartmentLite = {
+            id: property.id,
+            is_apartment: true,
+            property_price: property.price_per_night,
+            whole_apartment_price: wholeApartmentPrice,
+            two_bed_price: twoBedPrice,
+            rooms: rooms.map<RoomLite>((r) => ({
+                id: r.id,
+                name: r.name,
+                room_type: (r as unknown as { room_type: string | null }).room_type ?? null,
+                price_per_night: r.price_per_night ?? property.price_per_night,
+            })),
+        };
+        return computeOptions(
+            apt,
+            unavailableSet,
+            format(checkIn, 'yyyy-MM-dd'),
+            format(checkOut, 'yyyy-MM-dd'),
+            stayDates,
+        );
+    }, [isApartment, checkIn, checkOut, stayDates, unavailableSet, property.id, property.price_per_night, wholeApartmentPrice, twoBedPrice, rooms]);
+
+    const selectedOption = apartmentOptions.find((o) => o.key === selectedOptionKey) || null;
+
+    // For the apartment calendar, only grey out a date when EVERY room is blocked
+    // (i.e. no option — single/2-bed/whole — could be booked). Per-option
+    // availability is surfaced in the chooser below.
+    const apartmentCalendarAvailability = useMemo<Availability[]>(() => {
+        if (!isApartment || rooms.length === 0) return [];
+        const byDate: Record<string, { total: number; blocked: number }> = {};
+        for (const a of availability) {
+            if (!byDate[a.date]) byDate[a.date] = { total: rooms.length, blocked: 0 };
+            if (a.status !== 'available') byDate[a.date].blocked += 1;
+        }
+        return Object.entries(byDate)
+            .filter(([, v]) => v.blocked >= rooms.length)
+            .map(([date]) => ({ id: date, room_id: property.id, date, status: 'booked' as const, booking_id: null }));
+    }, [isApartment, rooms.length, availability, property.id]);
+
+    const roomTypeLabel: Record<string, string> = {
+        big_balcony: 'Big balcony',
+        regular_balcony: 'Balcony',
+        no_balcony: 'No balcony',
+    };
+
     const roomAvailability = selectedRoom
         ? availability.filter((a) => a.room_id === selectedRoom.id)
         : [];
@@ -166,7 +234,8 @@ export default function PropertyDetailClient({ property, rooms, availability, co
     };
 
     const handleBooking = async () => {
-        if (!selectedRoom || !checkIn || !checkOut || !guestName || !guestEmail || !guestPhone) {
+        const bookingRoomId = isApartment ? selectedOption?.roomIds[0] : selectedRoom?.id;
+        if (!bookingRoomId || !checkIn || !checkOut || !guestName || !guestEmail || !guestPhone) {
             setError('Please fill in all required fields');
             return;
         }
@@ -181,8 +250,9 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    roomId: selectedRoom.id,
+                    roomId: bookingRoomId,
                     propertyId: property.id,
+                    mode: isApartment ? bookingMode : 'single',
                     guestName,
                     guestEmail,
                     guestPhone,
@@ -208,13 +278,16 @@ export default function PropertyDetailClient({ property, rooms, availability, co
         if (!checkIn || !checkOut) return;
         const whatsappNumber = (contactWhatsapp || '2349067779344').replace(/\D/g, '');
         const propertyUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://9jarooms.com'}/property/${property.id}`;
+        const enquiryTotal = isApartment && selectedOption ? selectedOption.price : totalAmount;
+        const optionLine = isApartment && selectedOption ? [`🏠 Option: ${selectedOption.label}`] : [];
         const message = [
             `Hi, I'd like to book *${property.name}*`,
+            ...optionLine,
             ``,
             `📅 Check-in: ${format(checkIn, 'EEE, MMM d yyyy')}`,
             `📅 Check-out: ${format(checkOut, 'EEE, MMM d yyyy')}`,
             `🌙 ${nights} night${nights !== 1 ? 's' : ''}`,
-            `💰 Total: ₦${totalAmount.toLocaleString()}`,
+            `💰 Total: ₦${enquiryTotal.toLocaleString()}`,
             ``,
             `🔗 ${propertyUrl}`,
             ``,
@@ -227,7 +300,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
             (window as any).fbq('track', 'InitiateCheckout', {
                 content_name: property.name,
                 content_type: 'shortlet',
-                value: totalAmount,
+                value: enquiryTotal,
                 currency: 'NGN',
                 num_nights: nights,
             });
@@ -453,8 +526,8 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                                 </div>
                             )}
 
-                            {/* Room Selection (if multiple rooms) */}
-                            {rooms.length > 1 && (
+                            {/* Room Selection (if multiple rooms) — non-apartment only */}
+                            {!isApartment && rooms.length > 1 && (
                                 <div className="mb-6">
                                     <label className="text-sm font-medium text-gray-700 mb-2 block">Select Room</label>
                                     <div className="space-y-2">
@@ -493,7 +566,67 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                             )}
 
                             {/* Calendar */}
-                            {selectedRoom ? (
+                            {isApartment ? (
+                                <>
+                                    <p className="text-sm text-gray-500 mb-3">Book a single room, or take the whole apartment.</p>
+                                    <BookingCalendar
+                                        availability={apartmentCalendarAvailability}
+                                        onDateSelect={handleDateSelect}
+                                        selectedCheckIn={checkIn}
+                                        selectedCheckOut={checkOut}
+                                        minimumStay={property.minimum_stay || 1}
+                                    />
+
+                                    {checkIn && checkOut && nights > 0 && (
+                                        <div className="mt-6">
+                                            <label className="text-sm font-medium text-gray-700 mb-2 block">Choose your option</label>
+                                            <div className="space-y-2">
+                                                {apartmentOptions.map((opt) => {
+                                                    const roomForOpt = opt.type === 'single'
+                                                        ? rooms.find((r) => r.id === opt.roomIds[0])
+                                                        : null;
+                                                    const balcony = roomForOpt
+                                                        ? roomTypeLabel[(roomForOpt as unknown as { room_type: string | null }).room_type ?? '']
+                                                        : null;
+                                                    const isSelected = selectedOptionKey === opt.key;
+                                                    return (
+                                                        <button
+                                                            key={opt.key}
+                                                            type="button"
+                                                            disabled={!opt.available}
+                                                            onClick={() => {
+                                                                setSelectedOptionKey(opt.key);
+                                                                setBookingMode(opt.type);
+                                                            }}
+                                                            className={`w-full text-left p-3 rounded-xl border transition-all ${!opt.available
+                                                                ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+                                                                : isSelected
+                                                                    ? 'border-green-400 bg-green-50'
+                                                                    : 'border-gray-100 hover:border-gray-200'
+                                                                }`}
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <div>
+                                                                    <p className="font-medium text-sm">{opt.label}</p>
+                                                                    {balcony && (
+                                                                        <p className="text-xs text-gray-500 mt-0.5">{balcony}</p>
+                                                                    )}
+                                                                    {!opt.available && (
+                                                                        <p className="text-xs text-gray-400 mt-0.5">Not available for these dates</p>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-sm font-semibold shrink-0">
+                                                                    ₦{formatPrice(opt.pricePerNight)}<span className="font-normal text-gray-400">/night</span>
+                                                                </span>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            ) : selectedRoom ? (
                                 <BookingCalendar
                                     availability={roomAvailability}
                                     onDateSelect={handleDateSelect}
@@ -532,8 +665,22 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                                 </div>
                             )}
 
-                            {/* Pricing Summary */}
-                            {checkIn && checkOut && nights > 0 && (
+                            {/* Pricing Summary — apartment (selected option) */}
+                            {isApartment && checkIn && checkOut && nights > 0 && selectedOption && (
+                                <div className="mt-6 pt-4 border-t border-gray-100 space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-500">{selectedOption.label} · ₦{formatPrice(selectedOption.pricePerNight)} × {nights} nights</span>
+                                        <span className="text-gray-900">₦{formatPrice(selectedOption.price)}</span>
+                                    </div>
+                                    <div className="flex justify-between font-semibold text-lg pt-2 border-t border-gray-100">
+                                        <span>Total</span>
+                                        <span className="text-green-600">₦{formatPrice(selectedOption.price)}</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Pricing Summary — single room / non-apartment */}
+                            {!isApartment && checkIn && checkOut && nights > 0 && (
                                 <div className="mt-6 pt-4 border-t border-gray-100 space-y-2">
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-500">₦{formatPrice(pricePerNight)} × {nights} nights</span>
@@ -561,7 +708,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                             )}
 
                             {/* WhatsApp Enquiry Button */}
-                            {checkIn && checkOut ? (
+                            {checkIn && checkOut && (!isApartment || selectedOption) ? (
                                 <button
                                     onClick={handleWhatsAppEnquiry}
                                     className="w-full mt-6 bg-[#25D366] hover:bg-[#1ebe5d] text-white py-3.5 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
@@ -574,7 +721,7 @@ export default function PropertyDetailClient({ property, rooms, availability, co
                                     disabled
                                     className="w-full mt-6 bg-gray-100 text-gray-400 py-3.5 rounded-xl font-semibold cursor-not-allowed"
                                 >
-                                    Select dates to enquire
+                                    {isApartment && checkIn && checkOut ? 'Choose an option to enquire' : 'Select dates to enquire'}
                                 </button>
                             )}
                             {checkIn && checkOut && (

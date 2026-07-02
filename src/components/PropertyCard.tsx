@@ -16,7 +16,14 @@ interface PropertyCardProps {
 export default function PropertyCard({ property, className = '', featured = false }: PropertyCardProps) {
     const displayImage = property.thumbnail || property.images?.[0];
 
+    const isApartment = !!(property as unknown as { is_apartment?: boolean }).is_apartment;
+
     const priceDisplay = (() => {
+        if (isApartment && property.rooms && property.rooms.length > 0) {
+            const prices = property.rooms.map(r => r.price_per_night).filter((p): p is number => typeof p === 'number');
+            const min = prices.length > 0 ? Math.min(...prices) : property.price_per_night;
+            return `From ₦${min.toLocaleString()}`;
+        }
         if (property.type === 'Shared Apartment' && property.rooms && property.rooms.length > 0) {
             const prices = property.rooms.map(r => r.price_per_night);
             const min = Math.min(...prices);
@@ -88,6 +95,9 @@ export default function PropertyCard({ property, className = '', featured = fals
                                 View →
                             </span>
                         </div>
+                        {isApartment && (
+                            <p className="mt-2 text-[11px] text-white/70">Single rooms or whole apartment.</p>
+                        )}
                     </div>
                 </div>
             </Link>
@@ -152,6 +162,12 @@ export default function PropertyCard({ property, className = '', featured = fals
                     {priceDisplay}
                     <span className="font-normal text-gray-400 text-xs ml-1">/ night</span>
                 </p>
+
+                {isApartment && (
+                    <span className="mt-1.5 inline-block bg-green-50 text-green-700 text-[10px] font-medium px-2 py-0.5 rounded-full">
+                        Single rooms or whole apartment.
+                    </span>
+                )}
             </div>
         </Link>
     );

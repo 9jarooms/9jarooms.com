@@ -89,6 +89,12 @@ export default async function PropertyPage({ params }: Props) {
         return true; // Keep active holds and 'booked' slots
     });
 
+    // Build the `${room_id}|${date}` set of unavailable cells for the apartment
+    // booking engine, applying the SAME expired-hold filter used above.
+    const unavailable: string[] = (availability as { room_id: string; date: string; status: string }[])
+        .filter((slot) => slot.status !== 'available')
+        .map((slot) => `${slot.room_id}|${slot.date}`);
+
     // Fetch similar properties (same area, exclude current)
     const { data: similarProperties } = await supabase
         .from('properties')
@@ -141,6 +147,10 @@ export default async function PropertyPage({ params }: Props) {
                     property={safeProperty as typeof property}
                     rooms={rooms || []}
                     availability={availability || []}
+                    unavailable={unavailable}
+                    isApartment={!!property.is_apartment}
+                    wholeApartmentPrice={property.whole_apartment_price ?? null}
+                    twoBedPrice={property.two_bed_price ?? null}
                     contactPhone={settings.contact_phone || '09067779344'}
                     contactWhatsapp={settings.contact_whatsapp || '09067779344'}
                     similarProperties={similarProperties || []}
