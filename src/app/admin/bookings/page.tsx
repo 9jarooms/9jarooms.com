@@ -1,36 +1,26 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import BookingsConsole from './BookingsConsole';
-import type { ConsoleBooking, ConsoleSource } from './types';
-import type { ConsoleProperty } from './LogBookingModal';
+import BookingsCRM from './BookingsCRM';
+import type { CrmBooking, CrmProperty, CrmSource } from './types';
 
 export const dynamic = 'force-dynamic';
 
+// Standalone MANUAL bookings CRM — deliberately NOT linked to the website's
+// `bookings`/`properties`. Staff log everything by hand here. Website sync
+// comes later.
 export default async function AdminBookingsPage() {
     const supabase = createAdminClient();
 
-    const [{ data: bookings }, { data: sources }, { data: properties }] = await Promise.all([
-        supabase
-            .from('bookings')
-            .select(
-                '*, property:properties(name, area, is_apartment), room:rooms(name), booking_rooms(room_id, is_locked)'
-            )
-            .order('check_in', { ascending: false }),
-        supabase
-            .from('crm_booking_sources')
-            .select('*')
-            .order('sort_order')
-            .order('label'),
-        supabase
-            .from('properties')
-            .select('id, name, is_apartment, whole_apartment_price, two_bed_price')
-            .order('name'),
+    const [{ data: bookings }, { data: properties }, { data: sources }] = await Promise.all([
+        supabase.from('crm_bookings').select('*').order('check_in', { ascending: false }),
+        supabase.from('crm_properties').select('*').order('sort_order').order('name'),
+        supabase.from('crm_booking_sources').select('*').order('sort_order').order('label'),
     ]);
 
     return (
-        <BookingsConsole
-            bookings={(bookings as ConsoleBooking[]) || []}
-            sources={(sources as ConsoleSource[]) || []}
-            properties={(properties as ConsoleProperty[]) || []}
+        <BookingsCRM
+            initialBookings={(bookings as CrmBooking[]) || []}
+            properties={(properties as CrmProperty[]) || []}
+            sources={(sources as CrmSource[]) || []}
         />
     );
 }
