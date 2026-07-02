@@ -156,13 +156,14 @@ export async function POST(request: NextRequest) {
                 if (owner) console.log("User verified as Owner:", owner.id);
                 if (ownerError && ownerError.code !== 'PGRST116') console.error("Owner check error:", ownerError);
 
-                // Check operator (call_operator role via user_roles)
+                // Check operator or admin (via user_roles)
                 const { data: operatorRole } = await supabase
                     .from('user_roles')
                     .select('role')
                     .eq('user_id', user.id)
-                    .eq('role', 'call_operator')
-                    .single();
+                    .in('role', ['call_operator', 'admin'])
+                    .limit(1)
+                    .maybeSingle();
 
                 const operator = operatorRole ?? null;
                 if (operator) console.log("User verified as Operator:", user.id);

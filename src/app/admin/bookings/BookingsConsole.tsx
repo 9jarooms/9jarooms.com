@@ -1,15 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     CalendarDays, DollarSign, TrendingUp, Search, BedDouble,
-    LogIn, LogOut, X,
+    LogIn, LogOut, X, Plus, CheckCircle, Ban,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
     ConsoleBooking, ConsoleSource, BookingMode, MODE_LABEL, REVENUE_STATUSES,
     naira, nights, todayISO,
 } from './types';
+import LogBookingModal, { type ConsoleProperty } from './LogBookingModal';
 
 // Sensible defaults for legacy booking_source values that predate the editable list.
 const LEGACY_SOURCE_CONFIG: Record<string, { label: string; color: string }> = {
@@ -25,12 +27,48 @@ const UNTAGGED = { key: '__untagged__', label: 'Untagged', color: '#9ca3af' };
 type SourceConfig = { key: string; label: string; color: string };
 
 export default function BookingsConsole({
-    bookings, sources,
+    bookings, sources, properties,
 }: {
     bookings: ConsoleBooking[];
     sources: ConsoleSource[];
+    properties: ConsoleProperty[];
 }) {
+    const router = useRouter();
     const today = todayISO();
+
+    const [logOpen, setLogOpen] = useState(false);
+    const [busyId, setBusyId] = useState<string | null>(null);
+
+    async function postAction(url: string, bookingId: string) {
+        setBusyId(bookingId);
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingId }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(data.error || 'Request failed');
+                return;
+            }
+            router.refresh();
+        } catch {
+            alert('Request failed');
+        } finally {
+            setBusyId(null);
+        }
+    }
+
+    const markPaid = (b: ConsoleBooking) => {
+        if (!confirm(`Mark ${b.guest_name}'s booking (${b.check_in} → ${b.check_out}) as paid?`)) return;
+        postAction('/api/admin/bookings/confirm', b.id);
+    };
+
+    const cancelBooking = (b: ConsoleBooking) => {
+        if (!confirm(`Cancel ${b.guest_name}'s booking (${b.check_in} → ${b.check_out})? This frees its rooms for new bookings.`)) return;
+        postAction('/api/admin/bookings/cancel', b.id);
+    };
 
     // Build a source-key → config map from the loaded list + legacy defaults.
     // Real bookings store the raw source string in `booking_source`; we normalise
@@ -154,6 +192,10 @@ export default function BookingsConsole({
                     <h1 className="text-2xl font-bold text-gray-900">Bookings</h1>
                     <p className="text-gray-500 mt-1">{bookings.length} bookings</p>
                 </div>
+                <button onClick={() => setLogOpen(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700">
+                    <Plus size={16} /> Log Booking
+                </button>
             </div>
 
             {/* Summary cards */}
@@ -258,6 +300,7 @@ export default function BookingsConsole({
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Amount</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Source</th>
                                 <th className="px-5 py-3 font-medium whitespace-nowrap">Status</th>
+                                <th className="px-5 py-3 font-medium whitespace-nowrap text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -295,11 +338,25 @@ export default function BookingsConsole({
                                         <td className="px-5 py-3 whitespace-nowrap">
                                             <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[b.status] || 'bg-gray-100 text-gray-500'}`}>{b.status}</span>
                                         </td>
+                                        <td className="px-5 py-3 whitespace-nowrap">
+                                            <div className="flex items-center justify-end gap-1">
+                                                {(b.status === 'pending' || b.status === 'confirmed') && (
+                                                    <IconBtn title="Mark paid" onClick={() => markPaid(b)} disabled={busyId === b.id}>
+                                                        <CheckCircle size={15} />
+                                                    </IconBtn>
+                                                )}
+                                                {b.status !== 'cancelled' && (
+                                                    <IconBtn title="Cancel booking" onClick={() => cancelBooking(b)} disabled={busyId === b.id} danger>
+                                                        <Ban size={15} />
+                                                    </IconBtn>
+                                                )}
+                                            </div>
+                                        </td>
                                     </tr>
                                 );
                             })}
                             {filtered.length === 0 && (
-                                <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400">
+                                <tr><td colSpan={8} className="px-5 py-10 text-center text-gray-400">
                                     {bookings.length === 0 ? 'No bookings yet.' : 'No bookings match your filters.'}
                                 </td></tr>
                             )}
@@ -307,7 +364,20 @@ export default function BookingsConsole({
                     </table>
                 </div>
             </div>
+
+            {logOpen && (
+                <LogBookingModal properties={properties} sources={sources} onClose={() => setLogOpen(false)} />
+            )}
         </div>
+    );
+}
+
+function IconBtn({ children, title, onClick, disabled, danger }: { children: React.ReactNode; title: string; onClick: () => void; disabled?: boolean; danger?: boolean }) {
+    return (
+        <button title={title} onClick={onClick} disabled={disabled}
+            className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${danger ? 'text-gray-400 hover:text-red-600 hover:bg-red-50' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>
+            {children}
+        </button>
     );
 }
 
