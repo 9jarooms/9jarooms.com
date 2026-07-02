@@ -255,8 +255,8 @@ export default function BookingsCRM({
                 )}
             </div>
 
-            {/* Table */}
-            <div className="bg-white rounded-xl border border-gray-100">
+            {/* Table (desktop / tablet) */}
+            <div className="hidden md:block bg-white rounded-xl border border-gray-100">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[920px]">
                         <thead>
@@ -323,6 +323,64 @@ export default function BookingsCRM({
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            {/* Cards (mobile) */}
+            <div className="md:hidden space-y-3">
+                {filtered.map((b) => {
+                    const prop = b.property_id ? propMap.get(b.property_id) : null;
+                    const src = b.source_id ? srcMap.get(b.source_id) : null;
+                    return (
+                        <div key={b.id} className="bg-white rounded-xl border border-gray-100 p-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                    <p className="font-semibold text-gray-900 truncate">{b.guest_name}</p>
+                                    {b.guest_phone && <p className="text-xs text-gray-400">{b.guest_phone}</p>}
+                                    {b.guest_email && <p className="text-xs text-gray-400 truncate">{b.guest_email}</p>}
+                                </div>
+                                <span className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[b.status]}`}>{b.status}</span>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-y-3 gap-x-3">
+                                <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-gray-400">Property</p>
+                                    <p className="text-sm text-gray-700">{prop?.name || '—'}</p>
+                                    <p className="text-xs text-gray-400">{roomLabel(b.rooms_booked)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-gray-400">Amount</p>
+                                    <p className="text-sm font-semibold text-gray-900">{naira(Number(b.amount_paid))}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-gray-400">Stay</p>
+                                    <p className="text-xs text-gray-600">{b.check_in} → {b.check_out}<span className="text-gray-400"> ({nights(b.check_in, b.check_out)}n)</span></p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-gray-400">Source</p>
+                                    {src ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium" style={{ backgroundColor: (src.color || '#9ca3af') + '1a', color: src.color || '#6b7280' }}>
+                                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: src.color || '#9ca3af' }} />
+                                            {src.label}
+                                        </span>
+                                    ) : <span className="text-gray-400 text-xs">Untagged</span>}
+                                </div>
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-end gap-1">
+                                <IconBtn title="Edit" onClick={() => { setEditing(b); setFormOpen(true); }} disabled={busyId === b.id}><Pencil size={16} /></IconBtn>
+                                {b.status === 'confirmed' ? (
+                                    <IconBtn title="Cancel" onClick={() => setStatus(b, 'cancelled')} disabled={busyId === b.id}><Ban size={16} /></IconBtn>
+                                ) : (
+                                    <IconBtn title="Restore" onClick={() => setStatus(b, 'confirmed')} disabled={busyId === b.id}><RotateCcw size={16} /></IconBtn>
+                                )}
+                                <IconBtn title="Delete" onClick={() => remove(b)} disabled={busyId === b.id} danger><Trash2 size={16} /></IconBtn>
+                            </div>
+                        </div>
+                    );
+                })}
+                {filtered.length === 0 && (
+                    <div className="bg-white rounded-xl border border-gray-100 px-5 py-10 text-center text-gray-400">
+                        {initialBookings.length === 0 ? 'No bookings yet — tap “Add Booking” to start.' : 'No bookings match your filters.'}
+                    </div>
+                )}
             </div>
 
             {formOpen && (
