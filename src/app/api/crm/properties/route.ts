@@ -10,7 +10,7 @@ export async function GET() {
 
     const { data: properties, error } = await supabase
         .from('properties')
-        .select('id, name, area, city, price_per_night, is_active, is_apartment, max_guests, thumbnail, images, created_at')
+        .select('id, name, area, city, address, description, price_per_night, is_active, is_apartment, max_guests, thumbnail, images, created_at')
         .eq('is_deleted', false)
         .order('created_at', { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -150,6 +150,10 @@ const patchSchema = z.object({
     propertyId: z.string().uuid(),
     isActive: z.boolean().optional(),
     name: z.string().trim().min(3).max(120).optional(),
+    area: z.string().trim().min(2).max(80).optional(),
+    city: z.string().trim().min(2).max(80).optional(),
+    address: z.string().trim().max(200).optional().nullable(),
+    maxGuests: z.number().int().min(1).max(30).optional(),
     pricePerNight: z.number().positive().optional(),
     description: z.string().max(3000).optional().nullable(),
     images: z.array(z.string().url()).max(40).optional(),
@@ -172,8 +176,46 @@ export async function PATCH(request: NextRequest) {
     if (body.description !== undefined) update.description = body.description;
     if (body.images !== undefined) update.images = body.images;
     if (body.thumbnail !== undefined) update.thumbnail = body.thumbnail;
+    if (body.area !== undefined) update.area = body.area;
+    if (body.city !== undefined) update.city = body.city;
+    if (body.address !== undefined) update.address = body.address;
+    if (body.maxGuests !== undefined) update.max_guests = body.maxGuests;
 
     const { error } = await supabase.from('properties').update(update).eq('id', body.propertyId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true });
+}
+
+// Soft-delete a property. Blocked while live future bookings exist —
+// cancel or move them first so no guest is silently stranded.
+export async function DELETE(request: NextRequest) {
+    const auth = await requireCrm();
+    if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    const supabase = auth.adminClient!;
+
+    const { searchParams } = new URL(request.url);
+    const propertyId = searchParams.get('propertyId');
+    if (!propertyId) return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: upcoming } = await supabase
+        .from('bookings')
+        .select('id, guest_name, check_in, check_out')
+        .eq('property_id', propertyId)
+        .in('status', ['pending', 'confirmed', 'paid', 'checked_in'])
+        .gte('check_out', today);
+
+    if (upcoming && upcoming.length > 0) {
+        return NextResponse.json({
+            error: `This property has ${upcoming.length} active/upcoming booking${upcoming.length === 1 ? '' : 's'} (e.g. ${upcoming[0].guest_name}, ${upcoming[0].check_in}). Cancel or complete them first.`,
+        }, { status: 409 });
+    }
+
+    const { error } = await supabase
+        .from('properties')
+        .update({ is_active: false, is_deleted: true })
+        .eq('id', propertyId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
     return NextResponse.json({ success: true });
 }

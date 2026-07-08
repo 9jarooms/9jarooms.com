@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, X, Trash2, Images } from 'lucide-react';
+import { Plus, X, Trash2, Images, Pencil } from 'lucide-react';
 import MediaUploader from '@/components/MediaUploader';
 import PhotosModal from './PhotosModal';
+import EditPropertyModal from './EditPropertyModal';
 
 function naira(n: number) {
     return '₦' + Number(n || 0).toLocaleString('en-NG');
@@ -13,7 +14,9 @@ export default function PropertiesClient() {
     const [rows, setRows] = useState<any[]>([]);
     const [creating, setCreating] = useState(false);
     const [photosFor, setPhotosFor] = useState<any | null>(null);
+    const [editFor, setEditFor] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         const res = await fetch('/api/crm/properties');
@@ -31,6 +34,17 @@ export default function PropertiesClient() {
         load();
     };
 
+    const removeProperty = async (p: any) => {
+        if (!confirm(`Delete "${p.name}"? It disappears from the site and the CRM. Past bookings are kept.`)) return;
+        setError(null);
+        const res = await fetch(`/api/crm/properties?propertyId=${p.id}`, { method: 'DELETE' });
+        if (!res.ok) {
+            setError((await res.json()).error);
+            return;
+        }
+        load();
+    };
+
     return (
         <div className="p-6">
             <div className="flex items-center gap-3 mb-4">
@@ -40,6 +54,10 @@ export default function PropertiesClient() {
                     <Plus size={15} /> New property
                 </button>
             </div>
+
+            {error && (
+                <p className="mb-3 text-xs font-semibold text-[#c75146] bg-red-50 rounded-lg px-3.5 py-2.5">{error}</p>
+            )}
 
             <div className="grid gap-3">
                 {rows.map(p => (
@@ -63,6 +81,10 @@ export default function PropertiesClient() {
                             <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${p.is_active ? 'bg-green-100 text-green-800' : 'bg-stone-100 text-stone-500'}`}>
                                 {p.is_active ? 'Live' : 'Hidden'}
                             </span>
+                            <button onClick={() => setEditFor(p)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 text-xs font-semibold hover:bg-stone-50">
+                                <Pencil size={13} /> Edit
+                            </button>
                             <button onClick={() => setPhotosFor(p)}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 text-xs font-semibold hover:bg-stone-50">
                                 <Images size={13} /> Photos
@@ -70,6 +92,11 @@ export default function PropertiesClient() {
                             <button onClick={() => toggleActive(p)}
                                 className="px-3 py-1.5 rounded-md border border-stone-300 text-xs font-semibold hover:bg-stone-50">
                                 {p.is_active ? 'Hide from site' : 'Publish'}
+                            </button>
+                            <button onClick={() => removeProperty(p)}
+                                title="Delete property"
+                                className="p-1.5 rounded-md border border-stone-200 text-stone-400 hover:text-[#c75146] hover:border-[#c75146]/40">
+                                <Trash2 size={14} />
                             </button>
                         </div>
                     </div>
@@ -85,6 +112,13 @@ export default function PropertiesClient() {
                     property={photosFor}
                     onClose={() => setPhotosFor(null)}
                     onSaved={() => { setPhotosFor(null); load(); }}
+                />
+            )}
+            {editFor && (
+                <EditPropertyModal
+                    property={editFor}
+                    onClose={() => setEditFor(null)}
+                    onSaved={() => { setEditFor(null); load(); }}
                 />
             )}
         </div>
