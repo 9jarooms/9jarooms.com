@@ -10,6 +10,11 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   images: {
+    // Serve images straight from Supabase Storage instead of Vercel's image
+    // optimizer. The optimizer hit its monthly quota (402 Payment Required),
+    // which broke every not-yet-cached thumbnail. Uploads are already
+    // compressed (<=1MB, 1920px) via MediaUploader, so raw delivery is fine.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
