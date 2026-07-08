@@ -10,7 +10,7 @@ export default async function CrmCalendarPage({ searchParams }: {
     const supabase = createAdminClient();
     const { data: properties } = await supabase
         .from('properties')
-        .select('id, name, area')
+        .select('id, name, area, price_per_night')
         .eq('is_deleted', false)
         .eq('is_active', true)
         .order('name');

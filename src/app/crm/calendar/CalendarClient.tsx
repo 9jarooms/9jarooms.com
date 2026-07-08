@@ -22,7 +22,33 @@ function barColor(b: any): string {
     return '#c75146'; // confirmed, nothing paid — money owed
 }
 
-interface Property { id: string; name: string; area: string | null }
+interface Property { id: string; name: string; area: string | null; price_per_night?: number | null }
+
+// Many listings share a generic name ("Studio in Wuye" x2). Build a label
+// per property that is unique: base is "Name — Area"; when that collides,
+// append the price if it separates them, otherwise a #index. Also expose
+// an area→properties grouping so the dropdown can use <optgroup>.
+function buildSelectorLabels(properties: Property[]) {
+    const byBase = new Map<string, Property[]>();
+    for (const p of properties) {
+        const area = (p.area || '').trim();
+        const base = area ? `${p.name} — ${area}` : p.name;
+        if (!byBase.has(base)) byBase.set(base, []);
+        byBase.get(base)!.push(p);
+    }
+    const labelById: Record<string, string> = {};
+    for (const [base, group] of byBase) {
+        if (group.length === 1) { labelById[group[0].id] = base; continue; }
+        const prices = group.map(g => g.price_per_night ?? null);
+        const pricesUnique = new Set(prices).size === group.length && prices.every(v => v != null);
+        group.forEach((g, i) => {
+            labelById[g.id] = pricesUnique
+                ? `${base} · ₦${Number(g.price_per_night).toLocaleString('en-NG')}`
+                : `${base} · #${i + 1}`;
+        });
+    }
+    return labelById;
+}
 
 export default function CalendarClient({ properties, initialPropertyId }: {
     properties: Property[];
@@ -37,6 +63,25 @@ export default function CalendarClient({ properties, initialPropertyId }: {
     const [data, setData] = useState<any>(null);
     const [openBooking, setOpenBooking] = useState<string | null>(null);
     const [newBooking, setNewBooking] = useState<{ unitId: string; date: string } | null>(null);
+
+    const labelById = useMemo(() => buildSelectorLabels(properties), [properties]);
+
+    // group properties by area for the dropdown, areas alphabetical,
+    // labels alphabetical within each area
+    const groupedByArea = useMemo(() => {
+        const groups = new Map<string, Property[]>();
+        for (const p of properties) {
+            const area = (p.area || '').trim() || 'Other';
+            if (!groups.has(area)) groups.set(area, []);
+            groups.get(area)!.push(p);
+        }
+        return [...groups.entries()]
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([area, list]) => [
+                area,
+                list.sort((a, b) => (labelById[a.id] || '').localeCompare(labelById[b.id] || '')),
+            ] as [string, Property[]]);
+    }, [properties, labelById]);
 
     const dates = useMemo(
         () => Array.from({ length: DAYS }, (_, i) => iso(addDays(start, i))),
@@ -98,20 +143,26 @@ export default function CalendarClient({ properties, initialPropertyId }: {
                     <button
                         title="Previous property"
                         onClick={() => {
-                            const i = properties.findIndex(p => p.id === propertyId);
-                            setPropertyId(properties[(i - 1 + properties.length) % properties.length].id);
+                            const order = groupedByArea.flatMap(([, list]) => list);
+                            const i = order.findIndex(p => p.id === propertyId);
+                            setPropertyId(order[(i - 1 + order.length) % order.length].id);
                         }}
                         className="px-2.5 py-2 hover:bg-stone-50 text-stone-500 border-r border-stone-100"
                     ><ChevronLeft size={15} /></button>
                     <select value={propertyId} onChange={e => setPropertyId(e.target.value)}
-                        className="px-3 py-2 text-[13.5px] font-semibold bg-white outline-none max-w-64">
-                        {properties.map(p => <option key={p.id} value={p.id}>{p.name}{p.area ? ` — ${p.area}` : ''}</option>)}
+                        className="px-3 py-2 text-[13.5px] font-semibold bg-white outline-none max-w-72">
+                        {groupedByArea.map(([area, list]) => (
+                            <optgroup key={area} label={area}>
+                                {list.map(p => <option key={p.id} value={p.id}>{labelById[p.id]}</option>)}
+                            </optgroup>
+                        ))}
                     </select>
                     <button
                         title="Next property"
                         onClick={() => {
-                            const i = properties.findIndex(p => p.id === propertyId);
-                            setPropertyId(properties[(i + 1) % properties.length].id);
+                            const order = groupedByArea.flatMap(([, list]) => list);
+                            const i = order.findIndex(p => p.id === propertyId);
+                            setPropertyId(order[(i + 1) % order.length].id);
                         }}
                         className="px-2.5 py-2 hover:bg-stone-50 text-stone-500 border-l border-stone-100"
                     ><ChevronRight size={15} /></button>
