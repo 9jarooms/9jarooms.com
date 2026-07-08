@@ -31,7 +31,7 @@ export default function PropertiesClient() {
     return (
         <div className="p-6">
             <div className="flex items-center gap-3 mb-4">
-                <h1 className="text-xl font-bold text-stone-900">Properties</h1>
+                <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900">Properties</h1>
                 <button onClick={() => setCreating(true)}
                     className="ml-auto flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-[#008737] text-white text-sm font-semibold">
                     <Plus size={15} /> New property
@@ -40,7 +40,7 @@ export default function PropertiesClient() {
 
             <div className="grid gap-3">
                 {rows.map(p => (
-                    <div key={p.id} className="bg-white rounded-xl border border-stone-200 px-5 py-4 flex flex-wrap items-center gap-4">
+                    <div key={p.id} className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] px-5 py-4 flex flex-wrap items-center gap-4">
                         <div className="min-w-0 flex-1">
                             <p className="font-semibold text-stone-800">{p.name}</p>
                             <p className="text-xs text-stone-400 mt-0.5">{p.area}{p.city ? `, ${p.city}` : ''} · from {naira(p.price_per_night)}/night</p>

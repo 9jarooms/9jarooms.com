@@ -1,16 +1,10 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { Manrope } from 'next/font/google';
 import { createServerClient, createAdminClient } from '@/lib/supabase/server';
-import { CalendarDays, List, Users, Building2, BarChart3, Settings } from 'lucide-react';
+import SidebarNav from './components/SidebarNav';
 
-const NAV = [
-    { href: '/crm/calendar', label: 'Calendar', icon: CalendarDays },
-    { href: '/crm/reservations', label: 'Reservations', icon: List },
-    { href: '/crm/guests', label: 'Guests', icon: Users },
-    { href: '/crm/properties', label: 'Properties', icon: Building2 },
-    { href: '/crm/reports', label: 'Reports', icon: BarChart3 },
-    { href: '/crm/settings', label: 'Settings', icon: Settings },
-];
+const manrope = Manrope({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800'] });
 
 export default async function CrmLayout({ children }: { children: React.ReactNode }) {
     const sessionClient = await createServerClient();
@@ -27,28 +21,19 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
     if (!role) redirect('/login');
 
     return (
-        <div className="min-h-screen bg-stone-100 flex">
-            <aside className="w-56 shrink-0 bg-[#02572a] text-white flex flex-col">
-                <div className="px-5 py-5 border-b border-white/10">
-                    <Link href="/crm/calendar" className="text-lg font-bold tracking-tight">
-                        9ja<span className="text-[#7ed957]">Rooms</span> CRM
+        <div className={`${manrope.className} min-h-screen bg-[#f4f5f1] flex text-stone-800 antialiased [font-feature-settings:'ss01'] [&_input]:font-[inherit] [&_select]:font-[inherit] [&_button]:font-[inherit] [&_textarea]:font-[inherit]`}>
+            <aside className="w-60 shrink-0 bg-gradient-to-b from-[#03471f] to-[#02351a] text-white flex flex-col sticky top-0 h-screen">
+                <div className="px-6 pt-6 pb-5 border-b border-white/[0.08]">
+                    <Link href="/crm/overview" className="text-[19px] font-extrabold tracking-tight">
+                        9ja<span className="text-[#7ed957]">Rooms</span>
                     </Link>
-                    <p className="text-xs text-white/60 mt-1 capitalize">{role.role.replace('_', ' ')}</p>
+                    <p className="text-[10.5px] font-semibold tracking-[0.18em] uppercase text-white/40 mt-1.5">
+                        {role.role === 'admin' ? 'Admin' : 'Customer Rep'} Console
+                    </p>
                 </div>
-                <nav className="flex-1 py-4">
-                    {NAV.map(item => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className="flex items-center gap-3 px-5 py-2.5 text-sm text-white/85 hover:bg-white/10 hover:text-white transition-colors"
-                        >
-                            <item.icon size={17} />
-                            {item.label}
-                        </Link>
-                    ))}
-                </nav>
-                <div className="px-5 py-4 border-t border-white/10 text-xs text-white/50">
-                    {user.email}
+                <SidebarNav />
+                <div className="px-6 py-4 border-t border-white/[0.08]">
+                    <p className="text-[11px] text-white/45 truncate">{user.email}</p>
                 </div>
             </aside>
             <main className="flex-1 min-w-0">{children}</main>

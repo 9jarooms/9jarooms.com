@@ -39,9 +39,9 @@ export default function SettingsClient() {
 
     return (
         <div className="p-6 max-w-3xl">
-            <h1 className="text-xl font-bold text-stone-900 mb-4">Settings</h1>
+            <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900 mb-4">Settings</h1>
 
-            <div className="bg-white rounded-xl border border-stone-200 mb-5">
+            <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] mb-5">
                 <h2 className="px-5 py-3.5 text-sm font-bold text-stone-700 border-b border-stone-200">Team access</h2>
                 <div className="px-5 py-4">
                     <ul className="divide-y divide-stone-100 mb-4">
@@ -90,7 +90,7 @@ export default function SettingsClient() {
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-stone-200">
+            <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
                 <h2 className="px-5 py-3.5 text-sm font-bold text-stone-700 border-b border-stone-200">How roles work now</h2>
                 <div className="px-5 py-4 text-sm text-stone-600 space-y-2">
                     <p><b className="text-stone-800">Customer reps</b> — full control: create/edit/cancel bookings, block dates, record payments, manage properties and listings.</p>

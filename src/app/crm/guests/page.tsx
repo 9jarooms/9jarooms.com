@@ -55,11 +55,11 @@ export default async function GuestsPage() {
     return (
         <div className="p-6">
             <div className="flex items-baseline gap-3 mb-4">
-                <h1 className="text-xl font-bold text-stone-900">Guests</h1>
+                <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900">Guests</h1>
                 <p className="text-sm text-stone-400">{rows.length} guests · built automatically from bookings</p>
             </div>
 
-            <div className="bg-white rounded-xl border border-stone-200 overflow-x-auto">
+            <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="text-left text-xs text-stone-500 border-b border-stone-200">

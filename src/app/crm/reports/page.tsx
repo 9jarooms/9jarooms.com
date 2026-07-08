@@ -75,11 +75,11 @@ export default async function ReportsPage() {
 
     return (
         <div className="p-6">
-            <h1 className="text-xl font-bold text-stone-900 mb-4">Reports</h1>
+            <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900 mb-4">Reports</h1>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                 {cards.map(c => (
-                    <div key={c.label} className="bg-white rounded-xl border border-stone-200 px-4 py-3.5">
+                    <div key={c.label} className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] px-4 py-3.5">
                         <p className="text-[11px] uppercase tracking-wide text-stone-400">{c.label}</p>
                         <p className={`text-xl font-bold mt-1 ${c.alert ? 'text-[#c75146]' : 'text-stone-900'}`}>{c.value}</p>
                     </div>
@@ -87,7 +87,7 @@ export default async function ReportsPage() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-white rounded-xl border border-stone-200">
+                <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
                     <h2 className="px-4 py-3 text-sm font-bold text-stone-700 border-b border-stone-200">Revenue by source (this month)</h2>
                     <table className="w-full text-sm">
                         <tbody className="divide-y divide-stone-100">
@@ -102,7 +102,7 @@ export default async function ReportsPage() {
                     </table>
                 </div>
 
-                <div className="bg-white rounded-xl border border-stone-200">
+                <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
                     <h2 className="px-4 py-3 text-sm font-bold text-stone-700 border-b border-stone-200">Revenue by property (this month)</h2>
                     <table className="w-full text-sm">
                         <tbody className="divide-y divide-stone-100">

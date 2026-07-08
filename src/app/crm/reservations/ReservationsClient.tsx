@@ -50,7 +50,7 @@ export default function ReservationsClient() {
     return (
         <div className="p-6">
             <div className="flex flex-wrap items-center gap-3 mb-4">
-                <h1 className="text-xl font-bold text-stone-900 mr-2">Reservations</h1>
+                <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900 mr-2">Reservations</h1>
                 <div className="relative">
                     <Search size={14} className="absolute left-2.5 top-2.5 text-stone-400" />
                     <input
@@ -65,7 +65,7 @@ export default function ReservationsClient() {
                 </select>
             </div>
 
-            <div className="bg-white rounded-xl border border-stone-200 overflow-x-auto">
+            <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="text-left text-xs text-stone-500 border-b border-stone-200">

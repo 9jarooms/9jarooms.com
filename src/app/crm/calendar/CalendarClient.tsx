@@ -24,8 +24,15 @@ function barColor(b: any): string {
 
 interface Property { id: string; name: string; area: string | null }
 
-export default function CalendarClient({ properties }: { properties: Property[] }) {
-    const [propertyId, setPropertyId] = useState(properties[0]?.id || '');
+export default function CalendarClient({ properties, initialPropertyId }: {
+    properties: Property[];
+    initialPropertyId?: string;
+}) {
+    const [propertyId, setPropertyId] = useState(
+        (initialPropertyId && properties.some(p => p.id === initialPropertyId))
+            ? initialPropertyId
+            : (properties[0]?.id || '')
+    );
     const [start, setStart] = useState(() => addDays(new Date(), -2));
     const [data, setData] = useState<any>(null);
     const [openBooking, setOpenBooking] = useState<string | null>(null);
@@ -85,28 +92,46 @@ export default function CalendarClient({ properties }: { properties: Property[] 
     return (
         <div className="p-6">
             {/* toolbar */}
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-                <h1 className="text-xl font-bold text-stone-900 mr-2">Calendar</h1>
-                <select value={propertyId} onChange={e => setPropertyId(e.target.value)}
-                    className="border border-stone-300 rounded-md px-3 py-1.5 text-sm bg-white">
-                    {properties.map(p => <option key={p.id} value={p.id}>{p.name}{p.area ? ` — ${p.area}` : ''}</option>)}
-                </select>
-                <div className="flex items-center gap-1">
-                    <button onClick={() => setStart(addDays(start, -7))} className="p-1.5 rounded-md border border-stone-300 bg-white hover:bg-stone-50"><ChevronLeft size={16} /></button>
-                    <button onClick={() => setStart(addDays(new Date(), -2))} className="px-3 py-1.5 rounded-md border border-stone-300 bg-white text-sm hover:bg-stone-50">Today</button>
-                    <button onClick={() => setStart(addDays(start, 7))} className="p-1.5 rounded-md border border-stone-300 bg-white hover:bg-stone-50"><ChevronRight size={16} /></button>
+            <div className="flex flex-wrap items-center gap-3 mb-5">
+                <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900 mr-2">Calendar</h1>
+                <div className="flex items-center rounded-xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+                    <button
+                        title="Previous property"
+                        onClick={() => {
+                            const i = properties.findIndex(p => p.id === propertyId);
+                            setPropertyId(properties[(i - 1 + properties.length) % properties.length].id);
+                        }}
+                        className="px-2.5 py-2 hover:bg-stone-50 text-stone-500 border-r border-stone-100"
+                    ><ChevronLeft size={15} /></button>
+                    <select value={propertyId} onChange={e => setPropertyId(e.target.value)}
+                        className="px-3 py-2 text-[13.5px] font-semibold bg-white outline-none max-w-64">
+                        {properties.map(p => <option key={p.id} value={p.id}>{p.name}{p.area ? ` — ${p.area}` : ''}</option>)}
+                    </select>
+                    <button
+                        title="Next property"
+                        onClick={() => {
+                            const i = properties.findIndex(p => p.id === propertyId);
+                            setPropertyId(properties[(i + 1) % properties.length].id);
+                        }}
+                        className="px-2.5 py-2 hover:bg-stone-50 text-stone-500 border-l border-stone-100"
+                    ><ChevronRight size={15} /></button>
                 </div>
-                <div className="ml-auto flex items-center gap-4 text-xs text-stone-500">
-                    <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1" style={{ background: '#008737' }} />Paid</span>
-                    <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1" style={{ background: '#e8a13c' }} />Deposit</span>
-                    <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1" style={{ background: '#c75146' }} />Owing</span>
-                    <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1" style={{ background: '#8d7ab5' }} />Pending</span>
-                    <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1" style={{ background: '#02572a' }} />Checked in</span>
+                <div className="flex items-center rounded-xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+                    <button onClick={() => setStart(addDays(start, -7))} className="px-2.5 py-2 hover:bg-stone-50 text-stone-500"><ChevronLeft size={15} /></button>
+                    <button onClick={() => setStart(addDays(new Date(), -2))} className="px-3.5 py-2 text-[13px] font-bold text-[#02572a] hover:bg-stone-50 border-x border-stone-100">Today</button>
+                    <button onClick={() => setStart(addDays(start, 7))} className="px-2.5 py-2 hover:bg-stone-50 text-stone-500"><ChevronRight size={15} /></button>
+                </div>
+                <div className="ml-auto flex items-center gap-3.5 text-[11.5px] font-semibold text-stone-500">
+                    <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-[-1px]" style={{ background: '#008737' }} />Paid</span>
+                    <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-[-1px]" style={{ background: '#e8a13c' }} />Deposit</span>
+                    <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-[-1px]" style={{ background: '#c75146' }} />Owing</span>
+                    <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-[-1px]" style={{ background: '#8d7ab5' }} />Pending</span>
+                    <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-[-1px]" style={{ background: '#02572a' }} />Checked in</span>
                 </div>
             </div>
 
             {/* grid */}
-            <div className="bg-white rounded-xl border border-stone-200 overflow-x-auto">
+            <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-x-auto">
                 <div style={{ minWidth: gridWidth + 160 }}>
                     {/* header dates */}
                     <div className="flex sticky top-0 bg-white z-10 border-b border-stone-200">

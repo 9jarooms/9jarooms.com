@@ -3,7 +3,10 @@ import CalendarClient from './CalendarClient';
 
 export const dynamic = 'force-dynamic';
 
-export default async function CrmCalendarPage() {
+export default async function CrmCalendarPage({ searchParams }: {
+    searchParams: Promise<{ propertyId?: string }>;
+}) {
+    const { propertyId } = await searchParams;
     const supabase = createAdminClient();
     const { data: properties } = await supabase
         .from('properties')
@@ -12,5 +15,5 @@ export default async function CrmCalendarPage() {
         .eq('is_active', true)
         .order('name');
 
-    return <CalendarClient properties={properties || []} />;
+    return <CalendarClient properties={properties || []} initialPropertyId={propertyId} />;
 }
