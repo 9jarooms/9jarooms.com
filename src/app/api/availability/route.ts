@@ -2,10 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { addDays, format } from 'date-fns';
 import { createServerClient, createAdminClient } from '@/lib/supabase/server';
 import type { RoomLite } from '@/lib/booking/options';
+import { getRoomTypeAvailability } from '@/lib/booking/room-types';
 
 // Get availability for a room
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
+
+    // Room-type mode: pooled availability for properties that sell room
+    // types backed by multiple physical units (e.g. Kaura). A date is
+    // available for a type while at least one unit is free.
+    if (searchParams.get('propertyId') && searchParams.get('mode') === 'roomTypes') {
+        return getRoomTypesAvailability(searchParams);
+    }
 
     // Apartment-availability mode: when propertyId is present, return the bookable
     // map (active rooms + unavailable cells) for the option chooser.
@@ -42,6 +50,47 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ availability: data || [] });
     } catch (error) {
         console.error('Availability fetch error:', error);
+        return NextResponse.json({ error: 'Failed to fetch availability' }, { status: 500 });
+    }
+}
+
+// Room-type mode: returns active room types for the property with, per type,
+// the dates in [from, to) that are fully booked (zero free units). The public
+// calendar blocks only those dates; unit assignment happens at booking time.
+async function getRoomTypesAvailability(searchParams: URLSearchParams) {
+    try {
+        const propertyId = searchParams.get('propertyId')!;
+        const from = searchParams.get('from');
+        const to = searchParams.get('to');
+
+        if (!from || !to) {
+            return NextResponse.json({ error: 'from and to are required' }, { status: 400 });
+        }
+
+        const dates: string[] = [];
+        let current = new Date(from);
+        const end = new Date(to);
+        while (current < end) {
+            dates.push(format(current, 'yyyy-MM-dd'));
+            current = addDays(current, 1);
+        }
+
+        const supabase = createAdminClient();
+        const { roomTypes, fullDatesByType } = await getRoomTypeAvailability(supabase, propertyId, dates);
+
+        return NextResponse.json({
+            roomTypes: roomTypes.map(t => ({
+                id: t.id,
+                name: t.name,
+                description: t.description,
+                price_per_night: t.price_per_night,
+                max_guests: t.max_guests,
+                images: t.images,
+                fullDates: fullDatesByType[t.id] || [],
+            })),
+        });
+    } catch (error) {
+        console.error('Room-type availability fetch error:', error);
         return NextResponse.json({ error: 'Failed to fetch availability' }, { status: 500 });
     }
 }

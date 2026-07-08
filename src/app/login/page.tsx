@@ -42,8 +42,10 @@ export default function LoginPage() {
 
             switch (role) {
                 case 'admin':
-                    router.refresh();
-                    router.push('/admin');
+                case 'customer_rep':
+                    // full page load so the fresh session cookie reaches the
+                    // CRM server components immediately
+                    window.location.href = '/crm/calendar';
                     break;
                 case 'owner':
                     window.location.href = '/owner';

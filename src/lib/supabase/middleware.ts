@@ -38,6 +38,7 @@ export async function updateSession(request: NextRequest) {
 
     // Define protected routes and their required roles
     const protectedRoutes = [
+        { path: '/crm', roles: ['customer_rep', 'admin'] },
         { path: '/admin', roles: ['admin'] },
         { path: '/owner', roles: ['owner', 'admin'] },
         { path: '/operator', roles: ['call_operator', 'admin'] },
@@ -69,7 +70,8 @@ export async function updateSession(request: NextRequest) {
             const url = request.nextUrl.clone();
             
             // Redirect based on actual role
-            if (userRole === 'admin') url.pathname = '/admin';
+            if (userRole === 'admin') url.pathname = '/crm';
+            else if (userRole === 'customer_rep') url.pathname = '/crm';
             else if (userRole === 'owner') url.pathname = '/owner';
             else if (userRole === 'call_operator') url.pathname = '/operator';
             else if (userRole === 'caretaker') url.pathname = '/dashboard';

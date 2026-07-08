@@ -1,5 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import Header from '@/components/Header';
 import PropertyDetailClient from './PropertyDetailClient';
@@ -58,12 +58,28 @@ export default async function PropertyPage({ params }: Props) {
         .eq('id', id)
         .single();
 
-    if (!property) notFound();
+    if (!property) {
+        // Retired listings are hidden from the public client by RLS —
+        // check with the admin client whether this URL was merged into a
+        // surviving property (old Kaura ad links keep working).
+        const { createAdminClient } = await import('@/lib/supabase/server');
+        const { data: retired } = await createAdminClient()
+            .from('properties')
+            .select('merged_into')
+            .eq('id', id)
+            .maybeSingle();
+        if (retired?.merged_into) redirect(`/property/${retired.merged_into}`);
+        notFound();
+    }
+
+    // Consolidated listings keep their URLs working
+    if (property.merged_into) redirect(`/property/${property.merged_into}`);
+    if (property.is_deleted) notFound();
 
     // Strip address before passing to client — address is only sent privately via email/whatsapp
     const { address: _addr, ...safeProperty } = property;
 
-    const { data: rooms } = await supabase
+    let { data: rooms } = await supabase
         .from('rooms')
         .select('*')
         .eq('property_id', id)
@@ -79,7 +95,7 @@ export default async function PropertyPage({ params }: Props) {
 
     // Filter out expired holds dynamically so the UI treats them as available immediately
     const now = new Date();
-    const availability = (rawAvailability || []).filter((slot: any) => {
+    let availability = (rawAvailability || []).filter((slot: any) => {
         if (slot.status === 'held' && slot.booking?.expires_at) {
             const expiresAt = new Date(slot.booking.expires_at);
             if (expiresAt < now) {
@@ -88,6 +104,61 @@ export default async function PropertyPage({ params }: Props) {
         }
         return true; // Keep active holds and 'booked' slots
     });
+
+    // POOLED ROOM TYPES: when the property sells room types (e.g. Kaura's 3
+    // types x 8 units), the guest sees one card per type. A date only blocks
+    // when EVERY unit of that type is taken — so the listing stays available
+    // until the 8th unit is booked. The booking API assigns a real unit.
+    const { data: roomTypes } = await supabase
+        .from('room_types')
+        .select('*')
+        .eq('property_id', id)
+        .eq('is_active', true)
+        .order('sort_order');
+
+    if (roomTypes && roomTypes.length > 0 && rooms && rooms.length > 0) {
+        const unitsByType = new Map<string, string[]>();
+        for (const r of rooms as any[]) {
+            if (!r.room_type_id) continue;
+            unitsByType.set(r.room_type_id, [...(unitsByType.get(r.room_type_id) || []), r.id]);
+        }
+
+        const blockedByUnitDate = new Set(
+            (availability as any[])
+                .filter((slot) => slot.status !== 'available')
+                .map((slot) => `${slot.room_id}|${slot.date}`)
+        );
+        const allDates = [...new Set((availability as any[]).map((slot) => slot.date))];
+
+        const pooledAvailability: any[] = [];
+        for (const type of roomTypes) {
+            const unitIds = unitsByType.get(type.id) || [];
+            if (unitIds.length === 0) continue;
+            for (const date of allDates) {
+                const fullyBooked = unitIds.every((u) => blockedByUnitDate.has(`${u}|${date}`));
+                if (fullyBooked) {
+                    pooledAvailability.push({ room_id: type.id, date, status: 'booked', booking_id: null });
+                }
+            }
+        }
+
+        // The type IS the room, as far as the guest UI is concerned.
+        rooms = roomTypes.map((t: any) => ({
+            id: t.id,
+            property_id: id,
+            name: t.name,
+            description: t.description,
+            price_per_night: t.price_per_night,
+            max_guests: t.max_guests,
+            images: (t.images && t.images.length > 0) ? t.images : property.images,
+            videos: [],
+            is_active: true,
+            room_type: null,
+            created_at: t.created_at,
+            updated_at: t.updated_at,
+        })) as typeof rooms;
+        availability = pooledAvailability;
+    }
 
     // Build the `${room_id}|${date}` set of unavailable cells for the apartment
     // booking engine, applying the SAME expired-hold filter used above.

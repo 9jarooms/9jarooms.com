@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
     const roleList = roles.map(r => r.role);
     let finalRole = 'guest';
     if (roleList.includes('admin')) finalRole = 'admin';
+    else if (roleList.includes('customer_rep')) finalRole = 'customer_rep';
     else if (roleList.includes('owner')) finalRole = 'owner';
     else if (roleList.includes('caretaker')) finalRole = 'caretaker';
     else if (roleList.includes('call_operator')) finalRole = 'call_operator';

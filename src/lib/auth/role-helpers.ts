@@ -1,7 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { redirect } from 'next/navigation';
 
-export type UserRole = 'admin' | 'owner' | 'caretaker' | 'call_operator';
+export type UserRole = 'admin' | 'owner' | 'caretaker' | 'call_operator' | 'customer_rep';
+
+// Roles with full CRM control (bookings, blocks, properties, settings)
+export const CRM_ROLES: UserRole[] = ['admin', 'customer_rep'];
 
 // Get the role for the currently authenticated user
 export async function getUserRole(userId: string): Promise<UserRole | null> {
@@ -47,7 +50,8 @@ export async function requireRole(userId: string, requiredRole: UserRole): Promi
 // Get the dashboard redirect path for a role
 export function getDashboardPath(role: UserRole | null): string {
     switch (role) {
-        case 'admin': return '/admin';
+        case 'admin': return '/crm';
+        case 'customer_rep': return '/crm';
         case 'owner': return '/owner';
         case 'caretaker': return '/dashboard';
         case 'call_operator': return '/operator';

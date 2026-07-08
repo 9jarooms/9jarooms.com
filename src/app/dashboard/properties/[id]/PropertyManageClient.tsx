@@ -445,54 +445,18 @@ export default function PropertyManageClient({ property, rooms, availability, bo
                         })}
                     </div>
 
-                    {/* Selection Action Panel */}
+                    {/* Caretaker view is read-only: bookings and date blocking
+                        are handled by customer reps in the CRM. */}
                     {selection.start && (
-                        <div className="mt-4 p-3 bg-gray-50 rounded-xl animate-in slide-in-from-top-2 duration-200">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <div>
-                                    <p className="text-sm font-medium text-gray-900">
-                                        Selected: <span className="font-bold">{selection.start}</span>
-                                        {selection.end && <span> to <span className="font-bold">{selection.end}</span></span>}
-                                    </p>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        {!selection.end ? 'Select an end date to create a range' : 'Range selected'}
-                                    </p>
-                                </div>
-                                <div className="flex gap-2">
-                                    {/* Action Buttons */}
-                                    {selection.end ? (
-                                        <button
-                                            onClick={openManualBooking}
-                                            className="w-full sm:w-auto px-4 py-2 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-colors shadow-sm"
-                                        >
-                                            Block Dates
-                                        </button>
-                                    ) : (
-                                        // Simple status toggle for single date + Block option
-                                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                                            {STATUS_OPTIONS.filter(o => o.value !== 'maintenance').map((opt) => (
-                                                <button
-                                                    key={opt.value}
-                                                    onClick={() => handleStatusUpdate(selection.start!, opt.value)}
-                                                    disabled={updating}
-                                                    className={`flex-1 sm:flex-none px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors whitespace-nowrap ${opt.color} hover:opacity-80`}
-                                                >
-                                                    {opt.label}
-                                                </button>
-                                            ))}
-                                            <button
-                                                onClick={() => {
-                                                    setBookingType('maintenance');
-                                                    openManualBooking();
-                                                }}
-                                                className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[10px] font-medium hover:bg-gray-800 transition-colors whitespace-nowrap shadow-sm"
-                                            >
-                                                Block Dates
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                        <div className="mt-4 p-3 bg-gray-50 rounded-xl">
+                            <p className="text-sm font-medium text-gray-900">
+                                Selected: <span className="font-bold">{selection.start}</span>
+                                {selection.end && <span> to <span className="font-bold">{selection.end}</span></span>}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Bookings and date blocking are handled by the 9jaRooms customer rep team.
+                                Contact them if a room needs to be taken offline.
+                            </p>
                         </div>
                     )}
                 </div>

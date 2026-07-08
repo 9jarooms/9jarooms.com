@@ -5,9 +5,11 @@ import { addDays, format } from 'date-fns';
 import { Resend } from 'resend';
 import { z } from 'zod';
 import { computeOptions, type ApartmentLite, type RoomLite } from '@/lib/booking/options';
+import { findFreeUnits, priceRoomTypeStay } from '@/lib/booking/room-types';
 
 const bookingSchema = z.object({
     roomId: z.string().uuid().optional(),
+    roomTypeId: z.string().uuid().optional().nullable(),
     propertyId: z.string().uuid(),
     mode: z.enum(['single', 'two_bed', 'whole']).default('single'),
     guestName: z.string().trim().min(2).max(100),
@@ -109,10 +111,11 @@ export async function POST(request: NextRequest) {
         }
         
         const body = validation.data;
-        const { roomId, propertyId, mode, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
+        const { propertyId, mode, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
+        let roomId = body.roomId;
 
-        if (mode === 'single' && !roomId) {
-            return NextResponse.json({ error: 'roomId is required for single-room bookings' }, { status: 400 });
+        if (mode === 'single' && !roomId && !body.roomTypeId) {
+            return NextResponse.json({ error: 'roomId or roomTypeId is required for single-room bookings' }, { status: 400 });
         }
 
         const supabase = createAdminClient(); // Explicit Admin client for DB ops to enable safe guest inserts
@@ -135,49 +138,23 @@ export async function POST(request: NextRequest) {
 
             console.log(`Manual Booking Request by User: ${user.id} (${user.email})`);
 
-            if (user && user.email) {
-                // Verify if user is caretaker (id matches auth id)
-                const { data: caretaker, error: caretakerError } = await supabase
-                    .from('caretakers')
-                    .select('id')
-                    .eq('id', user.id)
-                    .single();
+            // Manual bookings are CRM-only: admin, customer_rep, call_operator.
+            // Caretakers and owners can no longer book or block dates.
+            const { data: crmRole } = await supabase
+                .from('user_roles')
+                .select('role')
+                .eq('user_id', user.id)
+                .in('role', ['admin', 'customer_rep', 'call_operator'])
+                .limit(1)
+                .maybeSingle();
 
-                if (caretaker) console.log("User verified as Caretaker:", caretaker.id);
-                if (caretakerError && caretakerError.code !== 'PGRST116') console.error("Caretaker check error:", caretakerError);
-
-                // Check owner by email
-                const { data: owner, error: ownerError } = await supabase
-                    .from('owners')
-                    .select('id')
-                    .eq('email', user.email)
-                    .single();
-
-                if (owner) console.log("User verified as Owner:", owner.id);
-                if (ownerError && ownerError.code !== 'PGRST116') console.error("Owner check error:", ownerError);
-
-                // Check operator or admin (via user_roles)
-                const { data: operatorRole } = await supabase
-                    .from('user_roles')
-                    .select('role')
-                    .eq('user_id', user.id)
-                    .in('role', ['call_operator', 'admin'])
-                    .limit(1)
-                    .maybeSingle();
-
-                const operator = operatorRole ?? null;
-                if (operator) console.log("User verified as Operator:", user.id);
-
-                if (caretaker || owner || operator) {
-                    isInternalBooking = true;
-                } else {
-                    console.warn(`Unauthorized Manual Booking Attempt: ${user.email} is neither Caretaker, Owner, nor Operator.`);
-                    return NextResponse.json({
-                        error: `Unauthorized: User ${user.email} is not registered as a Caretaker, Owner, or Operator.`
-                    }, { status: 403 });
-                }
+            if (crmRole) {
+                isInternalBooking = true;
             } else {
-                return NextResponse.json({ error: 'Unauthorized: No email found for user' }, { status: 401 });
+                console.warn(`Unauthorized Manual Booking Attempt: ${user.email} has no CRM role.`);
+                return NextResponse.json({
+                    error: 'Unauthorized: manual bookings are handled by customer reps.'
+                }, { status: 403 });
             }
         }
 
@@ -197,6 +174,57 @@ export async function POST(request: NextRequest) {
         while (current < checkOutDate) {
             dates.push(format(current, 'yyyy-MM-dd'));
             current = addDays(current, 1);
+        }
+
+        // ============================================================
+        // ROOM-TYPE RESOLUTION: a pooled room type (e.g. Kaura "Classic
+        // Room" backed by 8 units) resolves to one concrete free unit
+        // here, then flows through the normal single-room path below.
+        // Picking a random free unit softens races between simultaneous
+        // guests; reserveAndVerify still settles any true collision.
+        // ============================================================
+        let roomTypePricing: { total: number; perNight: number } | null = null;
+        let resolvedRoomTypeId: string | null = null;
+        let roomTypeIdParam = body.roomTypeId ?? null;
+
+        // Pooled listings send the room-type id in the roomId slot (the type
+        // is what the guest sees as "the room") — detect and reroute it.
+        if (mode === 'single' && roomId && !roomTypeIdParam) {
+            const { data: maybeType } = await supabase
+                .from('room_types')
+                .select('id')
+                .eq('id', roomId)
+                .maybeSingle();
+            if (maybeType) {
+                roomTypeIdParam = roomId;
+                roomId = undefined;
+            }
+        }
+
+        if (mode === 'single' && roomTypeIdParam) {
+            const { data: roomType } = await supabase
+                .from('room_types')
+                .select('*')
+                .eq('id', roomTypeIdParam)
+                .eq('is_active', true)
+                .single();
+
+            if (!roomType || roomType.property_id !== propertyId) {
+                return NextResponse.json({ error: 'Room type not found' }, { status: 404 });
+            }
+
+            const candidates = await findFreeUnits(supabase, roomType.id, dates);
+            if (candidates.length === 0) {
+                return NextResponse.json(
+                    { error: 'This room is fully booked for the selected dates.' },
+                    { status: 409 }
+                );
+            }
+
+            const pick = candidates[Math.floor(Math.random() * candidates.length)];
+            roomId = pick.id;
+            resolvedRoomTypeId = roomType.id;
+            roomTypePricing = await priceRoomTypeStay(supabase, roomType, dates);
         }
 
         // ============================================================
@@ -472,7 +500,9 @@ export async function POST(request: NextRequest) {
 
         const property = (room as any).property;
         const owner = property?.owner;
-        const pricePerNight = room.price_per_night || property.price_per_night;
+        const pricePerNight = roomTypePricing
+            ? roomTypePricing.perNight
+            : (room.price_per_night || property.price_per_night);
         const nightCount = dates.length;
 
         // Validate minimum stay
@@ -486,7 +516,9 @@ export async function POST(request: NextRequest) {
         // Handle Maintenance vs Guest Booking type
         const bookingType = body.bookingType || 'guest';
 
-        let totalAmount = pricePerNight * nightCount;
+        // Room-type stays price per-date (overrides included); plain rooms
+        // stay on the flat nightly rate.
+        let totalAmount = roomTypePricing ? roomTypePricing.total : pricePerNight * nightCount;
 
         // Apply discount from property's discount_rules
         if (property.discount_rules && Array.isArray(property.discount_rules) && bookingType !== 'maintenance') {
@@ -541,6 +573,9 @@ export async function POST(request: NextRequest) {
             .from('bookings')
             .insert({
                 room_id: roomId,
+                // only reference the column for pooled bookings so plain
+                // bookings keep working before the CRM migration runs
+                ...(resolvedRoomTypeId ? { room_type_id: resolvedRoomTypeId } : {}),
                 property_id: propertyId,
                 guest_name: guestName,
                 guest_email: finalGuestEmail,
