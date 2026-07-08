@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Plus, EyeOff, Eye } from 'lucide-react';
+import { X, Plus, EyeOff, Eye, Trash2 } from 'lucide-react';
+import MediaUploader from '@/components/MediaUploader';
 
-// Edit a property's details and its room types (rename, reprice,
-// add a type with pooled units, hide/show a type).
+// Edit everything about a property in one place: details, photos, and its
+// room types (rename, reprice, hide/show, add a new one — each with its own
+// photos you can add or remove here).
 export default function EditPropertyModal({ property, onClose, onSaved }: {
     property: any;
     onClose: () => void;
@@ -19,14 +21,19 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
         pricePerNight: String(property.price_per_night ?? ''),
         maxGuests: String(property.max_guests ?? 2),
     });
+    const [images, setImages] = useState<string[]>(property.images || []);
+    const [thumbnail, setThumbnail] = useState<string | null>(property.thumbnail || null);
     const [types, setTypes] = useState<any[]>(
         (property.roomTypes || []).map((t: any) => ({
-            id: t.id, name: t.name, price: String(t.price_per_night), isActive: t.is_active !== false, unitCount: t.unitCount,
+            id: t.id, name: t.name, price: String(t.price_per_night),
+            isActive: t.is_active !== false, unitCount: t.unitCount, images: t.images || [],
         }))
     );
-    const [newType, setNewType] = useState({ name: '', price: '', units: '' });
+    const [newType, setNewType] = useState({ name: '', price: '', units: '', images: [] as string[] });
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const setType = (i: number, patch: any) => setTypes(types.map((x, j) => j === i ? { ...x, ...patch } : x));
 
     const save = async () => {
         setBusy(true); setError(null);
@@ -42,6 +49,8 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
                     description: form.description || null,
                     pricePerNight: Number(form.pricePerNight) || undefined,
                     maxGuests: Number(form.maxGuests) || undefined,
+                    images,
+                    thumbnail: thumbnail || images[0] || null,
                 }),
             });
             if (!res.ok) throw new Error((await res.json()).error);
@@ -51,7 +60,8 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
                 const changed = original && (
                     original.name !== t.name ||
                     String(original.price_per_night) !== t.price ||
-                    (original.is_active !== false) !== t.isActive
+                    (original.is_active !== false) !== t.isActive ||
+                    JSON.stringify(original.images || []) !== JSON.stringify(t.images)
                 );
                 if (changed) {
                     const r = await fetch('/api/crm/room-types', {
@@ -61,6 +71,7 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
                             name: t.name,
                             pricePerNight: Number(t.price) || undefined,
                             isActive: t.isActive,
+                            images: t.images,
                         }),
                     });
                     if (!r.ok) throw new Error((await r.json()).error);
@@ -75,6 +86,7 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
                         name: newType.name,
                         pricePerNight: Number(newType.price),
                         units: Number(newType.units),
+                        images: newType.images,
                     }),
                 });
                 if (!r.ok) throw new Error((await r.json()).error);
@@ -88,9 +100,11 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
         }
     };
 
+    const addingType = newType.name || newType.price || newType.units || newType.images.length > 0;
+
     return (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-10" onClick={onClose}>
-            <div className="bg-white rounded-2xl w-[600px] max-w-[94vw] shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-2xl w-[640px] max-w-[94vw] shadow-2xl" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-6 pt-5 pb-3.5 border-b border-stone-200">
                     <h2 className="font-bold text-stone-900">Edit — {property.name}</h2>
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-stone-100"><X size={18} /></button>
@@ -98,7 +112,7 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
 
                 {error && <p className="mx-6 mt-3 text-xs text-[#c75146] bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
-                <div className="px-6 py-4 grid grid-cols-2 gap-3 text-sm max-h-[65vh] overflow-y-auto">
+                <div className="px-6 py-4 grid grid-cols-2 gap-3 text-sm max-h-[68vh] overflow-y-auto">
                     <label className="block col-span-2">
                         <span className="text-xs text-stone-500">Name</span>
                         <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
@@ -128,30 +142,56 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
                         <textarea rows={3} className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
                     </label>
 
+                    <div className="col-span-2 pt-2">
+                        <span className="text-xs font-semibold text-stone-600">Property photos</span>
+                        <p className="text-[11px] text-stone-400 mb-2">Add or remove gallery images. Star one as the cover.</p>
+                        <MediaUploader
+                            folder={`crm/${property.id}`}
+                            existingUrls={images}
+                            onUpload={setImages}
+                            thumbnail={thumbnail || images[0]}
+                            onThumbnailChange={setThumbnail}
+                        />
+                    </div>
+
                     {types.length > 0 && (
-                        <div className="col-span-2 mt-1">
+                        <div className="col-span-2 pt-3">
                             <span className="text-xs font-semibold text-stone-600">Room types</span>
-                            <p className="text-[11px] text-stone-400 mb-2">Rename, change nightly price, or hide a room from the site. Photos live under the Photos button.</p>
+                            <p className="text-[11px] text-stone-400 mb-2">Rename, change nightly price, hide a room from the site, and manage each room&apos;s own photos.</p>
                             {types.map((t, i) => (
-                                <div key={t.id} className={`flex gap-2 mb-2 items-center ${t.isActive ? '' : 'opacity-50'}`}>
-                                    <input className="flex-1 border border-stone-300 rounded-md px-2.5 py-1.5"
-                                        value={t.name} onChange={e => setTypes(types.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-                                    <input type="number" className="w-28 border border-stone-300 rounded-md px-2.5 py-1.5"
-                                        value={t.price} onChange={e => setTypes(types.map((x, j) => j === i ? { ...x, price: e.target.value } : x))} />
-                                    <span className="text-[11px] text-stone-400 w-14">{t.unitCount} unit{t.unitCount === 1 ? '' : 's'}</span>
-                                    <button
-                                        title={t.isActive ? 'Hide from site' : 'Show on site'}
-                                        onClick={() => setTypes(types.map((x, j) => j === i ? { ...x, isActive: !x.isActive } : x))}
-                                        className="p-1.5 rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50">
-                                        {t.isActive ? <Eye size={14} /> : <EyeOff size={14} />}
-                                    </button>
+                                <div key={t.id} className={`mb-3 p-3 rounded-xl border border-stone-200 bg-stone-50/50 ${t.isActive ? '' : 'opacity-60'}`}>
+                                    <div className="flex gap-2 items-center">
+                                        <input className="flex-1 border border-stone-300 rounded-md px-2.5 py-1.5 bg-white"
+                                            value={t.name} onChange={e => setType(i, { name: e.target.value })} />
+                                        <input type="number" className="w-28 border border-stone-300 rounded-md px-2.5 py-1.5 bg-white"
+                                            value={t.price} onChange={e => setType(i, { price: e.target.value })} />
+                                        <span className="text-[11px] text-stone-400 w-14">{t.unitCount} unit{t.unitCount === 1 ? '' : 's'}</span>
+                                        <button
+                                            title={t.isActive ? 'Hide from site' : 'Show on site'}
+                                            onClick={() => setType(i, { isActive: !t.isActive })}
+                                            className="p-1.5 rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50 bg-white">
+                                            {t.isActive ? <Eye size={14} /> : <EyeOff size={14} />}
+                                        </button>
+                                    </div>
+                                    <div className="mt-2.5">
+                                        <MediaUploader
+                                            folder={`crm/${property.id}/${t.id}`}
+                                            existingUrls={t.images}
+                                            onUpload={(urls) => setType(i, { images: urls })}
+                                        />
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     )}
 
-                    <div className="col-span-2 mt-1 p-3 rounded-xl border border-dashed border-stone-300">
-                        <span className="text-xs font-semibold text-stone-600 flex items-center gap-1"><Plus size={13} /> Add a room type</span>
+                    <div className="col-span-2 p-3 rounded-xl border border-dashed border-stone-300">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-stone-600 flex items-center gap-1"><Plus size={13} /> Add a room type</span>
+                            {addingType && (
+                                <button onClick={() => setNewType({ name: '', price: '', units: '', images: [] })} className="text-stone-300 hover:text-[#c75146]"><Trash2 size={14} /></button>
+                            )}
+                        </div>
                         <div className="flex gap-2 mt-2">
                             <input placeholder="Name" className="flex-1 border border-stone-300 rounded-md px-2.5 py-1.5"
                                 value={newType.name} onChange={e => setNewType({ ...newType, name: e.target.value })} />
@@ -160,6 +200,15 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
                             <input placeholder="Units" type="number" className="w-18 border border-stone-300 rounded-md px-2.5 py-1.5"
                                 value={newType.units} onChange={e => setNewType({ ...newType, units: e.target.value })} />
                         </div>
+                        {addingType && (
+                            <div className="mt-2.5">
+                                <MediaUploader
+                                    folder={`crm/${property.id}/new`}
+                                    existingUrls={newType.images}
+                                    onUpload={(urls) => setNewType({ ...newType, images: urls })}
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
 

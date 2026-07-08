@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, X, Trash2, Images, Pencil } from 'lucide-react';
+import { Plus, X, Trash2, Pencil } from 'lucide-react';
 import MediaUploader from '@/components/MediaUploader';
-import PhotosModal from './PhotosModal';
 import EditPropertyModal from './EditPropertyModal';
 
 function naira(n: number) {
@@ -13,7 +12,6 @@ function naira(n: number) {
 export default function PropertiesClient() {
     const [rows, setRows] = useState<any[]>([]);
     const [creating, setCreating] = useState(false);
-    const [photosFor, setPhotosFor] = useState<any | null>(null);
     const [editFor, setEditFor] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -85,10 +83,6 @@ export default function PropertiesClient() {
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 text-xs font-semibold hover:bg-stone-50">
                                 <Pencil size={13} /> Edit
                             </button>
-                            <button onClick={() => setPhotosFor(p)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 text-xs font-semibold hover:bg-stone-50">
-                                <Images size={13} /> Photos
-                            </button>
                             <button onClick={() => toggleActive(p)}
                                 className="px-3 py-1.5 rounded-md border border-stone-300 text-xs font-semibold hover:bg-stone-50">
                                 {p.is_active ? 'Hide from site' : 'Publish'}
@@ -107,13 +101,6 @@ export default function PropertiesClient() {
             </div>
 
             {creating && <NewPropertyModal onClose={() => setCreating(false)} onCreated={() => { setCreating(false); load(); }} />}
-            {photosFor && (
-                <PhotosModal
-                    property={photosFor}
-                    onClose={() => setPhotosFor(null)}
-                    onSaved={() => { setPhotosFor(null); load(); }}
-                />
-            )}
             {editFor && (
                 <EditPropertyModal
                     property={editFor}
