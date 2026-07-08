@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, X, Trash2 } from 'lucide-react';
+import { Plus, X, Trash2, Images } from 'lucide-react';
+import MediaUploader from '@/components/MediaUploader';
+import PhotosModal from './PhotosModal';
 
 function naira(n: number) {
     return '₦' + Number(n || 0).toLocaleString('en-NG');
@@ -10,6 +12,7 @@ function naira(n: number) {
 export default function PropertiesClient() {
     const [rows, setRows] = useState<any[]>([]);
     const [creating, setCreating] = useState(false);
+    const [photosFor, setPhotosFor] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
 
     const load = useCallback(async () => {
@@ -60,6 +63,10 @@ export default function PropertiesClient() {
                             <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${p.is_active ? 'bg-green-100 text-green-800' : 'bg-stone-100 text-stone-500'}`}>
                                 {p.is_active ? 'Live' : 'Hidden'}
                             </span>
+                            <button onClick={() => setPhotosFor(p)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 text-xs font-semibold hover:bg-stone-50">
+                                <Images size={13} /> Photos
+                            </button>
                             <button onClick={() => toggleActive(p)}
                                 className="px-3 py-1.5 rounded-md border border-stone-300 text-xs font-semibold hover:bg-stone-50">
                                 {p.is_active ? 'Hide from site' : 'Publish'}
@@ -73,6 +80,13 @@ export default function PropertiesClient() {
             </div>
 
             {creating && <NewPropertyModal onClose={() => setCreating(false)} onCreated={() => { setCreating(false); load(); }} />}
+            {photosFor && (
+                <PhotosModal
+                    property={photosFor}
+                    onClose={() => setPhotosFor(null)}
+                    onSaved={() => { setPhotosFor(null); load(); }}
+                />
+            )}
         </div>
     );
 }
@@ -81,7 +95,9 @@ function NewPropertyModal({ onClose, onCreated }: { onClose: () => void; onCreat
     const [form, setForm] = useState({
         name: '', area: '', city: 'Abuja', address: '', description: '', pricePerNight: '', maxGuests: '2',
     });
-    const [roomTypes, setRoomTypes] = useState<{ name: string; pricePerNight: string; units: string }[]>([]);
+    const [images, setImages] = useState<string[]>([]);
+    const [thumbnail, setThumbnail] = useState<string | null>(null);
+    const [roomTypes, setRoomTypes] = useState<{ name: string; pricePerNight: string; units: string; images: string[] }[]>([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -97,9 +113,11 @@ function NewPropertyModal({ onClose, onCreated }: { onClose: () => void; onCreat
                 description: form.description || null,
                 pricePerNight: Number(form.pricePerNight),
                 maxGuests: Number(form.maxGuests) || 2,
+                images,
+                thumbnail: thumbnail || images[0] || null,
                 roomTypes: roomTypes
                     .filter(t => t.name && Number(t.pricePerNight) > 0 && Number(t.units) > 0)
-                    .map(t => ({ name: t.name, pricePerNight: Number(t.pricePerNight), units: Number(t.units) })),
+                    .map(t => ({ name: t.name, pricePerNight: Number(t.pricePerNight), units: Number(t.units), images: t.images })),
             }),
         });
         const json = await res.json();
@@ -148,24 +166,44 @@ function NewPropertyModal({ onClose, onCreated }: { onClose: () => void; onCreat
                         <textarea rows={2} className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
                     </label>
 
+                    <div className="col-span-2">
+                        <span className="text-xs font-semibold text-stone-600">Property photos</span>
+                        <p className="text-[11px] text-stone-400 mb-2">Gallery for the listing page. Star one as the cover.</p>
+                        <MediaUploader
+                            folder="crm/new"
+                            existingUrls={images}
+                            onUpload={setImages}
+                            thumbnail={thumbnail || images[0]}
+                            onThumbnailChange={setThumbnail}
+                        />
+                    </div>
+
                     <div className="col-span-2 mt-1">
                         <div className="flex items-center justify-between mb-1.5">
                             <span className="text-xs font-semibold text-stone-600">Room types (pooled units)</span>
-                            <button onClick={() => setRoomTypes([...roomTypes, { name: '', pricePerNight: '', units: '' }])}
+                            <button onClick={() => setRoomTypes([...roomTypes, { name: '', pricePerNight: '', units: '', images: [] }])}
                                 className="text-xs font-semibold text-[#008737]">+ Add room type</button>
                         </div>
                         <p className="text-[11px] text-stone-400 mb-2">
                             Leave empty for a simple whole-property listing. With room types, the site shows one card per type and it stays bookable until every unit is full.
+                            Only pool rooms into one type when they look the same — each type card shows its own photos.
                         </p>
                         {roomTypes.map((t, i) => (
-                            <div key={i} className="flex gap-2 mb-2 items-center">
-                                <input placeholder="Name (e.g. Classic Room)" className="flex-1 border border-stone-300 rounded-md px-2.5 py-1.5"
-                                    value={t.name} onChange={e => setRoomTypes(roomTypes.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-                                <input placeholder="₦/night" type="number" className="w-24 border border-stone-300 rounded-md px-2.5 py-1.5"
-                                    value={t.pricePerNight} onChange={e => setRoomTypes(roomTypes.map((x, j) => j === i ? { ...x, pricePerNight: e.target.value } : x))} />
-                                <input placeholder="Units" type="number" className="w-18 border border-stone-300 rounded-md px-2.5 py-1.5"
-                                    value={t.units} onChange={e => setRoomTypes(roomTypes.map((x, j) => j === i ? { ...x, units: e.target.value } : x))} />
-                                <button onClick={() => setRoomTypes(roomTypes.filter((_, j) => j !== i))} className="text-stone-300 hover:text-[#c75146]"><Trash2 size={15} /></button>
+                            <div key={i} className="mb-3 p-3 rounded-xl border border-stone-200 bg-stone-50/50">
+                                <div className="flex gap-2 mb-2 items-center">
+                                    <input placeholder="Name (e.g. Classic Room)" className="flex-1 border border-stone-300 rounded-md px-2.5 py-1.5 bg-white"
+                                        value={t.name} onChange={e => setRoomTypes(roomTypes.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
+                                    <input placeholder="₦/night" type="number" className="w-24 border border-stone-300 rounded-md px-2.5 py-1.5 bg-white"
+                                        value={t.pricePerNight} onChange={e => setRoomTypes(roomTypes.map((x, j) => j === i ? { ...x, pricePerNight: e.target.value } : x))} />
+                                    <input placeholder="Units" type="number" className="w-18 border border-stone-300 rounded-md px-2.5 py-1.5 bg-white"
+                                        value={t.units} onChange={e => setRoomTypes(roomTypes.map((x, j) => j === i ? { ...x, units: e.target.value } : x))} />
+                                    <button onClick={() => setRoomTypes(roomTypes.filter((_, j) => j !== i))} className="text-stone-300 hover:text-[#c75146]"><Trash2 size={15} /></button>
+                                </div>
+                                <MediaUploader
+                                    folder="crm/new"
+                                    existingUrls={t.images}
+                                    onUpload={(urls) => setRoomTypes(roomTypes.map((x, j) => j === i ? { ...x, images: urls } : x))}
+                                />
                             </div>
                         ))}
                     </div>

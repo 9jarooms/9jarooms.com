@@ -18,7 +18,7 @@ export async function GET() {
     const ids = (properties || []).map(p => p.id);
     const [{ data: types }, { data: rooms }] = await Promise.all([
         ids.length
-            ? supabase.from('room_types').select('id, property_id, name, price_per_night, is_active, sort_order').in('property_id', ids).order('sort_order')
+            ? supabase.from('room_types').select('id, property_id, name, description, price_per_night, is_active, sort_order, images').in('property_id', ids).order('sort_order')
             : Promise.resolve({ data: [] as any[] }),
         ids.length
             ? supabase.from('rooms').select('id, property_id, room_type_id, unit_code, name, is_active').in('property_id', ids)
@@ -47,12 +47,15 @@ const createSchema = z.object({
     pricePerNight: z.number().positive(),
     maxGuests: z.number().int().min(1).max(30).default(2),
     ownerId: z.string().uuid().optional().nullable(),
+    images: z.array(z.string().url()).max(40).optional(),
+    thumbnail: z.string().url().optional().nullable(),
     // optional room types created alongside, each with N pooled units
     roomTypes: z.array(z.object({
         name: z.string().trim().min(2).max(80),
         description: z.string().max(500).optional().nullable(),
         pricePerNight: z.number().positive(),
         units: z.number().int().min(1).max(50),
+        images: z.array(z.string().url()).max(30).optional(),
     })).optional(),
 });
 
@@ -88,6 +91,8 @@ export async function POST(request: NextRequest) {
             price_per_night: body.pricePerNight,
             max_guests: body.maxGuests,
             owner_id: ownerId,
+            images: body.images || [],
+            thumbnail: body.thumbnail || body.images?.[0] || null,
             is_active: true,
             is_deleted: false,
             is_apartment: false,
@@ -107,6 +112,7 @@ export async function POST(request: NextRequest) {
                 price_per_night: t.pricePerNight,
                 max_guests: body.maxGuests,
                 sort_order: i + 1,
+                images: t.images || [],
             })
             .select()
             .single();
@@ -146,6 +152,8 @@ const patchSchema = z.object({
     name: z.string().trim().min(3).max(120).optional(),
     pricePerNight: z.number().positive().optional(),
     description: z.string().max(3000).optional().nullable(),
+    images: z.array(z.string().url()).max(40).optional(),
+    thumbnail: z.string().url().optional().nullable(),
 });
 
 export async function PATCH(request: NextRequest) {
@@ -162,6 +170,8 @@ export async function PATCH(request: NextRequest) {
     if (body.name !== undefined) update.name = body.name;
     if (body.pricePerNight !== undefined) update.price_per_night = body.pricePerNight;
     if (body.description !== undefined) update.description = body.description;
+    if (body.images !== undefined) update.images = body.images;
+    if (body.thumbnail !== undefined) update.thumbnail = body.thumbnail;
 
     const { error } = await supabase.from('properties').update(update).eq('id', body.propertyId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
