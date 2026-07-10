@@ -14,7 +14,7 @@ const NAV = [
     { href: '/crm/settings', label: 'Settings', icon: Settings },
 ];
 
-export default function SidebarNav() {
+export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
     const pathname = usePathname();
     return (
         <nav className="flex-1 py-4 px-3 space-y-0.5">
@@ -24,7 +24,8 @@ export default function SidebarNav() {
                     <Link
                         key={item.href}
                         href={item.href}
-                        className={`flex items-center gap-3 px-3.5 py-2.5 text-[13.5px] font-medium rounded-xl transition-all duration-150 ${
+                        onClick={onNavigate}
+                        className={`flex items-center gap-3 px-4 py-3 md:py-2.5 text-[15px] md:text-[13.5px] font-medium rounded-xl transition-all duration-150 ${
                             active
                                 ? 'bg-[#7ed957]/15 text-[#a8f07f] shadow-[inset_0_0_0_1px_rgba(126,217,87,0.25)]'
                                 : 'text-white/70 hover:bg-white/[0.07] hover:text-white'

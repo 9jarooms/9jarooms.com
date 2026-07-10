@@ -44,12 +44,12 @@ export default function PropertiesClient() {
     };
 
     return (
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
             <div className="flex items-center gap-3 mb-4">
-                <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900">Properties</h1>
+                <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-stone-900">Properties</h1>
                 <button onClick={() => setCreating(true)}
-                    className="ml-auto flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-[#008737] text-white text-sm font-semibold">
-                    <Plus size={15} /> New property
+                    className="ml-auto flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#008737] text-white text-sm font-semibold shrink-0">
+                    <Plus size={15} /> <span className="hidden sm:inline">New property</span><span className="sm:hidden">New</span>
                 </button>
             </div>
 
@@ -157,8 +157,8 @@ function NewPropertyModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
                 {error && <p className="mx-6 mt-3 text-xs text-[#c75146] bg-red-50 rounded-md px-3 py-2">{error}</p>}
 
-                <div className="px-6 py-4 grid grid-cols-2 gap-3 text-sm">
-                    <label className="block col-span-2">
+                <div className="px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <label className="block sm:col-span-2">
                         <span className="text-xs text-stone-500">Name *</span>
                         <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                     </label>
@@ -178,16 +178,16 @@ function NewPropertyModal({ onClose, onCreated }: { onClose: () => void; onCreat
                         <span className="text-xs text-stone-500">Max guests</span>
                         <input type="number" className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.maxGuests} onChange={e => setForm({ ...form, maxGuests: e.target.value })} />
                     </label>
-                    <label className="block col-span-2">
+                    <label className="block sm:col-span-2">
                         <span className="text-xs text-stone-500">Address</span>
                         <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
                     </label>
-                    <label className="block col-span-2">
+                    <label className="block sm:col-span-2">
                         <span className="text-xs text-stone-500">Description</span>
                         <textarea rows={2} className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
                     </label>
 
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                         <span className="text-xs font-semibold text-stone-600">Property photos</span>
                         <p className="text-[11px] text-stone-400 mb-2">Gallery for the listing page. Star one as the cover.</p>
                         <MediaUploader
@@ -199,7 +199,7 @@ function NewPropertyModal({ onClose, onCreated }: { onClose: () => void; onCreat
                         />
                     </div>
 
-                    <div className="col-span-2 mt-1">
+                    <div className="sm:col-span-2 mt-1">
                         <div className="flex items-center justify-between mb-1.5">
                             <span className="text-xs font-semibold text-stone-600">Room types (pooled units)</span>
                             <button onClick={() => setRoomTypes([...roomTypes, { name: '', pricePerNight: '', units: '', images: [] }])}
@@ -211,12 +211,12 @@ function NewPropertyModal({ onClose, onCreated }: { onClose: () => void; onCreat
                         </p>
                         {roomTypes.map((t, i) => (
                             <div key={i} className="mb-3 p-3 rounded-xl border border-stone-200 bg-stone-50/50">
-                                <div className="flex gap-2 mb-2 items-center">
-                                    <input placeholder="Name (e.g. Classic Room)" className="flex-1 border border-stone-300 rounded-md px-2.5 py-1.5 bg-white"
+                                <div className="flex flex-wrap gap-2 mb-2 items-center">
+                                    <input placeholder="Name (e.g. Classic Room)" className="flex-1 min-w-[140px] border border-stone-300 rounded-md px-2.5 py-2 bg-white"
                                         value={t.name} onChange={e => setRoomTypes(roomTypes.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-                                    <input placeholder="₦/night" type="number" className="w-24 border border-stone-300 rounded-md px-2.5 py-1.5 bg-white"
+                                    <input placeholder="₦/night" type="number" className="w-24 border border-stone-300 rounded-md px-2.5 py-2 bg-white"
                                         value={t.pricePerNight} onChange={e => setRoomTypes(roomTypes.map((x, j) => j === i ? { ...x, pricePerNight: e.target.value } : x))} />
-                                    <input placeholder="Units" type="number" className="w-18 border border-stone-300 rounded-md px-2.5 py-1.5 bg-white"
+                                    <input placeholder="Units" type="number" className="w-20 border border-stone-300 rounded-md px-2.5 py-2 bg-white"
                                         value={t.units} onChange={e => setRoomTypes(roomTypes.map((x, j) => j === i ? { ...x, units: e.target.value } : x))} />
                                     <button onClick={() => setRoomTypes(roomTypes.filter((_, j) => j !== i))} className="text-stone-300 hover:text-[#c75146]"><Trash2 size={15} /></button>
                                 </div>
@@ -229,7 +229,7 @@ function NewPropertyModal({ onClose, onCreated }: { onClose: () => void; onCreat
                         ))}
                     </div>
 
-                    <div className="col-span-2 flex justify-end gap-2 pt-1">
+                    <div className="sm:col-span-2 flex justify-end gap-2 pt-1">
                         <button onClick={onClose} className="px-4 py-2 rounded-md border border-stone-300 text-sm">Cancel</button>
                         <button
                             disabled={busy || form.name.trim().length < 3 || !form.area || !Number(form.pricePerNight)}

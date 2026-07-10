@@ -112,8 +112,8 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
 
                 {error && <p className="mx-6 mt-3 text-xs text-[#c75146] bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
-                <div className="px-6 py-4 grid grid-cols-2 gap-3 text-sm max-h-[68vh] overflow-y-auto">
-                    <label className="block col-span-2">
+                <div className="px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm max-h-[70vh] overflow-y-auto">
+                    <label className="block sm:col-span-2">
                         <span className="text-xs text-stone-500">Name</span>
                         <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                     </label>
@@ -133,16 +133,16 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
                         <span className="text-xs text-stone-500">Max guests</span>
                         <input type="number" className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.maxGuests} onChange={e => setForm({ ...form, maxGuests: e.target.value })} />
                     </label>
-                    <label className="block col-span-2">
+                    <label className="block sm:col-span-2">
                         <span className="text-xs text-stone-500">Address (kept private, sent to guests after booking)</span>
                         <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
                     </label>
-                    <label className="block col-span-2">
+                    <label className="block sm:col-span-2">
                         <span className="text-xs text-stone-500">Description</span>
                         <textarea rows={3} className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
                     </label>
 
-                    <div className="col-span-2 pt-2">
+                    <div className="sm:col-span-2 pt-2">
                         <span className="text-xs font-semibold text-stone-600">Property photos</span>
                         <p className="text-[11px] text-stone-400 mb-2">Add or remove gallery images. Star one as the cover.</p>
                         <MediaUploader
@@ -155,17 +155,17 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
                     </div>
 
                     {types.length > 0 && (
-                        <div className="col-span-2 pt-3">
+                        <div className="sm:col-span-2 pt-3">
                             <span className="text-xs font-semibold text-stone-600">Room types</span>
                             <p className="text-[11px] text-stone-400 mb-2">Rename, change nightly price, hide a room from the site, and manage each room&apos;s own photos.</p>
                             {types.map((t, i) => (
                                 <div key={t.id} className={`mb-3 p-3 rounded-xl border border-stone-200 bg-stone-50/50 ${t.isActive ? '' : 'opacity-60'}`}>
-                                    <div className="flex gap-2 items-center">
-                                        <input className="flex-1 border border-stone-300 rounded-md px-2.5 py-1.5 bg-white"
+                                    <div className="flex flex-wrap gap-2 items-center">
+                                        <input className="flex-1 min-w-[140px] border border-stone-300 rounded-md px-2.5 py-2 bg-white"
                                             value={t.name} onChange={e => setType(i, { name: e.target.value })} />
-                                        <input type="number" className="w-28 border border-stone-300 rounded-md px-2.5 py-1.5 bg-white"
+                                        <input type="number" className="w-24 border border-stone-300 rounded-md px-2.5 py-2 bg-white"
                                             value={t.price} onChange={e => setType(i, { price: e.target.value })} />
-                                        <span className="text-[11px] text-stone-400 w-14">{t.unitCount} unit{t.unitCount === 1 ? '' : 's'}</span>
+                                        <span className="text-[11px] text-stone-400">{t.unitCount} unit{t.unitCount === 1 ? '' : 's'}</span>
                                         <button
                                             title={t.isActive ? 'Hide from site' : 'Show on site'}
                                             onClick={() => setType(i, { isActive: !t.isActive })}
@@ -185,19 +185,19 @@ export default function EditPropertyModal({ property, onClose, onSaved }: {
                         </div>
                     )}
 
-                    <div className="col-span-2 p-3 rounded-xl border border-dashed border-stone-300">
+                    <div className="sm:col-span-2 p-3 rounded-xl border border-dashed border-stone-300">
                         <div className="flex items-center justify-between">
                             <span className="text-xs font-semibold text-stone-600 flex items-center gap-1"><Plus size={13} /> Add a room type</span>
                             {addingType && (
                                 <button onClick={() => setNewType({ name: '', price: '', units: '', images: [] })} className="text-stone-300 hover:text-[#c75146]"><Trash2 size={14} /></button>
                             )}
                         </div>
-                        <div className="flex gap-2 mt-2">
-                            <input placeholder="Name" className="flex-1 border border-stone-300 rounded-md px-2.5 py-1.5"
+                        <div className="flex flex-wrap gap-2 mt-2">
+                            <input placeholder="Name" className="flex-1 min-w-[140px] border border-stone-300 rounded-md px-2.5 py-2"
                                 value={newType.name} onChange={e => setNewType({ ...newType, name: e.target.value })} />
-                            <input placeholder="₦/night" type="number" className="w-24 border border-stone-300 rounded-md px-2.5 py-1.5"
+                            <input placeholder="₦/night" type="number" className="w-24 border border-stone-300 rounded-md px-2.5 py-2"
                                 value={newType.price} onChange={e => setNewType({ ...newType, price: e.target.value })} />
-                            <input placeholder="Units" type="number" className="w-18 border border-stone-300 rounded-md px-2.5 py-1.5"
+                            <input placeholder="Units" type="number" className="w-20 border border-stone-300 rounded-md px-2.5 py-2"
                                 value={newType.units} onChange={e => setNewType({ ...newType, units: e.target.value })} />
                         </div>
                         {addingType && (

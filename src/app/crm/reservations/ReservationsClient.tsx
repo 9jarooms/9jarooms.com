@@ -48,24 +48,55 @@ export default function ReservationsClient() {
     }, [load, q]);
 
     return (
-        <div className="p-6">
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-                <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900 mr-2">Reservations</h1>
-                <div className="relative">
+        <div className="p-4 sm:p-6">
+            <div className="flex flex-wrap items-center gap-2.5 mb-4">
+                <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-stone-900 w-full sm:w-auto sm:mr-2">Reservations</h1>
+                <div className="relative flex-1 sm:flex-none">
                     <Search size={14} className="absolute left-2.5 top-2.5 text-stone-400" />
                     <input
                         placeholder="Search guest, phone, email…"
                         value={q} onChange={e => setQ(e.target.value)}
-                        className="pl-8 pr-3 py-1.5 border border-stone-300 rounded-md text-sm bg-white w-64"
+                        className="w-full sm:w-64 pl-8 pr-3 py-2 border border-stone-300 rounded-lg text-sm bg-white"
                     />
                 </div>
                 <select value={status} onChange={e => setStatus(e.target.value)}
-                    className="border border-stone-300 rounded-md px-2 py-1.5 text-sm bg-white">
+                    className="border border-stone-300 rounded-lg px-2 py-2 text-sm bg-white">
                     {STATUS_FILTERS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
             </div>
 
-            <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-x-auto">
+            {/* Mobile: tappable cards */}
+            <div className="md:hidden space-y-2.5">
+                {rows.map(b => {
+                    const balance = Number(b.total_amount) - b.paid;
+                    const owing = balance > 0 && !['cancelled', 'no_show'].includes(b.status);
+                    return (
+                        <button key={b.id} onClick={() => setOpen(b.id)}
+                            className="w-full text-left bg-white rounded-xl border border-stone-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.04)] p-3.5 active:bg-stone-50">
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                    <p className="font-semibold text-stone-900 truncate">{b.guest_name}</p>
+                                    <p className="text-[12px] text-stone-400 truncate">{b.property?.name} · {b.room?.unit_code || b.room?.name}</p>
+                                </div>
+                                <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10.5px] font-bold ${STATUS_STYLE[b.status] || 'bg-stone-100 text-stone-600'}`}>
+                                    {b.status.replace('_', ' ')}
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between mt-2 text-[13px]">
+                                <span className="text-stone-500">{b.check_in} → {b.check_out}</span>
+                                <span className="font-semibold text-stone-800">{naira(b.total_amount)}</span>
+                            </div>
+                            {owing && <p className="mt-1.5 text-[12px] font-bold text-[#c75146]">{naira(balance)} owing</p>}
+                        </button>
+                    );
+                })}
+                {!loading && rows.length === 0 && (
+                    <p className="text-center text-stone-400 py-10">No reservations found.</p>
+                )}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="text-left text-xs text-stone-500 border-b border-stone-200">

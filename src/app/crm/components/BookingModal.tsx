@@ -197,7 +197,7 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
                 {error && <p className="mx-6 mt-3 text-xs text-[#c75146] bg-red-50 rounded-md px-3 py-2">{error}</p>}
 
                 {tab === 'booking' && (
-                    <div className="px-6 py-4 grid grid-cols-2 gap-3 text-sm">
+                    <div className="px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                         <label className="block">
                             <span className="text-xs text-stone-500">Guest name</span>
                             <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.guestName || ''} onChange={e => setForm({ ...form, guestName: e.target.value })} />
@@ -235,15 +235,15 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
                             <span className="text-xs text-stone-500">Children</span>
                             <input type="number" min={0} className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.children ?? 0} onChange={e => setForm({ ...form, children: e.target.value })} />
                         </label>
-                        <label className="block col-span-2">
+                        <label className="block sm:col-span-2">
                             <span className="text-xs text-stone-500">Total price (₦)</span>
                             <input type="number" min={0} className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.totalAmount ?? 0} onChange={e => setForm({ ...form, totalAmount: e.target.value })} />
                         </label>
-                        <label className="block col-span-2">
+                        <label className="block sm:col-span-2">
                             <span className="text-xs text-stone-500">Notes</span>
                             <textarea rows={2} className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} />
                         </label>
-                        <div className="col-span-2 flex justify-end">
+                        <div className="sm:col-span-2 flex justify-end">
                             <button disabled={busy} onClick={saveDetails}
                                 className="px-4 py-2 rounded-md bg-[#008737] text-white text-sm font-semibold disabled:opacity-50">
                                 Save changes
@@ -268,9 +268,9 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
                                 </li>
                             ))}
                         </ul>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                             <input type="number" min={0} placeholder="Amount (₦)" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-                                className="flex-1 border border-stone-300 rounded-md px-2.5 py-1.5 text-sm" />
+                                className="flex-1 min-w-[120px] border border-stone-300 rounded-md px-2.5 py-2 text-sm" />
                             <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
                                 className="border border-stone-300 rounded-md px-2 py-1.5 text-sm bg-white">
                                 {PAY_METHODS.map(m => <option key={m}>{m}</option>)}

@@ -38,8 +38,8 @@ export default function SettingsClient() {
     };
 
     return (
-        <div className="p-6 max-w-3xl">
-            <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900 mb-4">Settings</h1>
+        <div className="p-4 sm:p-6 max-w-3xl">
+            <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-stone-900 mb-4">Settings</h1>
 
             <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] mb-5">
                 <h2 className="px-5 py-3.5 text-sm font-bold text-stone-700 border-b border-stone-200">Team access</h2>
@@ -71,12 +71,12 @@ export default function SettingsClient() {
                     </p>
                     {error && <p className="text-xs text-[#c75146] bg-red-50 rounded-md px-3 py-2 mb-2">{error}</p>}
                     {ok && <p className="text-xs text-[#02572a] bg-[#7ed957]/15 rounded-md px-3 py-2 mb-2">{ok}</p>}
-                    <div className="grid grid-cols-3 gap-2">
-                        <input placeholder="Name" className="border border-stone-300 rounded-md px-2.5 py-1.5 text-sm"
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input placeholder="Name" className="border border-stone-300 rounded-md px-2.5 py-2 text-sm"
                             value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-                        <input placeholder="Email" className="border border-stone-300 rounded-md px-2.5 py-1.5 text-sm"
+                        <input placeholder="Email" className="border border-stone-300 rounded-md px-2.5 py-2 text-sm"
                             value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-                        <input placeholder="Password (min 8)" type="password" className="border border-stone-300 rounded-md px-2.5 py-1.5 text-sm"
+                        <input placeholder="Password (min 8)" type="password" className="border border-stone-300 rounded-md px-2.5 py-2 text-sm"
                             value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
                     </div>
                     <div className="flex justify-end mt-3">

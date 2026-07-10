@@ -74,10 +74,10 @@ export default async function ReportsPage() {
     const propertyRows = Object.values(byProperty).sort((a, b) => b.revenue - a.revenue);
 
     return (
-        <div className="p-6">
-            <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900 mb-4">Reports</h1>
+        <div className="p-4 sm:p-6">
+            <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-stone-900 mb-4">Reports</h1>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 mb-6">
                 {cards.map(c => (
                     <div key={c.label} className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] px-4 py-3.5">
                         <p className="text-[11px] uppercase tracking-wide text-stone-400">{c.label}</p>

@@ -135,11 +135,11 @@ export default function CalendarClient({ properties, initialPropertyId }: {
     const gridWidth = DAYS * CELL_W;
 
     return (
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
             {/* toolbar */}
-            <div className="flex flex-wrap items-center gap-3 mb-5">
-                <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900 mr-2">Calendar</h1>
-                <div className="flex items-center rounded-xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="flex flex-wrap items-center gap-2.5 mb-4 sm:mb-5">
+                <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-stone-900 w-full sm:w-auto sm:mr-2">Calendar</h1>
+                <div className="flex items-center rounded-xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden flex-1 sm:flex-none">
                     <button
                         title="Previous property"
                         onClick={() => {
@@ -147,10 +147,10 @@ export default function CalendarClient({ properties, initialPropertyId }: {
                             const i = order.findIndex(p => p.id === propertyId);
                             setPropertyId(order[(i - 1 + order.length) % order.length].id);
                         }}
-                        className="px-2.5 py-2 hover:bg-stone-50 text-stone-500 border-r border-stone-100"
+                        className="px-2.5 py-2.5 hover:bg-stone-50 text-stone-500 border-r border-stone-100 shrink-0"
                     ><ChevronLeft size={15} /></button>
                     <select value={propertyId} onChange={e => setPropertyId(e.target.value)}
-                        className="px-3 py-2 text-[13.5px] font-semibold bg-white outline-none max-w-72">
+                        className="flex-1 min-w-0 px-3 py-2.5 text-[13.5px] font-semibold bg-white outline-none sm:max-w-72">
                         {groupedByArea.map(([area, list]) => (
                             <optgroup key={area} label={area}>
                                 {list.map(p => <option key={p.id} value={p.id}>{labelById[p.id]}</option>)}
@@ -164,15 +164,15 @@ export default function CalendarClient({ properties, initialPropertyId }: {
                             const i = order.findIndex(p => p.id === propertyId);
                             setPropertyId(order[(i + 1) % order.length].id);
                         }}
-                        className="px-2.5 py-2 hover:bg-stone-50 text-stone-500 border-l border-stone-100"
+                        className="px-2.5 py-2.5 hover:bg-stone-50 text-stone-500 border-l border-stone-100 shrink-0"
                     ><ChevronRight size={15} /></button>
                 </div>
                 <div className="flex items-center rounded-xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
-                    <button onClick={() => setStart(addDays(start, -7))} className="px-2.5 py-2 hover:bg-stone-50 text-stone-500"><ChevronLeft size={15} /></button>
-                    <button onClick={() => setStart(addDays(new Date(), -2))} className="px-3.5 py-2 text-[13px] font-bold text-[#02572a] hover:bg-stone-50 border-x border-stone-100">Today</button>
-                    <button onClick={() => setStart(addDays(start, 7))} className="px-2.5 py-2 hover:bg-stone-50 text-stone-500"><ChevronRight size={15} /></button>
+                    <button onClick={() => setStart(addDays(start, -7))} className="px-3 py-2.5 hover:bg-stone-50 text-stone-500"><ChevronLeft size={15} /></button>
+                    <button onClick={() => setStart(addDays(new Date(), -2))} className="px-3.5 py-2.5 text-[13px] font-bold text-[#02572a] hover:bg-stone-50 border-x border-stone-100">Today</button>
+                    <button onClick={() => setStart(addDays(start, 7))} className="px-3 py-2.5 hover:bg-stone-50 text-stone-500"><ChevronRight size={15} /></button>
                 </div>
-                <div className="ml-auto flex items-center gap-3.5 text-[11.5px] font-semibold text-stone-500">
+                <div className="hidden lg:flex ml-auto items-center gap-3.5 text-[11.5px] font-semibold text-stone-500">
                     <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-[-1px]" style={{ background: '#008737' }} />Paid</span>
                     <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-[-1px]" style={{ background: '#e8a13c' }} />Deposit</span>
                     <span><i className="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-[-1px]" style={{ background: '#c75146' }} />Owing</span>
@@ -186,7 +186,7 @@ export default function CalendarClient({ properties, initialPropertyId }: {
                 <div style={{ minWidth: gridWidth + 160 }}>
                     {/* header dates */}
                     <div className="flex sticky top-0 bg-white z-10 border-b border-stone-200">
-                        <div className="w-40 shrink-0 px-3 py-2 text-xs font-semibold text-stone-500">Unit</div>
+                        <div className="w-24 sm:w-40 shrink-0 px-3 py-2 text-xs font-semibold text-stone-500 sticky left-0 bg-white z-20">Unit</div>
                         {dates.map(d => {
                             const day = new Date(d + 'T00:00:00');
                             const isToday = d === todayIso;
@@ -205,7 +205,7 @@ export default function CalendarClient({ properties, initialPropertyId }: {
                         <div key={group.type.id}>
                             {/* type header with free counts */}
                             <div className="flex bg-[#f4f9f1] border-b border-stone-200">
-                                <div className="w-40 shrink-0 px-3 py-1.5 text-xs font-bold text-[#02572a]">
+                                <div className="w-24 sm:w-40 shrink-0 px-3 py-1.5 text-xs font-bold text-[#02572a] sticky left-0 bg-[#f4f9f1] z-10 leading-tight">
                                     {group.type.name}
                                     {group.type.price_per_night != null && (
                                         <span className="font-normal text-stone-400"> · {naira(group.type.price_per_night)}</span>
@@ -228,7 +228,7 @@ export default function CalendarClient({ properties, initialPropertyId }: {
                                 const unitBlocks = (data?.blocks || []).filter((b: any) => b.room_id === unit.id);
                                 return (
                                     <div key={unit.id} className="flex border-b border-stone-100 relative" style={{ height: 40 }}>
-                                        <div className="w-40 shrink-0 px-3 flex items-center text-sm font-medium text-stone-700 border-r border-stone-100">
+                                        <div className="w-24 sm:w-40 shrink-0 px-3 flex items-center text-sm font-medium text-stone-700 border-r border-stone-100 sticky left-0 bg-white z-10">
                                             {unit.unit_code || unit.name}
                                         </div>
                                         {/* clickable empty cells */}
@@ -400,7 +400,7 @@ function NewBookingModal({ propertyId, unit, roomType, date, onClose, onCreated 
 
                 {error && <p className="mx-6 mt-3 text-xs text-[#c75146] bg-red-50 rounded-md px-3 py-2">{error}</p>}
 
-                <div className="px-6 py-4 grid grid-cols-2 gap-3 text-sm">
+                <div className="px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     <label className="block">
                         <span className="text-xs text-stone-500">Check-in</span>
                         <input type="date" className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.checkIn} onChange={e => setForm({ ...form, checkIn: e.target.value })} />
@@ -412,7 +412,7 @@ function NewBookingModal({ propertyId, unit, roomType, date, onClose, onCreated 
 
                     {mode === 'booking' ? (
                         <>
-                            <label className="block col-span-2">
+                            <label className="block sm:col-span-2">
                                 <span className="text-xs text-stone-500">Guest name *</span>
                                 <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.guestName} onChange={e => setForm({ ...form, guestName: e.target.value })} />
                             </label>
@@ -434,13 +434,13 @@ function NewBookingModal({ propertyId, unit, roomType, date, onClose, onCreated 
                                 <span className="text-xs text-stone-500">Deposit received (₦)</span>
                                 <input type="number" className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.deposit} onChange={e => setForm({ ...form, deposit: e.target.value })} />
                             </label>
-                            <label className="block col-span-2">
+                            <label className="block sm:col-span-2">
                                 <span className="text-xs text-stone-500">Notes</span>
                                 <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
                             </label>
                         </>
                     ) : (
-                        <label className="block col-span-2">
+                        <label className="block sm:col-span-2">
                             <span className="text-xs text-stone-500">Block reason</span>
                             <select className="mt-1 w-full border border-stone-300 rounded-md px-2 py-1.5 bg-white" value={form.blockStatus} onChange={e => setForm({ ...form, blockStatus: e.target.value })}>
                                 <option value="maintenance">Maintenance</option>
@@ -449,7 +449,7 @@ function NewBookingModal({ propertyId, unit, roomType, date, onClose, onCreated 
                         </label>
                     )}
 
-                    <div className="col-span-2 flex justify-end gap-2 pt-1">
+                    <div className="sm:col-span-2 flex justify-end gap-2 pt-1">
                         <button onClick={onClose} className="px-4 py-2 rounded-md border border-stone-300 text-sm">Cancel</button>
                         <button
                             disabled={busy || nights === 0 || (mode === 'booking' && form.guestName.trim().length < 2)}

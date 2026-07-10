@@ -53,13 +53,42 @@ export default async function GuestsPage() {
     const rows = [...guests.values()].sort((a, b) => b.spend - a.spend);
 
     return (
-        <div className="p-6">
-            <div className="flex items-baseline gap-3 mb-4">
-                <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900">Guests</h1>
+        <div className="p-4 sm:p-6">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-4">
+                <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-stone-900">Guests</h1>
                 <p className="text-sm text-stone-400">{rows.length} guests · built automatically from bookings</p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-x-auto">
+            {/* Mobile: cards */}
+            <div className="md:hidden space-y-2.5">
+                {rows.map((g, i) => (
+                    <div key={i} className="bg-white rounded-xl border border-stone-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.04)] p-3.5">
+                        <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                                <p className="font-semibold text-stone-900 truncate">
+                                    {g.name}
+                                    {g.stays > 1 && <span className="ml-2 px-2 py-0.5 rounded-full bg-[#7ed957]/20 text-[#02572a] text-[10.5px] font-bold align-middle">Repeat</span>}
+                                </p>
+                                <p className="text-[12px] text-stone-400 truncate">{g.phone || g.email || '—'}</p>
+                            </div>
+                            {g.phone && (
+                                <a href={waHref(g.phone)} target="_blank" rel="noopener noreferrer"
+                                   className="shrink-0 inline-flex items-center gap-1 text-[#25D366] text-[12px] font-semibold">
+                                    <MessageCircle size={14} /> WhatsApp
+                                </a>
+                            )}
+                        </div>
+                        <div className="flex items-center justify-between mt-2.5 text-[12.5px] text-stone-500">
+                            <span>{g.stays} stay{g.stays === 1 ? '' : 's'} · {g.nights} nights</span>
+                            <span className="font-bold text-stone-800">{naira(g.spend)}</span>
+                        </div>
+                    </div>
+                ))}
+                {rows.length === 0 && <p className="text-center text-stone-400 py-10">Guests appear here once bookings come in.</p>}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="text-left text-xs text-stone-500 border-b border-stone-200">

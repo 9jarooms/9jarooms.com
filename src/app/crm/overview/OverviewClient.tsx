@@ -75,10 +75,10 @@ export default function OverviewClient() {
     }, [visible]);
 
     return (
-        <div className="p-8 max-w-[1200px]">
-            <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-[1200px]">
+            <div className="flex flex-wrap items-end justify-between gap-4 mb-5 sm:mb-6">
                 <div>
-                    <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900">Overview</h1>
+                    <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-stone-900">Overview</h1>
                     <p className="text-[13px] text-stone-500 mt-0.5">
                         {new Date().toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                         {selected && <span> · showing {visible.length} of {data.length} properties</span>}
@@ -86,11 +86,11 @@ export default function OverviewClient() {
                 </div>
             </div>
 
-            {/* property filter chips */}
-            <div className="flex flex-wrap gap-2 mb-7">
+            {/* property filter chips — horizontal scroll strip on mobile */}
+            <div className="flex gap-2 mb-6 sm:mb-7 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 md:flex-wrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <button
                     onClick={() => { setSelected(null); try { localStorage.removeItem(STORE_KEY); } catch { } }}
-                    className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition-all ${!selected ? 'bg-[#02572a] text-white border-[#02572a] shadow-sm' : 'bg-white text-stone-600 border-stone-200 hover:border-stone-300'}`}
+                    className={`shrink-0 whitespace-nowrap px-3.5 py-2 rounded-full text-[12.5px] font-semibold border transition-all ${!selected ? 'bg-[#02572a] text-white border-[#02572a] shadow-sm' : 'bg-white text-stone-600 border-stone-200 hover:border-stone-300'}`}
                 >
                     All properties
                 </button>
@@ -100,7 +100,7 @@ export default function OverviewClient() {
                         <button
                             key={p.id}
                             onClick={() => toggle(p.id)}
-                            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition-all ${on ? 'bg-[#7ed957]/15 text-[#02572a] border-[#7ed957]/50' : 'bg-white text-stone-400 border-stone-200 hover:border-stone-300'}`}
+                            className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12.5px] font-semibold border transition-all ${on ? 'bg-[#7ed957]/15 text-[#02572a] border-[#7ed957]/50' : 'bg-white text-stone-400 border-stone-200 hover:border-stone-300'}`}
                         >
                             {on ? <CheckSquare size={13} /> : <Square size={13} />}
                             {p.name}
