@@ -59,15 +59,22 @@ export default function PropertiesClient() {
 
             <div className="grid gap-3">
                 {rows.map(p => (
-                    <div key={p.id} className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] px-5 py-4 flex flex-wrap items-center gap-4">
-                        <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-stone-800">{p.name}</p>
-                            <p className="text-xs text-stone-400 mt-0.5">{p.area}{p.city ? `, ${p.city}` : ''} · from {naira(p.price_per_night)}/night</p>
+                    <div key={p.id} className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] p-4 sm:px-5 sm:py-4 sm:flex sm:flex-wrap sm:items-center gap-4">
+                        <div className="min-w-0 sm:flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                    <p className="font-semibold text-stone-800 truncate">{p.name}</p>
+                                    <p className="text-xs text-stone-400 mt-0.5">{p.area}{p.city ? `, ${p.city}` : ''} · from {naira(p.price_per_night)}/night</p>
+                                </div>
+                                <span className={`shrink-0 sm:hidden px-2.5 py-1 rounded-full text-[11px] font-bold ${p.is_active ? 'bg-green-100 text-green-800' : 'bg-stone-100 text-stone-500'}`}>
+                                    {p.is_active ? 'Live' : 'Hidden'}
+                                </span>
+                            </div>
                             {p.roomTypes.length > 0 ? (
-                                <div className="flex flex-wrap gap-2 mt-2">
+                                <div className="flex flex-wrap gap-1.5 mt-2.5">
                                     {p.roomTypes.map((t: any) => (
-                                        <span key={t.id} className="px-2.5 py-1 rounded-full bg-[#f4f9f1] text-[#02572a] text-xs font-medium">
-                                            {t.name} · {t.unitCount} units · {naira(t.price_per_night)}
+                                        <span key={t.id} className="px-2.5 py-1 rounded-full bg-[#f4f9f1] text-[#02572a] text-[11px] font-medium">
+                                            {t.name} · {t.unitCount}u · {naira(t.price_per_night)}
                                         </span>
                                     ))}
                                 </div>
@@ -75,21 +82,21 @@ export default function PropertiesClient() {
                                 <p className="text-xs text-stone-400 mt-1.5">{p.unitCount} bookable room{p.unitCount === 1 ? '' : 's'}</p>
                             )}
                         </div>
-                        <div className="flex items-center gap-3">
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${p.is_active ? 'bg-green-100 text-green-800' : 'bg-stone-100 text-stone-500'}`}>
+                        <div className="flex items-center gap-2 sm:gap-3 mt-3 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-stone-100">
+                            <span className={`hidden sm:inline px-2.5 py-1 rounded-full text-xs font-bold ${p.is_active ? 'bg-green-100 text-green-800' : 'bg-stone-100 text-stone-500'}`}>
                                 {p.is_active ? 'Live' : 'Hidden'}
                             </span>
                             <button onClick={() => setEditFor(p)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 text-xs font-semibold hover:bg-stone-50">
+                                className="flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg border border-stone-300 text-xs font-semibold hover:bg-stone-50 active:bg-stone-100">
                                 <Pencil size={13} /> Edit
                             </button>
                             <button onClick={() => toggleActive(p)}
-                                className="px-3 py-1.5 rounded-md border border-stone-300 text-xs font-semibold hover:bg-stone-50">
-                                {p.is_active ? 'Hide from site' : 'Publish'}
+                                className="flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg border border-stone-300 text-xs font-semibold hover:bg-stone-50 active:bg-stone-100 whitespace-nowrap">
+                                {p.is_active ? 'Hide' : 'Publish'}
                             </button>
                             <button onClick={() => removeProperty(p)}
                                 title="Delete property"
-                                className="p-1.5 rounded-md border border-stone-200 text-stone-400 hover:text-[#c75146] hover:border-[#c75146]/40">
+                                className="shrink-0 p-2 sm:p-1.5 rounded-lg border border-stone-200 text-stone-400 hover:text-[#c75146] hover:border-[#c75146]/40 active:bg-red-50">
                                 <Trash2 size={14} />
                             </button>
                         </div>

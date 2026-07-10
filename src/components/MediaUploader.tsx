@@ -3,9 +3,10 @@
 import { useState, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { createClient } from '@/lib/supabase/client';
-import imageCompression from 'browser-image-compression';
-import heic2any from 'heic2any';
 import { X, Loader2, ImagePlus, Star } from 'lucide-react';
+
+// heic2any and browser-image-compression touch `window` at module load, which
+// breaks SSR. Import them lazily in the browser only, inside onDrop.
 
 interface MediaUploaderProps {
     onUpload: (urls: string[]) => void;
@@ -73,6 +74,7 @@ export default function MediaUploader({
                 // Convert HEIC/HEIF to JPEG first
                 if (isHeic) {
                     try {
+                        const heic2any = (await import('heic2any')).default;
                         const convertedBlob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
                         const jpegBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
                         fileToUpload = new File([jpegBlob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' });
@@ -85,6 +87,7 @@ export default function MediaUploader({
 
                 if (isImage) {
                     try {
+                        const imageCompression = (await import('browser-image-compression')).default;
                         const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
                         fileToUpload = await imageCompression(fileToUpload, options);
                     } catch (err) {

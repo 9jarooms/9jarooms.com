@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import ReportGenerator from './ReportGenerator';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,13 @@ export default async function ReportsPage() {
     const daysInMonth = monthEndDate.getDate() === 1 ? new Date(+monthEndDate - 86400000).getDate() : 30;
 
     const LIVE = ['confirmed', 'paid', 'checked_in', 'completed'];
+
+    const { data: activeProps } = await supabase
+        .from('properties')
+        .select('id, name, area')
+        .eq('is_deleted', false)
+        .eq('is_active', true)
+        .order('name');
 
     const [{ data: monthBookings }, { data: arrivals }, { data: departures }, { data: inHouse }, { data: units }, { data: payments }] = await Promise.all([
         supabase.from('bookings')
@@ -76,6 +84,8 @@ export default async function ReportsPage() {
     return (
         <div className="p-4 sm:p-6">
             <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-stone-900 mb-4">Reports</h1>
+
+            <ReportGenerator properties={activeProps || []} />
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 mb-6">
                 {cards.map(c => (
