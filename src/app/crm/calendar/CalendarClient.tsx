@@ -323,15 +323,22 @@ function NewBookingModal({ propertyId, unit, roomType, date, onClose, onCreated 
     const [mode, setMode] = useState<'booking' | 'block'>('booking');
     const [form, setForm] = useState({
         guestName: '', guestPhone: '', guestEmail: '',
-        checkIn: date, checkOut: iso(addDays(new Date(date + 'T00:00:00'), 1)),
+        checkIn: date, nights: 1,
         source: 'whatsapp', notes: '', deposit: '', price: '',
         blockStatus: 'maintenance',
     });
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const nights = Math.max(Math.round((+new Date(form.checkOut) - +new Date(form.checkIn)) / 86400000), 0);
+    // Nights-first: staff pick a check-in + number of nights; check-out and the
+    // price fall out automatically.
+    const nights = Math.max(Number(form.nights) || 0, 0);
+    const checkOut = iso(addDays(new Date(form.checkIn + 'T00:00:00'), nights));
     const defaultPrice = roomType ? Number(roomType.price_per_night) * nights : 0;
+    // Price auto-fills from the room type; blank input = use the auto price.
+    const effectivePrice = form.price !== '' ? Number(form.price) : defaultPrice;
+    const depositNum = Number(form.deposit) || 0;
+    const balanceDue = Math.max(effectivePrice - depositNum, 0);
 
     const submit = async () => {
         setBusy(true); setError(null);
@@ -339,7 +346,7 @@ function NewBookingModal({ propertyId, unit, roomType, date, onClose, onCreated 
             if (mode === 'block') {
                 const res = await fetch('/api/crm/blocks', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ roomId: unit.id, from: form.checkIn, to: form.checkOut, status: form.blockStatus }),
+                    body: JSON.stringify({ roomId: unit.id, from: form.checkIn, to: checkOut, status: form.blockStatus }),
                 });
                 if (!res.ok) throw new Error((await res.json()).error);
                 onCreated();
@@ -351,7 +358,7 @@ function NewBookingModal({ propertyId, unit, roomType, date, onClose, onCreated 
                 body: JSON.stringify({
                     roomId: unit.id, propertyId, mode: 'single',
                     guestName: form.guestName, guestPhone: form.guestPhone || null, guestEmail: form.guestEmail || null,
-                    checkIn: form.checkIn, checkOut: form.checkOut,
+                    checkIn: form.checkIn, checkOut,
                     isManualBooking: true, bookingSource: form.source, notes: form.notes || null,
                 }),
             });
@@ -406,9 +413,12 @@ function NewBookingModal({ propertyId, unit, roomType, date, onClose, onCreated 
                         <input type="date" className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.checkIn} onChange={e => setForm({ ...form, checkIn: e.target.value })} />
                     </label>
                     <label className="block">
-                        <span className="text-xs text-stone-500">Check-out</span>
-                        <input type="date" className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.checkOut} onChange={e => setForm({ ...form, checkOut: e.target.value })} />
+                        <span className="text-xs text-stone-500">Nights</span>
+                        <input type="number" min={1} className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.nights} onChange={e => setForm({ ...form, nights: Number(e.target.value) })} />
                     </label>
+                    <div className="sm:col-span-2 -mt-1 text-xs text-stone-500">
+                        Check-out: <span className="font-semibold text-stone-700">{new Date(checkOut + 'T00:00:00').toLocaleDateString('en', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                    </div>
 
                     {mode === 'booking' ? (
                         <>
@@ -427,17 +437,22 @@ function NewBookingModal({ propertyId, unit, roomType, date, onClose, onCreated 
                                 </select>
                             </label>
                             <label className="block">
-                                <span className="text-xs text-stone-500">Price (₦) — {nights} night{nights === 1 ? '' : 's'}</span>
+                                <span className="text-xs text-stone-500">Price (₦) — auto for {nights} night{nights === 1 ? '' : 's'}</span>
                                 <input type="number" placeholder={String(defaultPrice)} className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} />
                             </label>
                             <label className="block">
-                                <span className="text-xs text-stone-500">Deposit received (₦)</span>
+                                <span className="text-xs text-stone-500">Deposit now (₦) — optional</span>
                                 <input type="number" className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.deposit} onChange={e => setForm({ ...form, deposit: e.target.value })} />
                             </label>
                             <label className="block sm:col-span-2">
                                 <span className="text-xs text-stone-500">Notes</span>
                                 <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
                             </label>
+                            <div className="sm:col-span-2 flex items-center justify-between rounded-md bg-stone-50 border border-stone-200 px-3 py-2 text-xs">
+                                <span className="text-stone-500">Total <span className="font-semibold text-stone-800">{naira(effectivePrice)}</span></span>
+                                {depositNum > 0 && <span className="text-stone-500">Deposit <span className="font-semibold text-[#008737]">{naira(depositNum)}</span></span>}
+                                <span className="text-stone-500">Balance <span className={`font-semibold ${balanceDue > 0 ? 'text-[#c75146]' : 'text-stone-700'}`}>{naira(balanceDue)}</span></span>
+                            </div>
                         </>
                     ) : (
                         <label className="block sm:col-span-2">

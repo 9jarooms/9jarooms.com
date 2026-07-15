@@ -74,16 +74,24 @@ interface Props {
     isApartment?: boolean;
     wholeApartmentPrice?: number | null;
     twoBedPrice?: number | null;
+    duplexData?: {
+        units: { duplexNo: string; roomIds: string[] }[];
+        unavailable: string[];
+        threeBedPrice: number | null;
+        twoBedPrice: number | null;
+    } | null;
     contactPhone?: string;
     contactWhatsapp?: string;
     similarProperties?: any[];
 }
 
-export default function PropertyDetailClient({ property, rooms, availability, unavailable = [], isApartment = false, wholeApartmentPrice = null, twoBedPrice = null, contactPhone, contactWhatsapp, similarProperties = [] }: Props) {
+export default function PropertyDetailClient({ property, rooms, availability, unavailable = [], isApartment = false, wholeApartmentPrice = null, twoBedPrice = null, duplexData = null, contactPhone, contactWhatsapp, similarProperties = [] }: Props) {
     const router = useRouter();
     const [selectedRoom, setSelectedRoom] = useState<Room | null>(rooms.length === 1 && !isApartment ? rooms[0] : null);
     const [selectedOptionKey, setSelectedOptionKey] = useState<string | null>(null);
     const [bookingMode, setBookingMode] = useState<'single' | 'two_bed' | 'whole'>('single');
+    // Duplex bundle selection ('whole' = 3-bed, 'two_bed' = 2-bed), pooled properties only
+    const [selectedDuplex, setSelectedDuplex] = useState<'whole' | 'two_bed' | null>(null);
     const [checkIn, setCheckIn] = useState<Date | null>(null);
     const [checkOut, setCheckOut] = useState<Date | null>(null);
     const [guestName, setGuestName] = useState('');
@@ -216,6 +224,47 @@ export default function PropertyDetailClient({ property, rooms, availability, un
             .map(([date]) => ({ id: date, room_id: property.id, date, status: 'booked' as const, booking_id: null }));
     }, [isApartment, rooms.length, availability, property.id]);
 
+    // --- Duplex bundle options (Kaura: 3-bed / 2-bed whole units) ---
+    const hasDuplex = !!duplexData && duplexData.units.length > 0 &&
+        (duplexData.threeBedPrice != null || duplexData.twoBedPrice != null);
+    const duplexUnavailableSet = useMemo(() => new Set(duplexData?.unavailable || []), [duplexData]);
+
+    // Is at least one whole duplex free for every selected night?
+    const duplexAvailable = useMemo(() => {
+        if (!hasDuplex || stayDates.length === 0) return false;
+        return duplexData!.units.some(u =>
+            u.roomIds.every(rid => stayDates.every(d => !duplexUnavailableSet.has(`${rid}|${d}`)))
+        );
+    }, [hasDuplex, duplexData, stayDates, duplexUnavailableSet]);
+
+    // Grey out a calendar date only when NO whole unit is free that night.
+    const duplexCalendarAvailability = useMemo<Availability[]>(() => {
+        if (!hasDuplex) return [];
+        const allDates = [...new Set(duplexData!.unavailable.map(k => k.split('|')[1]))];
+        const blocked: Availability[] = [];
+        for (const date of allDates) {
+            const anyFree = duplexData!.units.some(u =>
+                u.roomIds.every(rid => !duplexUnavailableSet.has(`${rid}|${date}`))
+            );
+            if (!anyFree) blocked.push({ id: date, room_id: property.id, date, status: 'booked' as const, booking_id: null });
+        }
+        return blocked;
+    }, [hasDuplex, duplexData, duplexUnavailableSet, property.id]);
+
+    const duplexUnitPrice = selectedDuplex === 'whole'
+        ? (duplexData?.threeBedPrice ?? 0)
+        : selectedDuplex === 'two_bed'
+            ? (duplexData?.twoBedPrice ?? 0)
+            : 0;
+    const duplexTotal = duplexUnitPrice * nights;
+    const duplexLabel = selectedDuplex === 'whole' ? '3-Bed Duplex' : selectedDuplex === 'two_bed' ? '2-Bed Duplex' : '';
+
+    const canEnquire = !!checkIn && !!checkOut && nights > 0 && (
+        isApartment ? !!selectedOption :
+            selectedDuplex ? duplexAvailable :
+                !!selectedRoom
+    );
+
     const roomTypeLabel: Record<string, string> = {
         big_balcony: 'Big balcony',
         regular_balcony: 'Balcony',
@@ -234,8 +283,10 @@ export default function PropertyDetailClient({ property, rooms, availability, un
     };
 
     const handleBooking = async () => {
-        const bookingRoomId = isApartment ? selectedOption?.roomIds[0] : selectedRoom?.id;
-        if (!bookingRoomId || !checkIn || !checkOut || !guestName || !guestEmail || !guestPhone) {
+        // Duplex bundles let the API pick the concrete free unit (no roomId).
+        const bookingRoomId = selectedDuplex ? undefined : (isApartment ? selectedOption?.roomIds[0] : selectedRoom?.id);
+        const bookingModeToSend = selectedDuplex ? selectedDuplex : (isApartment ? bookingMode : 'single');
+        if ((!bookingRoomId && !selectedDuplex) || !checkIn || !checkOut || !guestName || !guestEmail || !guestPhone) {
             setError('Please fill in all required fields');
             return;
         }
@@ -250,9 +301,9 @@ export default function PropertyDetailClient({ property, rooms, availability, un
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    roomId: bookingRoomId,
+                    ...(bookingRoomId ? { roomId: bookingRoomId } : {}),
                     propertyId: property.id,
-                    mode: isApartment ? bookingMode : 'single',
+                    mode: bookingModeToSend,
                     guestName,
                     guestEmail,
                     guestPhone,
@@ -278,8 +329,10 @@ export default function PropertyDetailClient({ property, rooms, availability, un
         if (!checkIn || !checkOut) return;
         const whatsappNumber = (contactWhatsapp || '2349067779344').replace(/\D/g, '');
         const propertyUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://9jarooms.com'}/property/${property.id}`;
-        const enquiryTotal = isApartment && selectedOption ? selectedOption.price : totalAmount;
-        const optionLine = isApartment && selectedOption ? [`🏠 Option: ${selectedOption.label}`] : [];
+        const enquiryTotal = selectedDuplex ? duplexTotal : (isApartment && selectedOption ? selectedOption.price : totalAmount);
+        const optionLine = selectedDuplex
+            ? [`🏠 Option: ${duplexLabel}`]
+            : (isApartment && selectedOption ? [`🏠 Option: ${selectedOption.label}`] : []);
         const message = [
             `Hi, I'd like to book *${property.name}*`,
             ...optionLine,
@@ -536,10 +589,11 @@ export default function PropertyDetailClient({ property, rooms, availability, un
                                                 key={room.id}
                                                 onClick={() => {
                                                     setSelectedRoom(room);
+                                                    setSelectedDuplex(null);
                                                     setCheckIn(null);
                                                     setCheckOut(null);
                                                 }}
-                                                className={`w-full text-left p-3 rounded-xl border transition-all ${selectedRoom?.id === room.id
+                                                className={`w-full text-left p-3 rounded-xl border transition-all ${selectedRoom?.id === room.id && !selectedDuplex
                                                     ? 'border-green-400 bg-green-50'
                                                     : 'border-gray-100 hover:border-gray-200'
                                                     }`}
@@ -562,6 +616,51 @@ export default function PropertyDetailClient({ property, rooms, availability, un
                                             </button>
                                         ))}
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Duplex bundle options (Kaura: whole 3-bed / 2-bed unit) */}
+                            {!isApartment && hasDuplex && (
+                                <div className="mb-6">
+                                    <label className="text-sm font-medium text-gray-700 mb-2 block">Or book a whole duplex</label>
+                                    <div className="space-y-2">
+                                        {(['whole', 'two_bed'] as const).map((m) => {
+                                            const price = m === 'whole' ? duplexData!.threeBedPrice : duplexData!.twoBedPrice;
+                                            if (price == null) return null;
+                                            const label = m === 'whole' ? '3-Bed Duplex' : '2-Bed Duplex';
+                                            const sub = m === 'whole' ? 'Entire unit — 3 bedrooms' : '2 bedrooms — third room kept private';
+                                            const isSel = selectedDuplex === m;
+                                            return (
+                                                <button
+                                                    key={m}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedDuplex(m);
+                                                        setSelectedRoom(null);
+                                                        setCheckIn(null);
+                                                        setCheckOut(null);
+                                                    }}
+                                                    className={`w-full text-left p-3 rounded-xl border transition-all ${isSel
+                                                        ? 'border-green-400 bg-green-50'
+                                                        : 'border-gray-100 hover:border-gray-200'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <p className="font-medium text-sm">{label}</p>
+                                                            <p className="text-xs text-gray-500 mt-0.5">{sub}</p>
+                                                        </div>
+                                                        <span className="text-sm font-semibold shrink-0">
+                                                            ₦{formatPrice(price)}<span className="font-normal text-gray-400">/night</span>
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {selectedDuplex && checkIn && checkOut && nights > 0 && !duplexAvailable && (
+                                        <p className="text-xs text-amber-600 mt-2">No whole duplex is free for these dates. Please try different dates.</p>
+                                    )}
                                 </div>
                             )}
 
@@ -626,6 +725,14 @@ export default function PropertyDetailClient({ property, rooms, availability, un
                                         </div>
                                     )}
                                 </>
+                            ) : selectedDuplex ? (
+                                <BookingCalendar
+                                    availability={duplexCalendarAvailability}
+                                    onDateSelect={handleDateSelect}
+                                    selectedCheckIn={checkIn}
+                                    selectedCheckOut={checkOut}
+                                    minimumStay={property.minimum_stay || 1}
+                                />
                             ) : selectedRoom ? (
                                 <BookingCalendar
                                     availability={roomAvailability}
@@ -636,7 +743,7 @@ export default function PropertyDetailClient({ property, rooms, availability, un
                                 />
                             ) : (
                                 <div className="text-center py-8 text-gray-400 text-sm">
-                                    Select a room to view availability
+                                    Select a room or duplex to view availability
                                 </div>
                             )}
 
@@ -679,8 +786,22 @@ export default function PropertyDetailClient({ property, rooms, availability, un
                                 </div>
                             )}
 
+                            {/* Pricing Summary — duplex bundle */}
+                            {selectedDuplex && checkIn && checkOut && nights > 0 && duplexAvailable && (
+                                <div className="mt-6 pt-4 border-t border-gray-100 space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-500">{duplexLabel} · ₦{formatPrice(duplexUnitPrice)} × {nights} nights</span>
+                                        <span className="text-gray-900">₦{formatPrice(duplexTotal)}</span>
+                                    </div>
+                                    <div className="flex justify-between font-semibold text-lg pt-2 border-t border-gray-100">
+                                        <span>Total</span>
+                                        <span className="text-green-600">₦{formatPrice(duplexTotal)}</span>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Pricing Summary — single room / non-apartment */}
-                            {!isApartment && checkIn && checkOut && nights > 0 && (
+                            {!isApartment && !selectedDuplex && checkIn && checkOut && nights > 0 && (
                                 <div className="mt-6 pt-4 border-t border-gray-100 space-y-2">
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-500">₦{formatPrice(pricePerNight)} × {nights} nights</span>
@@ -708,7 +829,7 @@ export default function PropertyDetailClient({ property, rooms, availability, un
                             )}
 
                             {/* WhatsApp Enquiry Button */}
-                            {checkIn && checkOut && (!isApartment || selectedOption) ? (
+                            {canEnquire ? (
                                 <button
                                     onClick={handleWhatsAppEnquiry}
                                     className="w-full mt-6 bg-[#25D366] hover:bg-[#1ebe5d] text-white py-3.5 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
@@ -721,7 +842,10 @@ export default function PropertyDetailClient({ property, rooms, availability, un
                                     disabled
                                     className="w-full mt-6 bg-gray-100 text-gray-400 py-3.5 rounded-xl font-semibold cursor-not-allowed"
                                 >
-                                    {isApartment && checkIn && checkOut ? 'Choose an option to enquire' : 'Select dates to enquire'}
+                                    {selectedDuplex && checkIn && checkOut && !duplexAvailable
+                                        ? 'Not available for these dates'
+                                        : isApartment && checkIn && checkOut ? 'Choose an option to enquire'
+                                            : 'Select dates to enquire'}
                                 </button>
                             )}
                             {checkIn && checkOut && (

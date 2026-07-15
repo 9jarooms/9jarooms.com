@@ -29,20 +29,26 @@ function presets() {
     };
 }
 
-export default function ReportGenerator({ properties }: { properties: Property[] }) {
+export default function ReportGenerator({ properties, unitsByProperty = {} }: {
+    properties: Property[];
+    unitsByProperty?: Record<string, { id: string; label: string }[]>;
+}) {
     const P = presets();
     const [propertyId, setPropertyId] = useState(properties[0]?.id || '');
+    const [roomId, setRoomId] = useState(''); // '' = all units
     const [from, setFrom] = useState(P.thisMonth.from);
     const [to, setTo] = useState(iso(new Date())); // inclusive-feeling default: today
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [report, setReport] = useState<any>(null);
 
+    const units = unitsByProperty[propertyId] || [];
+
     const generate = async () => {
         setBusy(true); setError(null); setReport(null);
         // API treats `to` as exclusive; add a day so the picked end date is included
         const toExclusive = iso(new Date(new Date(to + 'T00:00:00').getTime() + 86400000));
-        const res = await fetch(`/api/crm/reports/property?propertyId=${propertyId}&from=${from}&to=${toExclusive}`);
+        const res = await fetch(`/api/crm/reports/property?propertyId=${propertyId}&from=${from}&to=${toExclusive}${roomId ? `&roomId=${roomId}` : ''}`);
         const json = await res.json();
         setBusy(false);
         if (!res.ok) { setError(json.error); return; }
@@ -68,7 +74,7 @@ export default function ReportGenerator({ properties }: { properties: Property[]
         doc.setTextColor(...lime); doc.text('Property Report', 128, 34);
         doc.setTextColor(255, 255, 255);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-        doc.text(`${report.property.name}${report.property.area ? ' — ' + report.property.area : ''}`, 40, 52);
+        doc.text(`${report.property.name}${report.property.area ? ' — ' + report.property.area : ''}${report.property.unit ? ' · Unit ' + report.property.unit : ''}`, 40, 52);
         const rangeLabel = `${report.range.from}  to  ${to}  (${report.range.days} nights window)`;
         doc.text(rangeLabel, 40, 64);
 
@@ -151,7 +157,7 @@ export default function ReportGenerator({ properties }: { properties: Property[]
                 40, doc.internal.pageSize.getHeight() - 20);
         }
 
-        const safe = report.property.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+        const safe = `${report.property.name}${report.property.unit ? '-' + report.property.unit : ''}`.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
         doc.save(`9jarooms-${safe}-${report.range.from}-to-${to}.pdf`);
     };
 
@@ -161,12 +167,21 @@ export default function ReportGenerator({ properties }: { properties: Property[]
                 <FileText size={15} className="text-[#008737]" /> Generate property report (PDF)
             </h2>
             <div className="px-4 sm:px-5 py-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <label className="block">
                         <span className="text-xs text-stone-500">Property</span>
-                        <select value={propertyId} onChange={e => setPropertyId(e.target.value)}
+                        <select value={propertyId} onChange={e => { setPropertyId(e.target.value); setRoomId(''); }}
                             className="mt-1 w-full border border-stone-300 rounded-lg px-2.5 py-2 text-sm bg-white">
                             {properties.map(p => <option key={p.id} value={p.id}>{p.name}{p.area ? ` — ${p.area}` : ''}</option>)}
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-stone-500">Unit</span>
+                        <select value={roomId} onChange={e => setRoomId(e.target.value)}
+                            disabled={units.length === 0}
+                            className="mt-1 w-full border border-stone-300 rounded-lg px-2.5 py-2 text-sm bg-white disabled:bg-stone-50 disabled:text-stone-400">
+                            <option value="">All units</option>
+                            {units.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
                         </select>
                     </label>
                     <label className="block">
@@ -209,7 +224,7 @@ export default function ReportGenerator({ properties }: { properties: Property[]
                 {report && (
                     <div className="mt-4 rounded-xl border border-[#7ed957]/40 bg-[#f4f9f1] p-4">
                         <p className="text-xs font-bold text-[#02572a] mb-2">
-                            {report.property.name} · {report.range.from} → {to}
+                            {report.property.name}{report.property.unit ? ` · Unit ${report.property.unit}` : ''} · {report.range.from} → {to}
                         </p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-sm">
                             <Stat label="Revenue" value={naira(report.summary.revenue).replace('NGN', '₦')} />

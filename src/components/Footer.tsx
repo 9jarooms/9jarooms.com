@@ -53,7 +53,8 @@ export default function Footer() {
                             </li>
                             <li>
                                 <p className="text-white/25 text-[10px] uppercase tracking-wider mb-1">Phone</p>
-                                <a href="tel:+2349111101012" className="hover:text-white transition-colors">+234 911 110 1012</a>
+                                <a href="tel:+2349111101012" className="block hover:text-white transition-colors">+234 911 110 1012</a>
+                                <a href="tel:+2349112224020" className="block hover:text-white transition-colors">0911 222 4020</a>
                             </li>
                         </ul>
                     </div>

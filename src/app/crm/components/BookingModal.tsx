@@ -7,6 +7,8 @@ export function naira(n: number) {
     return '₦' + Number(n || 0).toLocaleString('en-NG');
 }
 
+function addDaysLocal(d: Date, n: number) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+
 export function waLink(phone: string | null | undefined, text: string) {
     if (!phone) return null;
     let digits = phone.replace(/[^0-9]/g, '');
@@ -43,6 +45,10 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
     const [form, setForm] = useState<any>({});
     const [payAmount, setPayAmount] = useState('');
     const [payMethod, setPayMethod] = useState(PAY_METHODS[0]);
+    // Stay editor: move unit, extend / change dates, optional price recalculation
+    const [stay, setStay] = useState<{ unitId: string; checkIn: string; nights: number; autoPrice: boolean }>({
+        unitId: '', checkIn: '', nights: 1, autoPrice: true,
+    });
 
     const load = async () => {
         const res = await fetch(`/api/crm/bookings/${bookingId}`);
@@ -62,6 +68,12 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
                 bookingSource: b.booking_source || 'website',
                 totalAmount: Number(b.total_amount),
             });
+            setStay({
+                unitId: b.room_id || '',
+                checkIn: b.check_in || '',
+                nights: b.nights || 1,
+                autoPrice: true,
+            });
         } else setError(json.error);
     };
 
@@ -80,6 +92,22 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
         await load();
         onChanged();
         return true;
+    };
+
+    // local-date ISO (avoids the UTC day-shift in WAT)
+    const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const stayNights = Math.max(Number(stay.nights) || 0, 0);
+    const stayCheckOut = stay.checkIn
+        ? isoDate(addDaysLocal(new Date(stay.checkIn + 'T00:00:00'), stayNights))
+        : '';
+    const perNight = data?.booking ? Number(data.booking.price_per_night) : 0;
+    const autoTotal = Math.round(perNight * stayNights);
+
+    const saveStay = async () => {
+        if (!stay.checkIn || stayNights < 1) { setError('Enter a check-in date and at least 1 night'); return; }
+        const payload: any = { roomId: stay.unitId, checkIn: stay.checkIn, checkOut: stayCheckOut };
+        if (stay.autoPrice) payload.totalAmount = autoTotal;
+        await patch(payload);
     };
 
     const saveDetails = () => patch({
@@ -198,6 +226,56 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
 
                 {tab === 'booking' && (
                     <div className="px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        {/* Stay & unit — move room, extend / change dates */}
+                        <div className="sm:col-span-2 rounded-lg border border-stone-200 bg-stone-50/60 p-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-semibold text-stone-600 uppercase tracking-wide">Stay &amp; unit</span>
+                                <div className="flex gap-1.5">
+                                    <button type="button" onClick={() => setStay(s => ({ ...s, nights: (Number(s.nights) || 0) + 1 }))}
+                                        className="px-2 py-1 rounded-md bg-white border border-stone-300 text-[11px] font-semibold text-stone-600 hover:bg-stone-100">+1 night</button>
+                                    <button type="button" onClick={() => setStay(s => ({ ...s, nights: (Number(s.nights) || 0) + 7 }))}
+                                        className="px-2 py-1 rounded-md bg-white border border-stone-300 text-[11px] font-semibold text-stone-600 hover:bg-stone-100">+7 nights</button>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                <label className="block">
+                                    <span className="text-[11px] text-stone-500">Unit</span>
+                                    <select className="mt-1 w-full border border-stone-300 rounded-md px-2 py-1.5 bg-white text-sm"
+                                        value={stay.unitId} onChange={e => setStay(s => ({ ...s, unitId: e.target.value }))}>
+                                        {(data.units || []).map((u: any) => (
+                                            <option key={u.id} value={u.id}>{u.unit_code || u.name}</option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className="block">
+                                    <span className="text-[11px] text-stone-500">Check-in</span>
+                                    <input type="date" className="mt-1 w-full border border-stone-300 rounded-md px-2 py-1.5 text-sm"
+                                        value={stay.checkIn} onChange={e => setStay(s => ({ ...s, checkIn: e.target.value }))} />
+                                </label>
+                                <label className="block">
+                                    <span className="text-[11px] text-stone-500">Nights</span>
+                                    <input type="number" min={1} className="mt-1 w-full border border-stone-300 rounded-md px-2 py-1.5 text-sm"
+                                        value={stay.nights} onChange={e => setStay(s => ({ ...s, nights: Number(e.target.value) }))} />
+                                </label>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between gap-2 mt-2.5">
+                                <span className="text-[11px] text-stone-500">
+                                    Check-out <span className="font-semibold text-stone-700">{stayCheckOut || '—'}</span>
+                                    {stay.autoPrice && stayNights > 0 && <> · new total <span className="font-semibold text-stone-700">{naira(autoTotal)}</span></>}
+                                </span>
+                                <label className="flex items-center gap-1.5 text-[11px] text-stone-600">
+                                    <input type="checkbox" checked={stay.autoPrice} onChange={e => setStay(s => ({ ...s, autoPrice: e.target.checked }))} />
+                                    Auto-recalculate price
+                                </label>
+                            </div>
+                            <div className="flex justify-end mt-2">
+                                <button disabled={busy} onClick={saveStay}
+                                    className="px-3.5 py-1.5 rounded-md bg-[#02572a] text-white text-xs font-semibold disabled:opacity-50">
+                                    Save stay &amp; unit
+                                </button>
+                            </div>
+                        </div>
+
                         <label className="block">
                             <span className="text-xs text-stone-500">Guest name</span>
                             <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.guestName || ''} onChange={e => setForm({ ...form, guestName: e.target.value })} />

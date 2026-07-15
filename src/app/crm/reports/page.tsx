@@ -26,6 +26,17 @@ export default async function ReportsPage() {
         .eq('is_active', true)
         .order('name');
 
+    // Units per property, so the report generator can filter to a single unit.
+    const { data: reportUnits } = await supabase
+        .from('rooms')
+        .select('id, property_id, unit_code, name')
+        .eq('is_active', true)
+        .order('unit_code');
+    const unitsByProperty: Record<string, { id: string; label: string }[]> = {};
+    for (const u of reportUnits || []) {
+        (unitsByProperty[u.property_id] ||= []).push({ id: u.id, label: u.unit_code || u.name || 'Unit' });
+    }
+
     const [{ data: monthBookings }, { data: arrivals }, { data: departures }, { data: inHouse }, { data: units }, { data: payments }] = await Promise.all([
         supabase.from('bookings')
             .select('id, total_amount, nights, status, booking_source, check_in, check_out, property_id, property:properties(name)')
@@ -85,7 +96,7 @@ export default async function ReportsPage() {
         <div className="p-4 sm:p-6">
             <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-stone-900 mb-4">Reports</h1>
 
-            <ReportGenerator properties={activeProps || []} />
+            <ReportGenerator properties={activeProps || []} unitsByProperty={unitsByProperty} />
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 mb-6">
                 {cards.map(c => (

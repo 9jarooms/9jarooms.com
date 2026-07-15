@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import Header from '@/components/Header';
 import PropertyDetailClient from './PropertyDetailClient';
+import { groupDuplexes } from '@/lib/booking/options';
 
 interface Props {
     params: Promise<{ id: string }>;
@@ -116,6 +117,33 @@ export default async function PropertyPage({ params }: Props) {
         .eq('is_active', true)
         .order('sort_order');
 
+    // DUPLEX BUNDLES: a pooled property (e.g. Kaura) can also sell whole
+    // duplex units (all rooms sharing a unit number). Compute this from the
+    // PHYSICAL units + real availability now, before the pooled transform
+    // below collapses `rooms` into type-cards. The client decides per-range
+    // whether a whole unit is free.
+    let duplexData: {
+        units: { duplexNo: string; roomIds: string[] }[];
+        unavailable: string[];
+        threeBedPrice: number | null;
+        twoBedPrice: number | null;
+    } | null = null;
+    {
+        const b3 = property.whole_apartment_price ?? null;
+        const b2 = property.two_bed_price ?? null;
+        if ((b3 != null || b2 != null) && rooms && rooms.length > 0) {
+            const units = groupDuplexes(
+                (rooms as any[]).map((r) => ({ id: r.id, unit_code: r.unit_code, price_per_night: r.price_per_night }))
+            );
+            if (units.length > 0) {
+                const physUnavailable = (availability as any[])
+                    .filter((slot) => slot.status !== 'available')
+                    .map((slot) => `${slot.room_id}|${slot.date}`);
+                duplexData = { units, unavailable: physUnavailable, threeBedPrice: b3, twoBedPrice: b2 };
+            }
+        }
+    }
+
     if (roomTypes && roomTypes.length > 0 && rooms && rooms.length > 0) {
         const unitsByType = new Map<string, string[]>();
         for (const r of rooms as any[]) {
@@ -222,6 +250,7 @@ export default async function PropertyPage({ params }: Props) {
                     isApartment={!!property.is_apartment}
                     wholeApartmentPrice={property.whole_apartment_price ?? null}
                     twoBedPrice={property.two_bed_price ?? null}
+                    duplexData={duplexData}
                     contactPhone={settings.contact_phone || '09067779344'}
                     contactWhatsapp={settings.contact_whatsapp || '09067779344'}
                     similarProperties={similarProperties || []}

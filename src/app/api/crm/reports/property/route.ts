@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get('propertyId');
+    const roomId = searchParams.get('roomId'); // optional: report a single unit
     const from = searchParams.get('from'); // inclusive YYYY-MM-DD
     const to = searchParams.get('to');     // exclusive YYYY-MM-DD
     if (!propertyId || !from || !to) {
@@ -20,16 +21,22 @@ export async function GET(request: NextRequest) {
     }
     if (from >= to) return NextResponse.json({ error: 'End date must be after start date' }, { status: 400 });
 
-    const [{ data: property }, { data: units }, { data: bookings }] = await Promise.all([
+    let bookingsQuery = supabase.from('bookings')
+        .select('id, guest_name, check_in, check_out, nights, status, total_amount, booking_source, room:rooms(unit_code, name), room_type:room_types(name)')
+        .eq('property_id', propertyId)
+        .in('status', LIVE)
+        .lt('check_in', to)
+        .gt('check_out', from)
+        .order('check_in');
+    if (roomId) bookingsQuery = bookingsQuery.eq('room_id', roomId);
+
+    const [{ data: property }, { data: units }, { data: selectedUnit }, { data: bookings }] = await Promise.all([
         supabase.from('properties').select('id, name, area, city').eq('id', propertyId).single(),
         supabase.from('rooms').select('id').eq('property_id', propertyId).eq('is_active', true),
-        supabase.from('bookings')
-            .select('id, guest_name, check_in, check_out, nights, status, total_amount, booking_source, room:rooms(unit_code, name), room_type:room_types(name)')
-            .eq('property_id', propertyId)
-            .in('status', LIVE)
-            .lt('check_in', to)
-            .gt('check_out', from)
-            .order('check_in'),
+        roomId
+            ? supabase.from('rooms').select('id, unit_code, name').eq('id', roomId).maybeSingle()
+            : Promise.resolve({ data: null }),
+        bookingsQuery,
     ]);
 
     if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
@@ -43,7 +50,9 @@ export async function GET(request: NextRequest) {
 
     const dayMs = 86400000;
     const rangeDays = Math.round((+new Date(to) - +new Date(from)) / dayMs);
-    const unitCount = (units || []).length;
+    // occupancy is against the selected scope: one unit, or the whole property
+    const unitCount = roomId ? 1 : (units || []).length;
+    const unitLabel = selectedUnit ? (selectedUnit.unit_code || selectedUnit.name) : null;
 
     let revenue = 0, soldNights = 0, outstanding = 0;
     const bySource: Record<string, number> = {};
@@ -89,7 +98,7 @@ export async function GET(request: NextRequest) {
     const adr = soldNights > 0 ? Math.round(revenue / soldNights) : 0;
 
     return NextResponse.json({
-        property: { name: property.name, area: property.area, city: property.city },
+        property: { name: property.name, area: property.area, city: property.city, unit: unitLabel },
         range: { from, to, days: rangeDays },
         summary: {
             revenue,

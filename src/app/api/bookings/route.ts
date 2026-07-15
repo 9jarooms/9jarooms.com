@@ -4,7 +4,7 @@ import { initializePayment, generateReference } from '@/lib/paystack';
 import { addDays, format } from 'date-fns';
 import { Resend } from 'resend';
 import { z } from 'zod';
-import { computeOptions, type ApartmentLite, type RoomLite } from '@/lib/booking/options';
+import { computeOptions, groupDuplexes, freeDuplexes, type ApartmentLite, type RoomLite, type BookingOption } from '@/lib/booking/options';
 import { findFreeUnits, priceRoomTypeStay } from '@/lib/booking/room-types';
 
 const bookingSchema = z.object({
@@ -254,17 +254,30 @@ export async function POST(request: NextRequest) {
 
             const { data: roomRows } = await supabase
                 .from('rooms')
-                .select('id, name, room_type, price_per_night')
+                .select('id, name, room_type, unit_code, price_per_night')
                 .eq('property_id', propertyId)
                 .eq('is_active', true);
 
-            const rooms = (roomRows || []) as RoomLite[];
+            const rooms = (roomRows || []) as (RoomLite & { unit_code: string | null })[];
 
             const bundlePrice = mode === 'whole'
                 ? property.whole_apartment_price
                 : property.two_bed_price;
 
-            if (!property.is_apartment || bundlePrice == null) {
+            // A property is sold as duplex units when it has number-coded units
+            // (1A/1B/1C…) and a bundle price set, even though is_apartment=false
+            // (Kaura pools rooms under room_types). Otherwise it's the simple
+            // single-apartment model that computeOptions handles.
+            const duplexUnits = groupDuplexes(rooms);
+            const isDuplexProperty = !property.is_apartment && duplexUnits.length > 0 && bundlePrice != null;
+
+            if (!property.is_apartment && !isDuplexProperty) {
+                return NextResponse.json(
+                    { error: 'This property is not available as an apartment bundle.' },
+                    { status: 400 }
+                );
+            }
+            if (bundlePrice == null) {
                 return NextResponse.json(
                     { error: 'This property is not available as an apartment bundle.' },
                     { status: 400 }
@@ -299,17 +312,46 @@ export async function POST(request: NextRequest) {
                 if (blocked) unavailableSet.add(`${slot.room_id}|${slot.date}`);
             }
 
-            // 3. Run the booking engine and pick the requested bundle option.
-            const apt: ApartmentLite = {
-                id: property.id,
-                is_apartment: !!property.is_apartment,
-                property_price: property.price_per_night ?? 0,
-                whole_apartment_price: property.whole_apartment_price ?? null,
-                two_bed_price: property.two_bed_price ?? null,
-                rooms,
-            };
-            const option = computeOptions(apt, unavailableSet, checkIn, checkOut, dates)
-                .find(o => o.type === mode);
+            // 3. Resolve the requested bundle to a concrete option.
+            let option: BookingOption | undefined;
+            const nights = Math.max(1, dates.length);
+
+            if (isDuplexProperty) {
+                // Pick a free duplex unit (all its rooms free for the dates) and
+                // book the whole unit. 3-bed uses all 3 rooms; 2-bed uses 2 and
+                // holds the 3rd empty (locked). Bundle price is fixed.
+                const free = freeDuplexes(duplexUnits, unavailableSet, dates);
+                if (free.length > 0) {
+                    const unit = free[0];
+                    const perNight = bundlePrice;
+                    if (mode === 'whole') {
+                        option = {
+                            type: 'whole', label: '3-Bed Duplex', key: `whole:${unit.duplexNo}`,
+                            pricePerNight: perNight, price: perNight * nights,
+                            roomIds: unit.roomIds, lockedRoomIds: [], available: true,
+                        };
+                    } else {
+                        option = {
+                            type: 'two_bed', label: '2-Bed Duplex', key: `two_bed:${unit.duplexNo}`,
+                            pricePerNight: perNight, price: perNight * nights,
+                            roomIds: unit.roomIds.slice(0, 2),
+                            lockedRoomIds: unit.roomIds.slice(2),
+                            available: true,
+                        };
+                    }
+                }
+            } else {
+                const apt: ApartmentLite = {
+                    id: property.id,
+                    is_apartment: !!property.is_apartment,
+                    property_price: property.price_per_night ?? 0,
+                    whole_apartment_price: property.whole_apartment_price ?? null,
+                    two_bed_price: property.two_bed_price ?? null,
+                    rooms,
+                };
+                option = computeOptions(apt, unavailableSet, checkIn, checkOut, dates)
+                    .find(o => o.type === mode);
+            }
 
             if (!option || !option.available) {
                 return NextResponse.json(

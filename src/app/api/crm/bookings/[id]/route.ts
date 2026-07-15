@@ -56,7 +56,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         ? Number(booking.total_amount)
         : (payments || []).reduce((s, p) => s + Number(p.amount), 0);
 
-    return NextResponse.json({ booking, payments: payments || [], paid });
+    // Sibling units of the same property, so the modal can move the booking
+    // to another unit. Ordered by unit_code (1A, 1B, … 8C for Kaura).
+    const { data: units } = await supabase
+        .from('rooms')
+        .select('id, unit_code, name, room_type_id, is_active')
+        .eq('property_id', booking.property_id)
+        .eq('is_active', true)
+        .order('unit_code');
+
+    return NextResponse.json({ booking, payments: payments || [], paid, units: units || [] });
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
