@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
             .eq('property_id', propertyId)
             .order('sort_order'),
         supabase.from('rooms')
-            .select('id, name, unit_code, room_type_id, is_active')
+            .select('id, name, unit_code, room_type_id, is_active, price_per_night')
             .eq('property_id', propertyId)
             .eq('is_active', true)
             .order('unit_code'),

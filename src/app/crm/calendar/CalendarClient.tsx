@@ -63,6 +63,16 @@ export default function CalendarClient({ properties, initialPropertyId }: {
     const [data, setData] = useState<any>(null);
     const [openBooking, setOpenBooking] = useState<string | null>(null);
     const [newBooking, setNewBooking] = useState<{ unitId: string; date: string } | null>(null);
+    const [editUnit, setEditUnit] = useState<any>(null);
+
+    // Keep the chosen property in the URL so a refresh stays on it (the page
+    // reads ?propertyId to seed initialPropertyId).
+    const selectProperty = useCallback((id: string) => {
+        setPropertyId(id);
+        if (typeof window !== 'undefined') {
+            window.history.replaceState(null, '', `/crm/calendar?propertyId=${id}`);
+        }
+    }, []);
 
     const labelById = useMemo(() => buildSelectorLabels(properties), [properties]);
 
@@ -171,11 +181,11 @@ export default function CalendarClient({ properties, initialPropertyId }: {
                         onClick={() => {
                             const order = groupedByArea.flatMap(([, list]) => list);
                             const i = order.findIndex(p => p.id === propertyId);
-                            setPropertyId(order[(i - 1 + order.length) % order.length].id);
+                            selectProperty(order[(i - 1 + order.length) % order.length].id);
                         }}
                         className="px-2.5 py-2.5 hover:bg-stone-50 text-stone-500 border-r border-stone-100 shrink-0"
                     ><ChevronLeft size={15} /></button>
-                    <select value={propertyId} onChange={e => setPropertyId(e.target.value)}
+                    <select value={propertyId} onChange={e => selectProperty(e.target.value)}
                         className="flex-1 min-w-0 px-3 py-2.5 text-[13.5px] font-semibold bg-white outline-none sm:max-w-72">
                         {groupedByArea.map(([area, list]) => (
                             <optgroup key={area} label={area}>
@@ -188,7 +198,7 @@ export default function CalendarClient({ properties, initialPropertyId }: {
                         onClick={() => {
                             const order = groupedByArea.flatMap(([, list]) => list);
                             const i = order.findIndex(p => p.id === propertyId);
-                            setPropertyId(order[(i + 1) % order.length].id);
+                            selectProperty(order[(i + 1) % order.length].id);
                         }}
                         className="px-2.5 py-2.5 hover:bg-stone-50 text-stone-500 border-l border-stone-100 shrink-0"
                     ><ChevronRight size={15} /></button>
@@ -254,14 +264,18 @@ export default function CalendarClient({ properties, initialPropertyId }: {
                                 const unitBlocks = (data?.blocks || []).filter((b: any) => b.room_id === unit.id);
                                 return (
                                     <div key={unit.id} className="flex border-b border-stone-100 relative" style={{ height: 40 }}>
-                                        <div className="w-24 sm:w-40 shrink-0 px-3 flex flex-col justify-center text-sm font-medium text-stone-700 border-r border-stone-100 sticky left-0 bg-white z-10 leading-tight">
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditUnit(unit)}
+                                            title="Edit this unit (name, code, price)"
+                                            className="w-24 sm:w-40 shrink-0 px-3 flex flex-col justify-center text-left text-sm font-medium text-stone-700 border-r border-stone-100 sticky left-0 bg-white z-10 leading-tight hover:bg-stone-50 cursor-pointer">
                                             <span>{unit.unit_code || unit.name}</span>
                                             {group.type.price_per_night == null && typeById.get(unit.room_type_id) && (
                                                 <span className="text-[10px] font-normal text-stone-400">
                                                     {typeById.get(unit.room_type_id).name} · {naira(typeById.get(unit.room_type_id).price_per_night)}
                                                 </span>
                                             )}
-                                        </div>
+                                        </button>
                                         {/* clickable empty cells */}
                                         <div className="relative" style={{ width: gridWidth }}>
                                             {dates.map((d, i) => {
@@ -341,6 +355,87 @@ export default function CalendarClient({ properties, initialPropertyId }: {
                     onCreated={() => { setNewBooking(null); load(); }}
                 />
             )}
+            {editUnit && (
+                <EditUnitModal
+                    unit={editUnit}
+                    onClose={() => setEditUnit(null)}
+                    onSaved={() => { setEditUnit(null); load(); }}
+                />
+            )}
+        </div>
+    );
+}
+
+function EditUnitModal({ unit, onClose, onSaved }: {
+    unit: any; onClose: () => void; onSaved: () => void;
+}) {
+    const [form, setForm] = useState({
+        unitCode: unit.unit_code || '',
+        name: unit.name || '',
+        price: unit.price_per_night != null ? String(unit.price_per_night) : '',
+        isActive: unit.is_active !== false,
+    });
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const save = async () => {
+        if (!form.name.trim()) { setError('Name is required'); return; }
+        setBusy(true); setError(null);
+        try {
+            const res = await fetch(`/api/crm/rooms/${unit.id}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    unitCode: form.unitCode.trim() || null,
+                    name: form.name.trim(),
+                    pricePerNight: form.price === '' ? undefined : Number(form.price),
+                    isActive: form.isActive,
+                }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to save');
+            onSaved();
+        } catch (e: any) {
+            setError(e.message || 'Failed');
+        } finally { setBusy(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-10" onClick={onClose}>
+            <div className="bg-white rounded-xl w-[440px] max-w-[94vw] shadow-2xl" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-stone-200">
+                    <h2 className="font-bold text-stone-900">Edit unit {unit.unit_code || unit.name}</h2>
+                    <button onClick={onClose} className="p-1.5 rounded-md hover:bg-stone-100"><X size={18} /></button>
+                </div>
+
+                {error && <p className="mx-6 mt-3 text-xs text-[#c75146] bg-red-50 rounded-md px-3 py-2">{error}</p>}
+
+                <div className="px-6 py-4 grid grid-cols-2 gap-3 text-sm">
+                    <label className="block">
+                        <span className="text-xs text-stone-500">Unit code</span>
+                        <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.unitCode} onChange={e => setForm({ ...form, unitCode: e.target.value })} />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-stone-500">Price / night (₦)</span>
+                        <input type="number" min={0} className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} />
+                    </label>
+                    <label className="block col-span-2">
+                        <span className="text-xs text-stone-500">Name</span>
+                        <input className="mt-1 w-full border border-stone-300 rounded-md px-2.5 py-1.5" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                    </label>
+                    <label className="col-span-2 flex items-center gap-2 mt-1">
+                        <input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />
+                        <span className="text-stone-700">Active (bookable &amp; shown on the site)</span>
+                    </label>
+                </div>
+
+                <div className="flex justify-end gap-2 px-6 pb-5">
+                    <button onClick={onClose} className="px-4 py-2 rounded-md border border-stone-300 text-sm">Cancel</button>
+                    <button disabled={busy} onClick={save}
+                        className="px-4 py-2 rounded-md bg-[#008737] text-white text-sm font-semibold disabled:opacity-50">
+                        {busy ? 'Saving…' : 'Save unit'}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
