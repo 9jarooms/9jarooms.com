@@ -100,15 +100,41 @@ export default function CalendarClient({ properties, initialPropertyId }: {
 
     const todayIso = iso(new Date());
 
-    // group units by room type
+    const typeById = useMemo(() => {
+        const m = new Map<string, any>();
+        for (const t of data?.roomTypes || []) m.set(t.id, t);
+        return m;
+    }, [data]);
+
+    // Group the grid. Duplex properties (Kaura: unit codes like 1A/1B/1C) group
+    // by unit NUMBER — one "Unit N" block holding its 3 rooms. Everything else
+    // groups by room type as before.
     const groups = useMemo(() => {
         if (!data) return [];
+        const allUnits: any[] = data.units || [];
+        const isDuplex = allUnits.length > 0 && allUnits.every(u => /^\d+[A-Za-z]/.test(u.unit_code || ''));
+
+        if (isDuplex) {
+            const byNo = new Map<string, any[]>();
+            for (const u of allUnits) {
+                const n = (u.unit_code || '').match(/^(\d+)/)![1];
+                if (!byNo.has(n)) byNo.set(n, []);
+                byNo.get(n)!.push(u);
+            }
+            return [...byNo.entries()]
+                .sort((a, b) => Number(a[0]) - Number(b[0]))
+                .map(([n, units]) => ({
+                    type: { id: `unit-${n}`, name: `Unit ${n}`, price_per_night: null as number | null },
+                    units: units.sort((a, b) => (a.unit_code || '').localeCompare(b.unit_code || '')),
+                }));
+        }
+
         const types: any[] = [...(data.roomTypes || [])];
         const grouped = types.map(t => ({
             type: t,
-            units: (data.units || []).filter((u: any) => u.room_type_id === t.id),
+            units: allUnits.filter((u: any) => u.room_type_id === t.id),
         })).filter(g => g.units.length > 0);
-        const untyped = (data.units || []).filter((u: any) => !u.room_type_id);
+        const untyped = allUnits.filter((u: any) => !u.room_type_id);
         if (untyped.length > 0) grouped.push({ type: { id: '_none', name: 'Rooms', price_per_night: null }, units: untyped });
         return grouped;
     }, [data]);
@@ -228,8 +254,13 @@ export default function CalendarClient({ properties, initialPropertyId }: {
                                 const unitBlocks = (data?.blocks || []).filter((b: any) => b.room_id === unit.id);
                                 return (
                                     <div key={unit.id} className="flex border-b border-stone-100 relative" style={{ height: 40 }}>
-                                        <div className="w-24 sm:w-40 shrink-0 px-3 flex items-center text-sm font-medium text-stone-700 border-r border-stone-100 sticky left-0 bg-white z-10">
-                                            {unit.unit_code || unit.name}
+                                        <div className="w-24 sm:w-40 shrink-0 px-3 flex flex-col justify-center text-sm font-medium text-stone-700 border-r border-stone-100 sticky left-0 bg-white z-10 leading-tight">
+                                            <span>{unit.unit_code || unit.name}</span>
+                                            {group.type.price_per_night == null && typeById.get(unit.room_type_id) && (
+                                                <span className="text-[10px] font-normal text-stone-400">
+                                                    {typeById.get(unit.room_type_id).name} · {naira(typeById.get(unit.room_type_id).price_per_night)}
+                                                </span>
+                                            )}
                                         </div>
                                         {/* clickable empty cells */}
                                         <div className="relative" style={{ width: gridWidth }}>
