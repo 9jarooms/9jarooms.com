@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import PropertyCard from '@/components/PropertyCard';
@@ -6,6 +6,12 @@ import HomeSearch from '@/components/HomeSearch';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Search, User } from 'lucide-react';
+
+// The homepage shows only public property data (no per-user content). Cache it
+// as a static page revalidated every 5 min instead of rendering it fresh (with
+// live DB round-trips + cold start) on every visit — this is what made the
+// landing feel like a 10-second wait.
+export const revalidate = 300;
 
 const TRUST_ITEMS = [
     '60+ Properties Across Abuja',
@@ -17,7 +23,7 @@ const TRUST_ITEMS = [
 ];
 
 export default async function HomePage() {
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
 
     const [propertiesRes, settingsRes] = await Promise.all([
         supabase.from('properties').select('*, bookings(count)').eq('is_active', true).neq('is_deleted', true),
