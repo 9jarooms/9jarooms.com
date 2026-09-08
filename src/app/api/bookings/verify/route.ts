@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { verifyPayment } from '@/lib/paystack';
+import { confirmPaidBooking, notifyTeamNewBooking, notifyGuestBookingConfirmed } from '@/lib/booking/payment-confirmed';
 import { inngest } from '@/lib/inngest/client';
 
+// Called by /booking/confirm when Paystack redirects the guest back.
+// Verifies with Paystack and confirms the booking if the webhook has not
+// already done so (whichever arrives first wins; the other is a no-op).
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const reference = searchParams.get('reference');
@@ -14,7 +18,6 @@ export async function GET(request: NextRequest) {
     try {
         const supabase = createAdminClient();
 
-        // 1. Find Booking
         const { data: booking, error: dbError } = await supabase
             .from('bookings')
             .select('*, property:properties(*), room:rooms(*)')
@@ -25,54 +28,44 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
         }
 
-        // Return immediately if it's already marked as paid (webhook beat us here)
-        if (booking.status === 'paid') {
+        if (['paid', 'checked_in', 'completed'].includes(booking.status)) {
             return NextResponse.json({ status: 'success', booking });
         }
 
-        // 2. Verify with Paystack (since it's not marked paid yet)
         const verification = await verifyPayment(reference);
+        if (!verification.status || verification.data.status !== 'success') {
+            return NextResponse.json({ status: 'pending', paystack_status: verification.data?.status });
+        }
 
-        if (verification.status && verification.data.status === 'success') {
-            // Update booking status
-            await supabase
-                .from('bookings')
-                .update({ status: 'paid', expires_at: null })
-                .eq('id', booking.id);
+        const { booking: confirmed, alreadyPaid } = await confirmPaidBooking(supabase, {
+            reference,
+            amountKobo: verification.data.amount,
+            raw: verification.data,
+        });
 
-            await supabase
-                .from('availability')
-                .update({ status: 'booked' })
-                .eq('booking_id', booking.id);
-
-            // Trigger Post-Payment Workflow via Inngest
+        if (!alreadyPaid) {
+            const [team, guest] = await Promise.all([
+                notifyTeamNewBooking(supabase, confirmed),
+                notifyGuestBookingConfirmed(confirmed),
+            ]);
+            console.log(`[Verify] ${reference} confirmed · team email: ${team.sent ? team.to?.join(',') : team.reason} · guest email: ${guest.sent ? 'sent' : guest.reason}`);
             try {
                 await inngest.send({
                     name: 'payment/confirmed',
-                    data: {
-                        reference: reference,
-                        amount: verification.data.amount,
-                        paystackData: verification.data,
-                    },
+                    data: { reference, amount: verification.data.amount, paystackData: verification.data },
                 });
             } catch (inngestErr: any) {
-                console.error('[Verify API] Inngest event failed (non-blocking):', inngestErr?.message);
+                console.warn('[Verify API] Inngest event failed (non-blocking):', inngestErr?.message);
             }
-
-            // Fetch the updated booking to return it
-            const { data: updatedBooking } = await supabase
-                .from('bookings')
-                .select('*, property:properties(*), room:rooms(*)')
-                .eq('paystack_reference', reference)
-                .single();
-
-            return NextResponse.json({ status: 'success', booking: updatedBooking });
-        } else {
-            return NextResponse.json({ 
-                status: 'pending', 
-                paystack_status: verification.data?.status 
-            });
         }
+
+        const { data: updatedBooking } = await supabase
+            .from('bookings')
+            .select('*, property:properties(*), room:rooms(*)')
+            .eq('paystack_reference', reference)
+            .single();
+
+        return NextResponse.json({ status: 'success', booking: updatedBooking });
     } catch (error: any) {
         console.error('API /bookings/verify Error:', error);
         return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
