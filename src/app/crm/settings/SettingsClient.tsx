@@ -67,7 +67,7 @@ export default function SettingsClient() {
                     </h3>
                     <p className="text-[11px] text-stone-400 mb-3">
                         Customer reps run the whole CRM: bookings, blocking dates, guests, properties and reports.
-                        Caretakers and owners see their dashboards read-only.
+                        Caretakers get the phone-friendly Today screen for their own properties; owners see their dashboards read-only.
                     </p>
                     {error && <p className="text-xs text-[#c75146] bg-red-50 rounded-md px-3 py-2 mb-2">{error}</p>}
                     {ok && <p className="text-xs text-[#02572a] bg-[#7ed957]/15 rounded-md px-3 py-2 mb-2">{ok}</p>}
@@ -94,7 +94,7 @@ export default function SettingsClient() {
                 <h2 className="px-5 py-3.5 text-sm font-bold text-stone-700 border-b border-stone-200">How roles work now</h2>
                 <div className="px-5 py-4 text-sm text-stone-600 space-y-2">
                     <p><b className="text-stone-800">Customer reps</b> — full control: create/edit/cancel bookings, block dates, record payments, manage properties and listings.</p>
-                    <p><b className="text-stone-800">Caretakers</b> — read-only dashboard of their assigned properties. They can no longer book or block dates.</p>
+                    <p><b className="text-stone-800">Caretakers</b> — the Today screen for their assigned properties only: check guests in and out, record cash/transfer payments, take walk-in bookings, extend stays and block units for cleaning or maintenance. They cannot remove payments, change prices on the listing or see other properties.</p>
                     <p><b className="text-stone-800">Owners</b> — read-only overview of their own properties: bookings and numbers.</p>
                     <p><b className="text-stone-800">Admins</b> — everything reps can do, plus this settings page and the legacy admin panel.</p>
                 </div>

@@ -138,8 +138,9 @@ export async function POST(request: NextRequest) {
 
             console.log(`Manual Booking Request by User: ${user.id} (${user.email})`);
 
-            // Manual bookings are CRM-only: admin, customer_rep, call_operator.
-            // Caretakers and owners can no longer book or block dates.
+            // Manual bookings: CRM roles (admin, customer_rep, call_operator)
+            // on any property, or the caretaker assigned to this property
+            // taking a walk-in / phone booking from the Today screen.
             const { data: crmRole } = await supabase
                 .from('user_roles')
                 .select('role')
@@ -151,10 +152,21 @@ export async function POST(request: NextRequest) {
             if (crmRole) {
                 isInternalBooking = true;
             } else {
-                console.warn(`Unauthorized Manual Booking Attempt: ${user.email} has no CRM role.`);
-                return NextResponse.json({
-                    error: 'Unauthorized: manual bookings are handled by customer reps.'
-                }, { status: 403 });
+                const { data: assigned } = await supabase
+                    .from('properties')
+                    .select('id')
+                    .eq('id', propertyId)
+                    .eq('caretaker_id', user.id)
+                    .maybeSingle();
+
+                if (assigned) {
+                    isInternalBooking = true;
+                } else {
+                    console.warn(`Unauthorized Manual Booking Attempt: ${user.email} has no CRM role and is not this property's caretaker.`);
+                    return NextResponse.json({
+                        error: 'Unauthorized: you can only take bookings for properties assigned to you.'
+                    }, { status: 403 });
+                }
             }
         }
 

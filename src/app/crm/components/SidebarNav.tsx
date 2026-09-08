@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CalendarDays, List, Users, Building2, BarChart3, Settings } from 'lucide-react';
+import { Sun, LayoutDashboard, CalendarDays, List, Users, Building2, BarChart3, Settings } from 'lucide-react';
 
 const NAV = [
+    { href: '/crm/today', label: 'Today', icon: Sun },
     { href: '/crm/overview', label: 'Overview', icon: LayoutDashboard },
     { href: '/crm/calendar', label: 'Calendar', icon: CalendarDays },
     { href: '/crm/reservations', label: 'Reservations', icon: List },
