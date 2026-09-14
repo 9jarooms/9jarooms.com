@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Plus, RefreshCw, Search, ChevronRight } from 'lucide-react';
 import {
     BookingCard, KindPill, isoToday, fmtDay, naira, balanceOf, owes, shiftIso,
-    unitLabel, groupUnits, unitPrice, relDayLower,
+    unitLabel, groupAllUnits, unitPrice, relDayLower,
     type OpsToday, type OpsBooking, type UnitState,
 } from './shared';
 import BookingSheet from './BookingSheet';
@@ -35,9 +35,12 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
 
     // remembered property (read after mount so server + client render the same)
     useEffect(() => {
-        let stored = '';
-        try { stored = localStorage.getItem(STORE_KEY) || ''; } catch { /* ignore */ }
-        setPropertyId(stored);
+        const t = setTimeout(() => {
+            let stored = '';
+            try { stored = localStorage.getItem(STORE_KEY) || ''; } catch { /* ignore */ }
+            setPropertyId(stored || 'all');
+        }, 0);
+        return () => clearTimeout(t);
     }, []);
 
     const load = useCallback(async (silent = false) => {
@@ -62,6 +65,15 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
 
     useEffect(() => { load(); }, [load]);
 
+    // Keep the screen fresh: every minute while visible, and whenever the
+    // phone comes back to the app.
+    useEffect(() => {
+        const tick = () => { if (document.visibilityState === 'visible') load(true); };
+        const timer = setInterval(tick, 60000);
+        document.addEventListener('visibilitychange', tick);
+        return () => { clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
+    }, [load]);
+
     const selectProperty = (id: string) => {
         setPropertyId(id);
         try { localStorage.setItem(STORE_KEY, id); } catch { /* ignore */ }
@@ -70,7 +82,15 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
     const today = data?.today || isoToday();
     const unitById = useMemo(() => new Map((data?.units || []).map(u => [u.id, u] as const)), [data]);
     const typeById = useMemo(() => new Map((data?.roomTypes || []).map(t => [t.id, t] as const)), [data]);
-    const unitNameOf = useCallback((b: OpsBooking) => unitLabel(unitById.get(b.room_id) || b.room), [unitById]);
+    const propertyById = useMemo(() => new Map((data?.properties || []).map(p => [p.id, p] as const)), [data]);
+    const allMode = data?.propertyId === 'all';
+    // "A1" on one property, "Kaura · A1" when showing every property
+    const unitNameOf = useCallback((b: OpsBooking) => {
+        const unit = unitLabel(unitById.get(b.room_id) || b.room);
+        if (!allMode) return unit;
+        const p = propertyById.get(b.property_id) || b.property;
+        return p ? `${shortName(p.name)} · ${unit}` : unit;
+    }, [unitById, propertyById, allMode]);
 
     const lists = useMemo(() => {
         const bs = data?.bookings || [];
@@ -113,7 +133,7 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
         return m;
     }, [data, today]);
     const freeTonight = [...unitStatus.values()].filter(s => s.kind === 'free').length;
-    const groups = useMemo(() => data ? groupUnits(data.units, data.roomTypes) : [], [data]);
+    const groups = useMemo(() => data ? groupAllUnits(data) : [], [data]);
 
     const quick = async (id: string, payload: Record<string, unknown>) => {
         setBusyId(id);
@@ -167,13 +187,14 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                             onChange={e => selectProperty(e.target.value)}
                             className="flex-1 min-w-0 h-12 rounded-xl border border-stone-300 bg-white px-3 text-[16px] font-bold text-stone-900"
                         >
+                            <option value="all">All properties</option>
                             {data.properties.map(p => (
                                 <option key={p.id} value={p.id}>{p.name}{p.area ? ` — ${p.area}` : ''}</option>
                             ))}
                         </select>
                     ) : (
                         <h1 className="flex-1 min-w-0 text-[22px] font-extrabold tracking-tight text-stone-900 truncate">
-                            {property?.name || (loading ? 'Loading…' : 'Today')}
+                            {allMode ? 'All properties' : (property?.name || (loading ? 'Loading…' : 'Today'))}
                         </h1>
                     )}
                     <button type="button" onClick={() => load(true)} aria-label="Refresh"
@@ -338,7 +359,10 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
             {unitSheet && data && unitById.get(unitSheet) && (
                 <UnitSheet
                     unit={unitById.get(unitSheet)!}
-                    typeName={typeById.get(unitById.get(unitSheet)!.room_type_id || '')?.name || null}
+                    typeName={[
+                        allMode ? propertyById.get(unitById.get(unitSheet)!.property_id || '')?.name : null,
+                        typeById.get(unitById.get(unitSheet)!.room_type_id || '')?.name,
+                    ].filter(Boolean).join(' · ') || null}
                     state={unitStatus.get(unitSheet) || { kind: 'free' }}
                     today={today}
                     blocks={data.blocks}
@@ -351,6 +375,13 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
             )}
         </div>
     );
+}
+
+// "Single Room in Kaura" -> "Kaura", "Studio in Garki" -> "Studio Garki"
+function shortName(name: string) {
+    const m = name.match(/^(.*?)\s+in\s+(.+)$/i);
+    if (!m) return name;
+    return /^single room$/i.test(m[1]) ? m[2] : `${m[1]} ${m[2]}`;
 }
 
 function Section({ title, count, empty, right, children }: {
@@ -390,7 +421,8 @@ function BookingSearch({ propertyId, today, unitNameOf, onOpen }: {
 
     const load = useCallback(async () => {
         setLoading(true);
-        const p = new URLSearchParams({ propertyId, limit: '100' });
+        const p = new URLSearchParams({ limit: '100' });
+        if (propertyId !== 'all') p.set('propertyId', propertyId);
         if (q.trim()) {
             p.set('q', q.trim());
         } else if (scope === 'upcoming') {

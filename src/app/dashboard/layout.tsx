@@ -1,6 +1,13 @@
 import { createAuthClient } from '@/lib/supabase/auth';
 import { redirect } from 'next/navigation';
 import DashboardShell from './DashboardShell';
+import type { Metadata, Viewport } from 'next';
+
+export const metadata: Metadata = {
+    title: 'Today · 9jaRooms',
+    appleWebApp: { capable: true, statusBarStyle: 'default', title: '9jaRooms' },
+};
+export const viewport: Viewport = { themeColor: '#008737', width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 
 export default async function DashboardLayout({
     children,

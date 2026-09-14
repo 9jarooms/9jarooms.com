@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Home, Building2, UserCircle, LogOut } from 'lucide-react';
+import { Home, Building2, UserCircle, LogOut, Smartphone, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 
 const navItems = [
@@ -23,6 +24,29 @@ interface Props {
 export default function DashboardShell({ user, caretakerName, children }: Props) {
     const pathname = usePathname();
     const router = useRouter();
+    const [showInstall, setShowInstall] = useState(false);
+    const [platform, setPlatform] = useState<'ios' | 'android' | 'other'>('other');
+
+    // One-time nudge to add the portal to the home screen, so it opens like
+    // an app. Hidden once installed (standalone) or dismissed.
+    useEffect(() => {
+        // deferred so it runs after hydration rather than inside the effect body
+        const t = setTimeout(() => {
+            try {
+                const standalone = window.matchMedia('(display-mode: standalone)').matches
+                    || (navigator as unknown as { standalone?: boolean }).standalone === true;
+                const dismissed = localStorage.getItem('install-hint-dismissed') === '1';
+                const ua = navigator.userAgent;
+                setPlatform(/iPhone|iPad|iPod/i.test(ua) ? 'ios' : /Android/i.test(ua) ? 'android' : 'other');
+                setShowInstall(!standalone && !dismissed && /iPhone|iPad|iPod|Android/i.test(ua));
+            } catch { /* ignore */ }
+        }, 0);
+        return () => clearTimeout(t);
+    }, []);
+    const dismissInstall = () => {
+        setShowInstall(false);
+        try { localStorage.setItem('install-hint-dismissed', '1'); } catch { /* ignore */ }
+    };
 
     const isActive = (href: string) =>
         href === '/dashboard'
@@ -100,6 +124,21 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
 
             {/* Main content */}
             <main className="lg:ml-64 pt-14 lg:pt-0 pb-24 lg:pb-8 min-h-screen">
+                {showInstall && (
+                    <div className="lg:hidden mx-4 mt-3 rounded-2xl bg-[#02572a] text-white px-4 py-3 flex items-start gap-3">
+                        <Smartphone size={20} className="shrink-0 mt-0.5 text-[#7ed957]" />
+                        <div className="text-[13px] leading-snug flex-1">
+                            <p className="font-bold">Add 9jaRooms to your home screen</p>
+                            <p className="text-white/80 mt-0.5">
+                                {platform === 'ios'
+                                    ? 'Tap the Share button below, then “Add to Home Screen”.'
+                                    : 'Tap the ⋮ menu at the top right, then “Add to Home screen”.'}
+                                {' '}It then opens like an app, straight to Today.
+                            </p>
+                        </div>
+                        <button type="button" onClick={dismissInstall} aria-label="Dismiss" className="p-1 -mr-1 rounded-lg text-white/70 active:bg-white/10"><X size={18} /></button>
+                    </div>
+                )}
                 <div className="p-4 sm:p-6 lg:p-8 page-enter">
                     {children}
                 </div>

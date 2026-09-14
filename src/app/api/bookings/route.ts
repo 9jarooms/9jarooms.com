@@ -138,35 +138,23 @@ export async function POST(request: NextRequest) {
 
             console.log(`Manual Booking Request by User: ${user.id} (${user.email})`);
 
-            // Manual bookings: CRM roles (admin, customer_rep, call_operator)
-            // on any property, or the caretaker assigned to this property
-            // taking a walk-in / phone booking from the Today screen.
-            const { data: crmRole } = await supabase
+            // Manual bookings: CRM roles and caretakers (who take walk-in /
+            // phone bookings from the Today screen).
+            const { data: staffRole } = await supabase
                 .from('user_roles')
                 .select('role')
                 .eq('user_id', user.id)
-                .in('role', ['admin', 'customer_rep', 'call_operator'])
+                .in('role', ['admin', 'customer_rep', 'call_operator', 'caretaker'])
                 .limit(1)
                 .maybeSingle();
 
-            if (crmRole) {
+            if (staffRole) {
                 isInternalBooking = true;
             } else {
-                const { data: assigned } = await supabase
-                    .from('properties')
-                    .select('id')
-                    .eq('id', propertyId)
-                    .eq('caretaker_id', user.id)
-                    .maybeSingle();
-
-                if (assigned) {
-                    isInternalBooking = true;
-                } else {
-                    console.warn(`Unauthorized Manual Booking Attempt: ${user.email} has no CRM role and is not this property's caretaker.`);
-                    return NextResponse.json({
-                        error: 'Unauthorized: you can only take bookings for properties assigned to you.'
-                    }, { status: 403 });
-                }
+                console.warn(`Unauthorized Manual Booking Attempt: ${user.email} has no staff role.`);
+                return NextResponse.json({
+                    error: 'Unauthorized: manual bookings are for 9jaRooms staff.'
+                }, { status: 403 });
             }
         }
 

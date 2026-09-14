@@ -7,10 +7,10 @@ import { X, Minus, Plus, Phone, MessageCircle, LogIn, LogOut, AlertTriangle } fr
 // Types — mirror what /api/ops/today returns
 // ------------------------------------------------------------------
 export interface OpsProperty { id: string; name: string; area: string | null }
-export interface OpsRoomType { id: string; name: string; price_per_night: number | string | null }
+export interface OpsRoomType { id: string; name: string; price_per_night: number | string | null; property_id?: string }
 export interface OpsUnit {
     id: string; name: string; unit_code: string | null;
-    room_type_id: string | null; price_per_night: number | string | null;
+    room_type_id: string | null; price_per_night: number | string | null; property_id?: string;
 }
 export interface OpsBooking {
     id: string; room_id: string; room_type_id: string | null; property_id: string;
@@ -167,6 +167,15 @@ export function groupUnits(units: OpsUnit[], roomTypes: OpsRoomType[]): UnitGrou
     const untyped = units.filter(u => !u.room_type_id || !roomTypes.some(t => t.id === u.room_type_id));
     if (untyped.length) groups.push({ key: '_none', label: 'Rooms', price: null, units: untyped });
     return groups;
+}
+// Groups for one property, or for every property when the Today screen is
+// in "All properties" mode (group labels then carry the property name).
+export function groupAllUnits(data: { propertyId: string | null; properties: OpsProperty[]; units: OpsUnit[]; roomTypes: OpsRoomType[] }): UnitGroup[] {
+    if (data.propertyId !== 'all') return groupUnits(data.units, data.roomTypes);
+    return data.properties.flatMap(p =>
+        groupUnits(data.units.filter(u => u.property_id === p.id), data.roomTypes.filter(t => t.property_id === p.id))
+            .map(g => ({ ...g, key: `${p.id}:${g.key}`, label: `${p.name} · ${g.label}` }))
+    );
 }
 export function unitPrice(u: OpsUnit, roomTypes: OpsRoomType[]): number | null {
     if (u.price_per_night != null && u.price_per_night !== '') return Number(u.price_per_night);

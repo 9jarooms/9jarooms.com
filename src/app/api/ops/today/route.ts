@@ -52,19 +52,23 @@ export async function GET(request: NextRequest) {
     if (propError) return NextResponse.json({ error: propError.message }, { status: 500 });
 
     const properties = propertyRows || [];
-    const propertyId = requestedId && properties.some(p => p.id === requestedId)
-        ? requestedId
-        : (properties[0]?.id ?? null);
+    // 'all' = every property at once (the default for a two-person team)
+    const propertyId = requestedId === 'all' && properties.length > 0
+        ? 'all'
+        : requestedId && properties.some(p => p.id === requestedId)
+            ? requestedId
+            : (properties.length > 1 ? 'all' : (properties[0]?.id ?? null));
     if (!propertyId) return empty(properties, null);
+    const propertyIds = propertyId === 'all' ? properties.map(p => p.id as string) : [propertyId];
 
     const [{ data: roomTypes }, { data: units }] = await Promise.all([
         supabase.from('room_types')
-            .select('id, name, price_per_night, sort_order')
-            .eq('property_id', propertyId)
+            .select('id, name, price_per_night, sort_order, property_id')
+            .in('property_id', propertyIds)
             .order('sort_order'),
         supabase.from('rooms')
-            .select('id, name, unit_code, room_type_id, price_per_night')
-            .eq('property_id', propertyId)
+            .select('id, name, unit_code, room_type_id, price_per_night, property_id')
+            .in('property_id', propertyIds)
             .eq('is_active', true)
             .order('unit_code'),
     ]);
@@ -72,7 +76,7 @@ export async function GET(request: NextRequest) {
 
     const windowBookingsP = supabase.from('bookings')
         .select(BOOKING_COLS)
-        .eq('property_id', propertyId)
+        .in('property_id', propertyIds)
         .lt('check_in', to)
         .gt('check_out', today)
         .not('status', 'in', '("cancelled","expired","no_show")');
@@ -80,7 +84,7 @@ export async function GET(request: NextRequest) {
     // is physically occupied until someone checks them out.
     const overdueP = supabase.from('bookings')
         .select(BOOKING_COLS)
-        .eq('property_id', propertyId)
+        .in('property_id', propertyIds)
         .eq('status', 'checked_in')
         .lte('check_out', today);
     const blocksP = unitIds.length

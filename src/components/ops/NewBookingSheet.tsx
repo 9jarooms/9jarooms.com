@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import {
     Sheet, BigButton, Field, Stepper, Chips, inputCls,
-    naira, shiftIso, fmtDay, unitLabel, unitPrice, groupUnits, LIVE_STATUSES, type OpsToday,
+    naira, shiftIso, fmtDay, unitLabel, unitPrice, groupAllUnits, LIVE_STATUSES, type OpsToday,
 } from './shared';
 
 const SOURCES = [
@@ -43,7 +43,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated }: {
     const [error, setError] = useState<string | null>(null);
 
     const checkOut = shiftIso(checkIn, Math.max(nights, 1));
-    const groups = useMemo(() => groupUnits(data.units, data.roomTypes), [data]);
+    const groups = useMemo(() => groupAllUnits(data), [data]);
 
     // Free for the whole stay? Bookings and booking-held cells always block;
     // cleaning/maintenance blocks only matter for a guest booking.
@@ -87,7 +87,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated }: {
             const res = await fetch('/api/bookings', {
                 method: 'POST', headers,
                 body: JSON.stringify({
-                    roomId: unit.id, propertyId: data.propertyId, mode: 'single',
+                    roomId: unit.id, propertyId: unit.property_id || data.propertyId, mode: 'single',
                     guestName: guestName.trim(), guestPhone: phone.trim() || null,
                     checkIn, checkOut,
                     isManualBooking: true, bookingSource: source, notes: notes.trim() || null,

@@ -7,8 +7,7 @@ export interface OpsAuth {
     user: User;
     adminClient: ReturnType<typeof createAdminClient>;
     role: OpsRole;
-    // null = every property (admin / customer rep). A caretaker only gets the
-    // properties assigned to them via properties.caretaker_id.
+    // null = every property. Kept as an array for a future per-property scope.
     propertyIds: string[] | null;
 }
 
@@ -32,13 +31,9 @@ export async function requireOps(): Promise<OpsAuthResult> {
 
     if (have.has('admin')) return { user, adminClient, role: 'admin', propertyIds: null };
     if (have.has('customer_rep')) return { user, adminClient, role: 'customer_rep', propertyIds: null };
-    if (have.has('caretaker')) {
-        const { data: props } = await adminClient
-            .from('properties')
-            .select('id')
-            .eq('caretaker_id', user.id);
-        return { user, adminClient, role: 'caretaker', propertyIds: (props || []).map(p => p.id as string) };
-    }
+    // Caretakers cover every 9jaRooms property (two people run the whole
+    // portfolio), so they are not scoped either — only their powers differ.
+    if (have.has('caretaker')) return { user, adminClient, role: 'caretaker', propertyIds: null };
 
     return { error: 'Forbidden: operations access required', status: 403 };
 }
