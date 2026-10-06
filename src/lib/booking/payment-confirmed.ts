@@ -1,5 +1,7 @@
 import { Resend } from 'resend';
 import type { createAdminClient } from '@/lib/supabase/server';
+import { claimDates, moveBookingDates, releaseAllDates, dateRange, describeConflict } from './claim';
+import { findFreeUnits } from './room-types';
 
 // Everything that must happen when Paystack says a booking is paid.
 // Called directly from the Paystack webhook and from /api/bookings/verify
@@ -25,6 +27,66 @@ function esc(s: unknown) {
 export interface PaidBookingResult {
     booking: any;
     alreadyPaid: boolean;
+    // set when the guest paid but no unit could be secured — the team must act
+    attention?: string | null;
+}
+
+function appendNote(existing: string | null | undefined, line: string) {
+    const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    return [existing, `[${stamp}] ${line}`].filter(Boolean).join('\n');
+}
+
+// A paid booking must own every night it paid for. Normally its held cells
+// simply become booked. If the 30-minute hold had lapsed and a caretaker
+// took the unit while the guest was still on the Paystack page, move the
+// guest to a sister unit of the same room type; if none is free, keep the
+// payment, release the cells we could not fully own and flag the booking
+// so the team calls the guest before arrival (move or refund).
+async function secureDatesForPaidBooking(supabase: Db, booking: any): Promise<string | null> {
+    const dates = dateRange(booking.check_in, booking.check_out);
+    const { data: bookingRooms } = await supabase
+        .from('booking_rooms')
+        .select('room_id')
+        .eq('booking_id', booking.id);
+    const roomIds = Array.from(new Set((bookingRooms || []).map(r => r.room_id as string)));
+    if (roomIds.length === 0 && booking.room_id) roomIds.push(booking.room_id);
+
+    const claim = await claimDates(supabase, roomIds, dates, booking.id, 'booked');
+    if (claim.ok) return null;
+
+    const isBundle = booking.booking_mode === 'two_bed' || booking.booking_mode === 'whole';
+    if (!isBundle && booking.room_type_id) {
+        const free = await findFreeUnits(supabase, booking.room_type_id, dates);
+        for (const unit of free) {
+            if (unit.id === booking.room_id) continue;
+            const moved = await moveBookingDates(supabase, booking.id, booking.room_id, unit.id, dates, 'booked');
+            if (!moved.ok) continue;
+            const label = unit.unit_code || unit.name;
+            await supabase
+                .from('bookings')
+                .update({
+                    room_id: unit.id,
+                    notes: appendNote(booking.notes, `Moved to unit ${label} after payment: the original unit was taken while the guest was paying.`),
+                })
+                .eq('id', booking.id);
+            await supabase
+                .from('booking_rooms')
+                .update({ room_id: unit.id })
+                .eq('booking_id', booking.id)
+                .eq('room_id', booking.room_id);
+            booking.room_id = unit.id;
+            booking.room = { ...(booking.room || {}), id: unit.id, unit_code: unit.unit_code, name: unit.name };
+            return null;
+        }
+    }
+
+    await releaseAllDates(supabase, booking.id);
+    const message = `PAID BUT NO UNIT: ${describeConflict(claim.conflicts)}. Call the guest before arrival — move them to another unit or refund.`;
+    await supabase
+        .from('bookings')
+        .update({ notes: appendNote(booking.notes, message) })
+        .eq('id', booking.id);
+    return message;
 }
 
 // Mark the booking paid, log the transaction, turn held dates into booked
@@ -73,11 +135,7 @@ export async function confirmPaidBooking(supabase: Db, input: {
         .eq('id', booking.id);
     if (upErr) throw new Error(`Failed to mark booking paid: ${upErr.message}`);
 
-    await supabase
-        .from('availability')
-        .update({ status: 'booked' })
-        .eq('booking_id', booking.id)
-        .eq('status', 'held');
+    const attention = await secureDatesForPaidBooking(supabase, booking);
 
     // ledger row so the CRM / Today screen show it as paid in full
     const { count } = await supabase
@@ -93,7 +151,7 @@ export async function confirmPaidBooking(supabase: Db, input: {
         });
     }
 
-    return { booking: { ...booking, status: 'paid' }, alreadyPaid: false };
+    return { booking: { ...booking, status: 'paid' }, alreadyPaid: false, attention };
 }
 
 function resendClient() {
@@ -126,7 +184,7 @@ async function teamRecipients(supabase: Db, booking: any): Promise<string[]> {
 }
 
 // "A room has been booked" — everything the team needs to receive the guest.
-export async function notifyTeamNewBooking(supabase: Db, booking: any): Promise<{ sent: boolean; to?: string[]; reason?: string }> {
+export async function notifyTeamNewBooking(supabase: Db, booking: any, attention?: string | null): Promise<{ sent: boolean; to?: string[]; reason?: string }> {
     const resend = resendClient();
     if (!resend) return { sent: false, reason: 'RESEND_API_KEY not set' };
     const to = await teamRecipients(supabase, booking);
@@ -142,9 +200,10 @@ export async function notifyTeamNewBooking(supabase: Db, booking: any): Promise<
     const { error } = await resend.emails.send({
         from: FROM,
         to,
-        subject: `New booking · ${p.name} · Unit ${unit} · ${fmtDate(booking.check_in)}`,
+        subject: `${attention ? 'ACTION NEEDED · ' : 'New booking · '}${p.name} · Unit ${unit} · ${fmtDate(booking.check_in)}`,
         html: `
 <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;color:#111827">
+  ${attention ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 18px;margin-bottom:16px;color:#991b1b;font-weight:600">${esc(attention)}</div>` : ''}
   <h2 style="color:#008737;margin:0 0 4px">A room has just been booked and paid</h2>
   <p style="margin:0 0 20px;color:#6b7280">${esc(p.name)} · Unit ${esc(unit)}${esc(roomType)}</p>
 

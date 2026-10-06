@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ status: 'pending', paystack_status: verification.data?.status });
         }
 
-        const { booking: confirmed, alreadyPaid } = await confirmPaidBooking(supabase, {
+        const { booking: confirmed, alreadyPaid, attention } = await confirmPaidBooking(supabase, {
             reference,
             amountKobo: verification.data.amount,
             raw: verification.data,
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
         if (!alreadyPaid) {
             const [team, guest] = await Promise.all([
-                notifyTeamNewBooking(supabase, confirmed),
+                notifyTeamNewBooking(supabase, confirmed, attention),
                 notifyGuestBookingConfirmed(confirmed),
             ]);
             console.log(`[Verify] ${reference} confirmed · team email: ${team.sent ? team.to?.join(',') : team.reason} · guest email: ${guest.sent ? 'sent' : guest.reason}`);

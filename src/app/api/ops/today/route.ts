@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOps } from '@/lib/auth/require-ops';
 import { paidByBooking } from '@/lib/booking/crm-ops';
+import { releaseExpiredHolds } from '@/lib/booking/claim';
 
 // Everything the Today / Units screens need for one property in a single
 // call: the properties this user may operate, the property's units and
@@ -22,6 +23,9 @@ export async function GET(request: NextRequest) {
     if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
     const supabase = auth.adminClient;
     const role = auth.role;
+
+    // lapsed unpaid website holds must not show as taken cells on the phone
+    try { await releaseExpiredHolds(supabase); } catch (e: any) { console.warn('[today] releaseExpiredHolds:', e?.message); }
 
     const { searchParams } = new URL(request.url);
     const requestedId = searchParams.get('propertyId');

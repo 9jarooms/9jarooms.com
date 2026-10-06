@@ -5,7 +5,8 @@ import { addDays, format } from 'date-fns';
 import { Resend } from 'resend';
 import { z } from 'zod';
 import { computeOptions, groupDuplexes, freeDuplexes, type ApartmentLite, type RoomLite, type BookingOption } from '@/lib/booking/options';
-import { findFreeUnits, priceRoomTypeStay } from '@/lib/booking/room-types';
+import { findFreeUnits, priceRoomTypeStay, isBlockedSlot } from '@/lib/booking/room-types';
+import { claimDates, releaseAllDates } from '@/lib/booking/claim';
 
 const bookingSchema = z.object({
     roomId: z.string().uuid().optional(),
@@ -27,10 +28,10 @@ const bookingSchema = z.object({
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-// Atomically reserve `dates` across all `roomIds` for this booking, then verify
-// that every room+date now belongs to us. Returns the conflicting cells (empty
-// = we won the race). On conflict the caller rolls back. Shared by the
-// single-room and bundle (whole/2-bed) paths so both use one correct impl.
+// Reserve `dates` across all `roomIds` for this booking through the shared
+// claim engine (insert-only, so a cell another booking — e.g. a caretaker's
+// walk-in — already owns is never overwritten). Returns the conflicting
+// cells; empty = we won. On conflict the caller rolls back.
 async function reserveAndVerify(
     supabase: AdminClient,
     roomIds: string[],
@@ -38,37 +39,18 @@ async function reserveAndVerify(
     status: string,
     bookingId: string,
 ): Promise<{ date: string; booking_id: string | null; status: string }[]> {
-    const availabilityRows = roomIds.flatMap(room_id =>
-        dates.map(date => ({ room_id, date, status, booking_id: bookingId }))
-    );
-
-    await supabase
-        .from('availability')
-        .upsert(availabilityRows, { onConflict: 'room_id,date' });
-
-    const { data: verifyRows } = await supabase
-        .from('availability')
-        .select('date, booking_id, status')
-        .in('room_id', roomIds)
-        .in('date', dates);
-
-    return (verifyRows || []).filter(
-        row => row.booking_id !== bookingId && row.status !== 'available'
-    );
+    const result = await claimDates(supabase, roomIds, dates, bookingId, status === 'booked' ? 'booked' : 'held');
+    return result.conflicts.map(c => ({ date: c.date, booking_id: c.booking_id, status: c.status }));
 }
 
-// Undo a reservation: remove every availability row this booking claimed and
-// mark the booking cancelled. Mirrors the original single-room rollback.
+// Undo a reservation: give back every cell this booking claimed and mark
+// the booking cancelled.
 async function rollbackReservation(
     supabase: AdminClient,
-    roomIds: string[],
+    _roomIds: string[],
     bookingId: string,
 ) {
-    await supabase
-        .from('availability')
-        .delete()
-        .in('room_id', roomIds)
-        .eq('booking_id', bookingId);
+    await releaseAllDates(supabase, bookingId);
 
     await supabase
         .from('bookings')
@@ -517,14 +499,18 @@ export async function POST(request: NextRequest) {
 
         // Quick pre-check: fast-fail if dates are obviously unavailable
         // (This is just an optimization — the real protection is below)
-        const { data: unavailable } = await supabase
+        // Same rule as the public calendar: a lapsed unpaid hold is free.
+        const { data: preCells } = await supabase
             .from('availability')
-            .select('date')
+            .select('date, status, booking:bookings(expires_at)')
             .eq('room_id', roomId)
-            .in('date', dates)
-            .not('status', 'eq', 'available');
+            .in('date', dates);
+        const preNow = new Date();
+        const unavailable = ((preCells || []) as unknown as Array<{
+            date: string; status: string; booking?: { expires_at: string | null } | null;
+        }>).filter(slot => isBlockedSlot(slot, preNow));
 
-        if (unavailable && unavailable.length > 0) {
+        if (unavailable.length > 0) {
             return NextResponse.json(
                 { error: `Room not available for selected dates` },
                 { status: 409 }

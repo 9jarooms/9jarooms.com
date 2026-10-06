@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/require-admin';
 import { createAdminClient } from '@/lib/supabase/server';
-import { inngest } from '@/lib/inngest/client';
+import { confirmPaidBooking, notifyTeamNewBooking, notifyGuestBookingConfirmed } from '@/lib/booking/payment-confirmed';
 
 export async function POST(request: Request) {
     try {
@@ -45,29 +45,25 @@ export async function POST(request: Request) {
         const reference = booking.paystack_reference || `manual_${Date.now()}`;
         const amountInKobo = booking.total_amount * 100;
 
-        // 5. Trigger the exact same Inngest job as the Paystack webhook
-        // We pass the explicit booking_id so it finds the right booking
-        await inngest.send({
-            name: 'payment/confirmed',
-            data: {
-                reference: reference,
-                amount: amountInKobo,
-                metadata: {
-                    booking_id: booking.id,
-                    manual_confirmation_by: user.id
-                },
-                paystackData: {
-                    channel: 'manual',
-                    status: 'success',
-                    reference: reference,
-                    amount: amountInKobo
-                }
-            }
+        // 5. Same path as the Paystack webhook, run right here (the old
+        // Inngest hand-off never executes in production, so nothing happened).
+        const { booking: confirmed, alreadyPaid, attention } = await confirmPaidBooking(adminSupabase, {
+            reference,
+            bookingId: booking.id,
+            amountKobo: amountInKobo,
+            raw: { channel: 'manual', status: 'success', reference, amount: amountInKobo, confirmed_by: user.id },
         });
+        if (!alreadyPaid) {
+            await Promise.all([
+                notifyTeamNewBooking(adminSupabase, confirmed, attention),
+                notifyGuestBookingConfirmed(confirmed),
+            ]);
+        }
 
         return NextResponse.json({
             success: true,
-            message: 'Payment confirmed and processing job started.'
+            attention: attention || null,
+            message: attention ? `Payment recorded, but: ${attention}` : 'Payment confirmed.'
         });
 
     } catch (error: any) {

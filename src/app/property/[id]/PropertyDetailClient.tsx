@@ -85,6 +85,9 @@ interface Props {
     similarProperties?: any[];
 }
 
+// Website card payments (Paystack). Off until NEXT_PUBLIC_DIRECT_PAY=1.
+const DIRECT_PAY = process.env.NEXT_PUBLIC_DIRECT_PAY === '1';
+
 export default function PropertyDetailClient({ property, rooms, availability, unavailable = [], isApartment = false, wholeApartmentPrice = null, twoBedPrice = null, duplexData = null, contactPhone, contactWhatsapp, similarProperties = [] }: Props) {
     const router = useRouter();
     const [selectedRoom, setSelectedRoom] = useState<Room | null>(rooms.length === 1 && !isApartment ? rooms[0] : null);
@@ -852,13 +855,79 @@ export default function PropertyDetailClient({ property, rooms, availability, un
                                 <p className="text-center text-xs text-gray-400 mt-2">Our team will confirm availability and send your payment link</p>
                             )}
 
-                            {/* Direct Pay Coming Soon */}
-                            {checkIn && checkOut && (
+                            {/* Direct payment. Switched on with NEXT_PUBLIC_DIRECT_PAY=1
+                                once the caretakers' offline bookings are in the system
+                                (otherwise the site could sell an occupied unit). */}
+                            {checkIn && checkOut && !DIRECT_PAY && (
                                 <div className="mt-4 pt-4 border-t border-gray-100">
                                     <div className="w-full py-3 rounded-xl border border-dashed border-gray-200 text-center">
                                         <p className="text-xs font-medium text-gray-400">Direct payment <span className="text-gray-500">coming soon</span></p>
                                         <p className="text-[11px] text-gray-400 mt-0.5">For now, our team will handle your booking via WhatsApp</p>
                                     </div>
+                                </div>
+                            )}
+                            {checkIn && checkOut && DIRECT_PAY && !selectedDuplex && !isApartment && (
+                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                    {!showBookingForm ? (
+                                        <button
+                                            onClick={() => setShowBookingForm(true)}
+                                            className="w-full py-3.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors shadow-sm"
+                                        >
+                                            Book &amp; pay now — ₦{formatPrice(totalAmount)}
+                                        </button>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="text-xs font-medium text-gray-600 mb-1 block">Full name *</label>
+                                                <input
+                                                    type="text"
+                                                    value={guestName}
+                                                    onChange={(e) => setGuestName(e.target.value)}
+                                                    placeholder="Your name"
+                                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-medium text-gray-600 mb-1 block">Email *</label>
+                                                <input
+                                                    type="email"
+                                                    value={guestEmail}
+                                                    onChange={(e) => setGuestEmail(e.target.value)}
+                                                    placeholder="you@example.com"
+                                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-medium text-gray-600 mb-1 block">Phone *</label>
+                                                <input
+                                                    type="tel"
+                                                    value={guestPhone}
+                                                    onChange={(e) => setGuestPhone(e.target.value)}
+                                                    placeholder="0803 000 0000"
+                                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-400"
+                                                />
+                                            </div>
+                                            {error && (
+                                                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600">{error}</div>
+                                            )}
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => setShowBookingForm(false)}
+                                                    className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    onClick={handleBooking}
+                                                    disabled={isBooking}
+                                                    className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
+                                                >
+                                                    {isBooking ? 'Processing...' : `Pay ₦${formatPrice(totalAmount)}`}
+                                                </button>
+                                            </div>
+                                            <p className="text-center text-[11px] text-gray-400">Secured by Paystack. Your unit is confirmed the moment payment goes through.</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

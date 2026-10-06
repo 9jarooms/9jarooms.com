@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const { reference, amount, metadata } = event.data || {};
     try {
         const supabase = createAdminClient();
-        const { booking, alreadyPaid } = await confirmPaidBooking(supabase, {
+        const { booking, alreadyPaid, attention } = await confirmPaidBooking(supabase, {
             reference,
             bookingId: metadata?.booking_id || null,
             amountKobo: amount,
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
         if (!alreadyPaid) {
             const [team, guest] = await Promise.all([
-                notifyTeamNewBooking(supabase, booking),
+                notifyTeamNewBooking(supabase, booking, attention),
                 notifyGuestBookingConfirmed(booking),
             ]);
             console.log(`[Paystack] ${reference} confirmed · team email: ${team.sent ? team.to?.join(',') : team.reason} · guest email: ${guest.sent ? 'sent' : guest.reason}`);

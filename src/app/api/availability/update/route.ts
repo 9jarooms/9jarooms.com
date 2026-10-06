@@ -26,10 +26,19 @@ export async function POST(request: NextRequest) {
         // Check if record exists
         const { data: existing } = await supabase
             .from('availability')
-            .select('id')
+            .select('id, booking_id, status')
             .eq('room_id', roomId)
             .eq('date', date)
             .single();
+
+        // A night a booking owns can only change through that booking
+        // (cancel, move, check-out) — otherwise the website would sell it twice.
+        if (existing?.booking_id) {
+            return NextResponse.json(
+                { error: 'This night belongs to a booking. Change the booking instead.' },
+                { status: 409 }
+            );
+        }
 
         if (existing) {
             const { error } = await supabase
