@@ -4,23 +4,24 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { LogIn, LogOut, Banknote, CalendarDays, Pencil, ChevronDown, ChevronUp, Trash2, Ban, UserX } from 'lucide-react';
 import {
     Sheet, StatusPill, BigButton, Field, Stepper, Chips, ContactButtons, inputCls,
-    naira, balanceOf, owes, fmtDay, shiftIso, unitLabel, type OpsRole,
+    naira, balanceOf, owes, fmtDay, shiftIso, nightsBetween, unitLabel, type OpsRole,
 } from './shared';
 
 const PAY_METHODS = ['Cash', 'Bank Transfer', 'POS', 'Moniepoint', 'Other'];
 
 interface Detail { booking: any; payments: any[]; paid: number; units: any[] }
-type Panel = 'none' | 'pay' | 'stay' | 'guest' | 'more';
+export type Panel = 'none' | 'pay' | 'stay' | 'guest' | 'more';
 
 // Everything you can do to one booking, biggest buttons first:
 // check in / check out / take money, then change the stay, then details.
-export default function BookingSheet({ bookingId, role, today, onClose, onChanged }: {
+export default function BookingSheet({ bookingId, role, today, onClose, onChanged, initialPanel = 'none' }: {
     bookingId: string; role: OpsRole; today: string; onClose: () => void; onChanged: () => void;
+    initialPanel?: Panel;
 }) {
     const [data, setData] = useState<Detail | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    const [panel, setPanel] = useState<Panel>('none');
+    const [panel, setPanel] = useState<Panel>(initialPanel);
     const [pay, setPay] = useState({ amount: '', method: 'Cash' });
     const [stay, setStay] = useState({ unitId: '', checkIn: '', nights: 1, autoPrice: true });
     const [guest, setGuest] = useState({ guestName: '', guestPhone: '', notes: '' });
@@ -31,11 +32,15 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
         if (!res.ok) { setError(json.error || 'Could not load booking'); return; }
         setData(json);
         const b = json.booking;
-        setStay({ unitId: b.room_id || '', checkIn: b.check_in || '', nights: b.nights || 1, autoPrice: true });
+        // "Still here" on a guest past their check-out: start from staying
+        // until tomorrow, so the caretaker only adds what was agreed.
+        const overdue = initialPanel === 'stay' && b.status === 'checked_in' && b.check_out <= today;
+        const nights = overdue ? Math.max(nightsBetween(b.check_in, shiftIso(today, 1)), b.nights || 1) : (b.nights || 1);
+        setStay({ unitId: b.room_id || '', checkIn: b.check_in || '', nights, autoPrice: true });
         setGuest({ guestName: b.guest_name || '', guestPhone: b.guest_phone || '', notes: b.notes || '' });
         const balance = Math.max(Number(b.total_amount) - Number(json.paid || 0), 0);
         setPay(p => ({ ...p, amount: balance > 0 ? String(balance) : '' }));
-    }, [bookingId]);
+    }, [bookingId, initialPanel, today]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -205,6 +210,8 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                                     <Stepper value={stayNights} onChange={n => setStay({ ...stay, nights: n })} />
                                     <button type="button" onClick={() => setStay(s => ({ ...s, nights: (Number(s.nights) || 0) + 7 }))}
                                         className="h-11 px-3 rounded-xl border border-stone-300 bg-white text-[13px] font-semibold">+7</button>
+                                    <button type="button" onClick={() => setStay(s => ({ ...s, nights: (Number(s.nights) || 0) + 30 }))}
+                                        className="h-11 px-3 rounded-xl border border-stone-300 bg-white text-[13px] font-semibold">+30</button>
                                 </div>
                             </Field>
                             <p className="text-[13px] text-stone-600">

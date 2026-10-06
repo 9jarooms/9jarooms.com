@@ -7,7 +7,7 @@ import {
     unitLabel, groupAllUnits, unitPrice, relDayLower,
     type OpsToday, type OpsBooking, type UnitState,
 } from './shared';
-import BookingSheet from './BookingSheet';
+import BookingSheet, { type Panel } from './BookingSheet';
 import NewBookingSheet, { type NewBookingPreset } from './NewBookingSheet';
 import UnitSheet from './UnitSheet';
 
@@ -30,6 +30,7 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
     const [error, setError] = useState<string | null>(null);
     const [busyId, setBusyId] = useState<string | null>(null);
     const [openBooking, setOpenBooking] = useState<string | null>(null);
+    const [openPanel, setOpenPanel] = useState<Panel>('none');
     const [newBooking, setNewBooking] = useState<NewBookingPreset | null>(null);
     const [unitSheet, setUnitSheet] = useState<string | null>(null);
 
@@ -102,6 +103,9 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
             arrivals: bs.filter(b => expected(b) && b.check_in <= today && b.check_out > today).sort(byIn),
             // leaving today, or should already have left
             departures: bs.filter(b => b.status === 'checked_in' && b.check_out <= today).sort(byOut),
+            leavingToday: bs.filter(b => b.status === 'checked_in' && b.check_out === today).sort(byOut),
+            // past their check-out and still marked in: left, or stayed on?
+            overdue: bs.filter(b => b.status === 'checked_in' && b.check_out < today).sort(byOut),
             inHouse: bs.filter(b => b.status === 'checked_in' && b.check_out > today).sort(byOut),
             // booked, never checked in, and the dates have passed
             missed: bs.filter(b => expected(b) && b.check_out <= today).sort(byIn),
@@ -242,8 +246,18 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                         ))}
                     </Section>
 
-                    <Section title="Leaving today" count={lists.departures.length} empty="No check-outs today">
-                        {lists.departures.map(b => (
+                    {lists.overdue.length > 0 && (
+                        <Section title="Should have left — still here?" count={lists.overdue.length} empty="">
+                            {lists.overdue.map(b => (
+                                <BookingCard key={b.id} b={b} today={today} unit={unitNameOf(b)} busy={busyId === b.id}
+                                    onOpen={() => setOpenBooking(b.id)} onCheckOut={() => checkOut(b)}
+                                    onStillHere={() => { setOpenPanel('stay'); setOpenBooking(b.id); }} />
+                            ))}
+                        </Section>
+                    )}
+
+                    <Section title="Leaving today" count={lists.leavingToday.length} empty="No check-outs today">
+                        {lists.leavingToday.map(b => (
                             <BookingCard key={b.id} b={b} today={today} unit={unitNameOf(b)} busy={busyId === b.id}
                                 onOpen={() => setOpenBooking(b.id)} onCheckOut={() => checkOut(b)} />
                         ))}
@@ -349,8 +363,8 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
             )}
 
             {openBooking && data && (
-                <BookingSheet bookingId={openBooking} role={data.role} today={today}
-                    onClose={() => setOpenBooking(null)} onChanged={() => load(true)} />
+                <BookingSheet bookingId={openBooking} role={data.role} today={today} initialPanel={openPanel}
+                    onClose={() => { setOpenBooking(null); setOpenPanel('none'); }} onChanged={() => load(true)} />
             )}
             {newBooking && data && (
                 <NewBookingSheet data={data} preset={newBooking}

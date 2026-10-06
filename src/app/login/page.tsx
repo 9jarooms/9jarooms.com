@@ -69,6 +69,21 @@ export default function LoginPage() {
 
     // Automatically check for an existing session (useful for password resets / email verification links)
     useEffect(() => {
+        // arrived from a caretaker's personal link that could not sign them in
+        const link = new URLSearchParams(window.location.search).get('link');
+        if (link) {
+            const msg: Record<string, string> = {
+                expired: 'That link has been replaced. Ask the 9jaRooms team on WhatsApp for your new link.',
+                removed: 'Your access has been removed. Contact the 9jaRooms team if this is a mistake.',
+                invalid: 'That link is not valid. Ask the 9jaRooms team on WhatsApp for your link.',
+                error: 'Could not sign you in with that link. Please try again in a minute.',
+            };
+            const t = setTimeout(() => setError(msg[link] || msg.invalid), 0);
+            return () => clearTimeout(t);
+        }
+    }, []);
+
+    useEffect(() => {
         let mounted = true;
         const supabase = createClient();
         

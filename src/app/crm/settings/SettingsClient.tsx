@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { UserPlus, Trash2 } from 'lucide-react';
+import CaretakerLinks from './CaretakerLinks';
 
 export default function SettingsClient() {
     const [staff, setStaff] = useState<any[]>([]);
@@ -40,6 +41,8 @@ export default function SettingsClient() {
     return (
         <div className="p-4 sm:p-6 max-w-3xl">
             <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-stone-900 mb-4">Settings</h1>
+
+            <CaretakerLinks />
 
             <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] mb-5">
                 <h2 className="px-5 py-3.5 text-sm font-bold text-stone-700 border-b border-stone-200">Team access</h2>

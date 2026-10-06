@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
-import { X, Minus, Plus, Phone, MessageCircle, LogIn, LogOut, AlertTriangle } from 'lucide-react';
+import { X, Minus, Plus, Phone, MessageCircle, LogIn, LogOut, AlertTriangle, CalendarPlus } from 'lucide-react';
 
 // ------------------------------------------------------------------
 // Types — mirror what /api/ops/today returns
@@ -332,9 +332,11 @@ export function ContactButtons({ phone, name, message, compact }: {
 
 // One booking as a card. Tap the body to open it; check-in / check-out are
 // one tap from the list so the common case never needs the full sheet.
-export function BookingCard({ b, today, unit, onOpen, onCheckIn, onCheckOut, busy }: {
+export function BookingCard({ b, today, unit, onOpen, onCheckIn, onCheckOut, onStillHere, busy }: {
     b: OpsBooking; today: string; unit?: string;
-    onOpen: () => void; onCheckIn?: () => void; onCheckOut?: () => void; busy?: boolean;
+    onOpen: () => void; onCheckIn?: () => void; onCheckOut?: () => void;
+    // overdue guest who is actually still in the room → extend their stay
+    onStillHere?: () => void; busy?: boolean;
 }) {
     const balance = balanceOf(b);
     const owing = owes(b);
@@ -373,7 +375,21 @@ export function BookingCard({ b, today, unit, onOpen, onCheckIn, onCheckOut, bus
                     </div>
                 </div>
             </button>
-            {(onCheckIn || onCheckOut || phoneDigits(b.guest_phone)) && (
+            {overdue && onStillHere && onCheckOut ? (
+                <div className="px-3 pb-3">
+                    <p className="text-[12px] font-semibold text-stone-500 mb-2 px-1">Is {b.guest_name.split(/\s+/)[0]} still in the room?</p>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button type="button" onClick={onStillHere} disabled={busy}
+                            className="h-12 rounded-xl border-2 border-[#008737] text-[#008737] font-extrabold text-[14px] flex items-center justify-center gap-1.5 disabled:opacity-50 active:bg-[#008737]/5">
+                            <CalendarPlus size={16} /> Still here
+                        </button>
+                        <button type="button" onClick={onCheckOut} disabled={busy}
+                            className="h-12 rounded-xl bg-[#02572a] text-white font-extrabold text-[14px] flex items-center justify-center gap-1.5 disabled:opacity-50 active:bg-[#03471f]">
+                            <LogOut size={16} /> Has left
+                        </button>
+                    </div>
+                </div>
+            ) : (onCheckIn || onCheckOut || phoneDigits(b.guest_phone)) && (
                 <div className="flex items-center gap-2 px-3 pb-3">
                     <ContactButtons phone={b.guest_phone} name={b.guest_name} compact />
                     <div className="flex-1" />

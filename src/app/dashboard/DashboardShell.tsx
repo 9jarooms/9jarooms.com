@@ -16,12 +16,16 @@ const navItems = [
 interface Props {
     user: User;
     caretakerName: string;
+    // the user's own sign-in link page; adding THAT page to the home screen
+    // gives an icon that stays signed in (iPhone home-screen apps don't
+    // share Safari's sign-in)
+    personalLink?: string;
     children: React.ReactNode;
 }
 
 // Phone-first shell: slim top bar + bottom tab bar on mobile, a sidebar on
 // desktop. No hamburger — every section is one tap away.
-export default function DashboardShell({ user, caretakerName, children }: Props) {
+export default function DashboardShell({ user, caretakerName, personalLink, children }: Props) {
     const pathname = usePathname();
     const router = useRouter();
     const [showInstall, setShowInstall] = useState(false);
@@ -129,12 +133,16 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
                         <Smartphone size={20} className="shrink-0 mt-0.5 text-[#7ed957]" />
                         <div className="text-[13px] leading-snug flex-1">
                             <p className="font-bold">Add 9jaRooms to your home screen</p>
-                            <p className="text-white/80 mt-0.5">
-                                {platform === 'ios'
-                                    ? 'Tap the Share button below, then “Add to Home Screen”.'
-                                    : 'Tap the ⋮ menu at the top right, then “Add to Home screen”.'}
-                                {' '}It then opens like an app, straight to Today.
-                            </p>
+                            <p className="text-white/80 mt-0.5">It then opens like an app, straight to Today, and you stay signed in.</p>
+                            {personalLink ? (
+                                <a href={personalLink} className="inline-block mt-2 px-3 py-1.5 rounded-lg bg-white text-[#02572a] font-bold text-[13px]">Show me how</a>
+                            ) : (
+                                <p className="text-white/80 mt-0.5">
+                                    {platform === 'ios'
+                                        ? 'Tap the Share button below, then “Add to Home Screen”.'
+                                        : 'Tap the ⋮ menu at the top right, then “Add to Home screen”.'}
+                                </p>
+                            )}
                         </div>
                         <button type="button" onClick={dismissInstall} aria-label="Dismiss" className="p-1 -mr-1 rounded-lg text-white/70 active:bg-white/10"><X size={18} /></button>
                     </div>
