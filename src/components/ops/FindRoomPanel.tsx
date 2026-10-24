@@ -97,7 +97,7 @@ export default function FindRoomPanel({ data, onHold }: {
                 </div>
                 <p className="text-[13px] text-gray-600">
                     Check-out <b>{fmtDay(checkOut)}</b>
-                    {loading && <span className="text-gray-400"> · checking…</span>}
+                    {loading && !groups && <span className="text-gray-400"> · checking…</span>}
                 </p>
             </div>
 

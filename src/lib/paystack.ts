@@ -34,10 +34,24 @@ interface PaystackVerifyResponse {
     };
 }
 
+// Simulated Paystack for local demos and testing: no network, the "payment
+// page" is /booking/mock-pay and verification always succeeds. Never active
+// in production, whatever the env var says.
+export const PAYSTACK_MOCK = process.env.PAYSTACK_MOCK === '1' && process.env.NODE_ENV !== 'production';
+
 // Initialize a payment transaction
 export async function initializePayment(
     params: InitializePaymentParams
 ): Promise<PaystackInitResponse> {
+    if (PAYSTACK_MOCK) {
+        const base = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+        const q = new URLSearchParams({ ref: params.reference, amount: String(params.amount), email: params.email });
+        return {
+            status: true,
+            message: 'mock',
+            data: { authorization_url: `${base}/booking/mock-pay?${q}`, access_code: 'mock', reference: params.reference },
+        };
+    }
     const body: Record<string, unknown> = {
         email: params.email,
         amount: params.amount,
@@ -70,6 +84,9 @@ export async function initializePayment(
 
 // Verify a payment transaction
 export async function verifyPayment(reference: string): Promise<PaystackVerifyResponse> {
+    if (PAYSTACK_MOCK) {
+        return { status: true, message: 'mock', data: { status: 'success', reference, amount: 0, currency: 'NGN', metadata: {} } };
+    }
     const response = await fetch(
         `${PAYSTACK_BASE_URL}/transaction/verify/${reference}`,
         {

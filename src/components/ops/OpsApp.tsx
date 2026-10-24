@@ -129,7 +129,8 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
             // extra rooms of a duplex / whole-apartment booking
             const held = heldToday.find(h => h.room_id === u.id);
             const hb = held ? bookingById.get(held.booking_id) : undefined;
-            if (hb) { m.set(u.id, { kind: hb.status === 'checked_in' ? 'occupied' : 'arriving', booking: hb }); continue; }
+            // a guest who already checked out keeps the night's cell, but the unit is free again
+            if (hb && hb.status !== 'completed') { m.set(u.id, { kind: hb.status === 'checked_in' ? 'occupied' : 'arriving', booking: hb }); continue; }
             const blk = blocksToday.find(k => k.room_id === u.id);
             if (blk) { m.set(u.id, { kind: blk.status === 'maintenance' ? 'maintenance' : 'cleaning' }); continue; }
             m.set(u.id, { kind: 'free' });

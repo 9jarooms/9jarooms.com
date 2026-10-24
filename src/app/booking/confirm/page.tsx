@@ -5,6 +5,11 @@ import { useSearchParams } from 'next/navigation';
 import { CheckCircle, MapPin, Calendar, XCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
+// Calendar dates (no timezone): 2026-10-26 must read as 26 Oct everywhere
+function fmtStayDate(d: string) {
+    return new Date(String(d).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export default function BookingConfirmPage() {
     return (
         <Suspense fallback={
@@ -139,7 +144,7 @@ function BookingConfirmContent() {
                                             </div>
                                             <div>
                                                 <p className="text-sm sm:text-base font-medium text-gray-900">
-                                                    {new Date(booking.check_in).toLocaleDateString()} — {new Date(booking.check_out).toLocaleDateString()}
+                                                    {fmtStayDate(booking.check_in)} — {fmtStayDate(booking.check_out)}
                                                 </p>
                                                 <div className="text-[11px] sm:text-sm text-gray-500 mt-1 flex flex-col sm:flex-row sm:flex-wrap gap-x-4 gap-y-0.5 sm:gap-y-1">
                                                     <span>Check-in: {booking.property?.check_in_time}</span>

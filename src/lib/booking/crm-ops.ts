@@ -346,13 +346,23 @@ export async function setBlock(supabase: Db, input: BlockInput): Promise<OpsResu
 
     const { data: existing } = await supabase
         .from('availability')
-        .select('date, booking_id, status')
+        .select('id, date, booking_id, status, booking:bookings(status)')
         .eq('room_id', roomId)
         .in('date', dates);
 
-    const bookedDates = (existing || []).filter(r => r.booking_id).map(r => r.date);
+    // Only a live booking protects its nights. A guest who checked out
+    // early (completed) or never came (cancelled / no-show / expired) still
+    // owns the cell, and the unit must be blockable for cleaning that day.
+    const rows = (existing || []) as unknown as Array<{ id: string; date: string; booking_id: string | null; status: string; booking?: { status: string } | null }>;
+    const finished = new Set(['completed', 'cancelled', 'no_show', 'expired']);
+    const live = rows.filter(r => r.booking_id && !(r.booking && finished.has(r.booking.status)));
+    const bookedDates = live.map(r => r.date);
     if (bookedDates.length > 0 && status !== 'available') {
         return fail(`Dates with bookings cannot be blocked: ${bookedDates.join(', ')}`, 409);
+    }
+    const stale = rows.filter(r => r.booking_id && r.booking && finished.has(r.booking.status));
+    if (stale.length > 0 && status !== 'available') {
+        await supabase.from('availability').delete().in('id', stale.map(r => r.id));
     }
 
     if (status === 'available') {
