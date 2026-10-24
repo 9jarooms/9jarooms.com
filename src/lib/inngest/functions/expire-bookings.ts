@@ -1,7 +1,7 @@
 import { inngest } from '../client';
 import { createAdminClient } from '@/lib/supabase/server';
 
-// Cron: Expire unpaid bookings after 30 minutes
+// Cron: Expire unpaid bookings and holds once expires_at passes (HOLD_MINUTES)
 export const expirePendingBookings = (inngest as any).createFunction(
     {
         id: 'expire-pending-bookings',

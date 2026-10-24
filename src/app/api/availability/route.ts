@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { addDays, format } from 'date-fns';
+import { stayDates } from '@/lib/booking/hold';
 import { createServerClient, createAdminClient } from '@/lib/supabase/server';
 import type { RoomLite } from '@/lib/booking/options';
 import { getRoomTypeAvailability } from '@/lib/booking/room-types';
@@ -67,13 +67,7 @@ async function getRoomTypesAvailability(searchParams: URLSearchParams) {
             return NextResponse.json({ error: 'from and to are required' }, { status: 400 });
         }
 
-        const dates: string[] = [];
-        let current = new Date(from);
-        const end = new Date(to);
-        while (current < end) {
-            dates.push(format(current, 'yyyy-MM-dd'));
-            current = addDays(current, 1);
-        }
+        const dates = stayDates(from, to);
 
         const supabase = createAdminClient();
         const { roomTypes, fullDatesByType } = await getRoomTypeAvailability(supabase, propertyId, dates);
@@ -131,13 +125,7 @@ async function getApartmentAvailability(searchParams: URLSearchParams) {
         }
 
         // Build the date range [from, to): from through the day before to.
-        const dates: string[] = [];
-        let current = new Date(from);
-        const end = new Date(to);
-        while (current < end) {
-            dates.push(format(current, 'yyyy-MM-dd'));
-            current = addDays(current, 1);
-        }
+        const dates = stayDates(from, to);
         const dateSet = new Set(dates);
 
         const { data: rawAvailability, error: availError } = await supabase

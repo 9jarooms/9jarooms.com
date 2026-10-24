@@ -1,3 +1,25 @@
+# 9jaRooms
+
+Booking and operations app for 9jaRooms shortlets in Abuja: public site (search, property pages, Paystack checkout), caretaker Today screen (`/dashboard`), CRM (`/crm`), WhatsApp bot (unused since Oct 2026).
+
+## Status (24 Oct 2026)
+
+**Going live with website bookings.** Until now every booking came through WhatsApp and lived in caretakers' heads; the app's availability table was empty. The rule from here: **a room is never promised in chat, it is held in the app first.** Both channels (website and caretakers) claim nights in the same `availability` table, and the database settles ties.
+
+Built on branch `booking-holds` (24 Oct 2026):
+- `src/lib/booking/hold.ts`: `claimDates` is the one atomic path for claiming nights (insert-only, so a racing booking can never overwrite another's nights). `HOLD_MINUTES = 15`. `stayDates` is timezone-safe. Proven by `scripts/test-claim-race.mjs` (6 simultaneous bookings, one winner) and `hold.test.ts`.
+- Caretaker **Find** tab (`FindRoomPanel`): enter dates, see free units with stay prices, *Share option* to the guest's WhatsApp (link opens the property page with dates pre-filled: `/property/<id>?in=&out=`), or *Hold a unit*.
+- **Hold & send pay link** in `NewBookingSheet`: 15-minute hold (`pending`/`held`) + Paystack link sent to the guest on WhatsApp; confirms itself on payment or when a caretaker records a transfer; frees itself on expiry (existing Inngest cron). *Release hold* and *Send link again* in `BookingSheet`.
+- Late payments (`payment-confirmed.ts`): a Paystack payment arriving after the hold expired re-claims the nights; if they are gone the booking is cancelled, flagged `PAID AFTER HOLD EXPIRED`, and the team is alerted to refund.
+- WhatsApp alerts to the property's caretaker (`notify-caretakers.ts`): website hold started, booking paid, refund needed. Needs `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`; outside Meta's 24h window set `WHATSAPP_ALERT_TEMPLATE` to an approved template. Optional `TEAM_NOTIFY_PHONES`.
+- Payments go to the main Paystack account; an owner sub-account is used only if set (9jaRooms manages all properties itself now).
+
+**Before switching a property on:** a caretaker enters everyone currently in the building (unit, name, paid-until) via *New booking → Book now*, and checks out the 43 stale `occupancy_log` guests still marked in-house from September.
+
+**Open:** Vercel env vars (Paystack, Resend, Gemini, WhatsApp) are not in the local `.env.local`; the test admin login `claude-test@9jarooms.internal` can be deleted once no longer needed.
+
+---
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

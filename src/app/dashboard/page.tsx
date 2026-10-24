@@ -7,6 +7,6 @@ export default async function DashboardHome({ searchParams }: {
     searchParams: Promise<{ tab?: string }>;
 }) {
     const { tab } = await searchParams;
-    const initialTab = tab === 'units' || tab === 'bookings' ? tab : 'today';
+    const initialTab = tab === 'units' || tab === 'bookings' || tab === 'find' ? tab : 'today';
     return <OpsApp initialTab={initialTab} bottomBar />;
 }

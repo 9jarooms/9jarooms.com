@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { addDays, format } from 'date-fns';
 import { z } from 'zod';
 import type { createAdminClient } from '@/lib/supabase/server';
+import { claimDates, releaseClaim, stayDates } from '@/lib/booking/hold';
 
 // Booking operations shared by the CRM (/api/crm/*) and the mobile
 // operations surface (/api/ops/*). Routes handle auth + scoping and
@@ -30,14 +30,7 @@ export function opsResponse<T>(r: OpsResult<T>) {
 }
 
 export function dateRange(checkIn: string, checkOut: string): string[] {
-    const dates: string[] = [];
-    let current = new Date(checkIn);
-    const end = new Date(checkOut);
-    while (current < end) {
-        dates.push(format(current, 'yyyy-MM-dd'));
-        current = addDays(current, 1);
-    }
-    return dates;
+    return stayDates(checkIn, checkOut);
 }
 
 // Sum of recorded payments per booking. Bookings paid online (status
@@ -187,28 +180,17 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
             return fail('Check-out must be after check-in', 400);
         }
 
-        // Conflicts: any non-available cell on the target unit/dates that
-        // doesn't already belong to this booking.
-        const { data: clashes } = await supabase
-            .from('availability')
-            .select('date, booking_id, status')
-            .eq('room_id', newRoomId)
-            .in('date', newDates)
-            .neq('status', 'available');
-
-        const conflict = (clashes || []).find(c => c.booking_id !== id);
-        if (conflict) {
-            return fail(`Unit is not free on ${conflict.date}`, 409);
-        }
-
-        // Release everything this booking held, then claim the new range.
-        await supabase.from('availability').delete().eq('booking_id', id);
+        // Release what this booking held, claim the new range atomically,
+        // and put the old range back if another booking got there first.
+        const oldDates = dateRange(booking.check_in, booking.check_out);
         const status = booking.status === 'pending' ? 'held' : 'booked';
-        const { error: claimError } = await supabase.from('availability').upsert(
-            newDates.map(date => ({ room_id: newRoomId, date, status, booking_id: id })),
-            { onConflict: 'room_id,date' }
-        );
-        if (claimError) return fail(claimError.message, 500);
+        await releaseClaim(supabase, id);
+        const conflicts = await claimDates(supabase, [newRoomId], newDates, status, id);
+        if (conflicts.length > 0) {
+            await releaseClaim(supabase, id);
+            await claimDates(supabase, [booking.room_id], oldDates, status, id);
+            return fail(`Unit is not free on ${conflicts[0].date}`, 409);
+        }
 
         update.room_id = newRoomId;
         update.check_in = newCheckIn;
@@ -240,20 +222,12 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
                 (update.check_out as string) || booking.check_out
             );
             const roomForClaim = (update.room_id as string) || booking.room_id;
-            const { data: clashes } = await supabase
-                .from('availability')
-                .select('date, booking_id')
-                .eq('room_id', roomForClaim)
-                .in('date', dates)
-                .neq('status', 'available');
-            const conflict = (clashes || []).find(c => c.booking_id !== id);
-            if (conflict) {
-                return fail(`Cannot restore: unit already taken on ${conflict.date}`, 409);
+            // a pending hold already owns its cells as 'held'; re-claim as booked
+            await supabase.from('availability').update({ status: 'booked' }).eq('booking_id', id).eq('status', 'held');
+            const conflicts = await claimDates(supabase, [roomForClaim], dates, 'booked', id);
+            if (conflicts.length > 0) {
+                return fail(`Cannot restore: unit already taken on ${conflicts[0].date}`, 409);
             }
-            await supabase.from('availability').upsert(
-                dates.map(date => ({ room_id: roomForClaim, date, status: 'booked', booking_id: id })),
-                { onConflict: 'room_id,date' }
-            );
             update.expires_at = null;
         }
 
@@ -330,6 +304,7 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
         await supabase.from('bookings')
             .update({ status: 'confirmed', expires_at: null })
             .eq('id', id);
+        await supabase.from('availability').update({ status: 'booked' }).eq('booking_id', id).eq('status', 'held');
     }
 
     const { data: payments } = await supabase

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient, createSessionClient } from '@/lib/supabase/server';
 import { initializePayment, generateReference } from '@/lib/paystack';
-import { addDays, format } from 'date-fns';
-import { Resend } from 'resend';
 import { z } from 'zod';
 import { computeOptions, groupDuplexes, freeDuplexes, type ApartmentLite, type RoomLite, type BookingOption } from '@/lib/booking/options';
-import { findFreeUnits, priceRoomTypeStay } from '@/lib/booking/room-types';
+import { findFreeUnits, priceRoomTypeStay, isBlockedSlot } from '@/lib/booking/room-types';
+import { claimDates, releaseClaim, holdExpiry, stayDates, HOLD_MINUTES } from '@/lib/booking/hold';
+import { notifyCaretakersHold } from '@/lib/booking/notify-caretakers';
 
 const bookingSchema = z.object({
     roomId: z.string().uuid().optional(),
@@ -20,6 +20,9 @@ const bookingSchema = z.object({
     checkOut: z.string(),
     userId: z.string().uuid().optional().nullable(),
     isManualBooking: z.boolean().optional(),
+    // staff only: block the unit for HOLD_MINUTES and get a payment link,
+    // instead of confirming on the spot
+    hold: z.boolean().optional(),
     bookingSource: z.string().optional().nullable(),
     bookingType: z.string().optional().nullable(),
     notes: z.string().max(1000).optional().nullable()
@@ -27,58 +30,46 @@ const bookingSchema = z.object({
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-// Atomically reserve `dates` across all `roomIds` for this booking, then verify
-// that every room+date now belongs to us. Returns the conflicting cells (empty
-// = we won the race). On conflict the caller rolls back. Shared by the
-// single-room and bundle (whole/2-bed) paths so both use one correct impl.
-async function reserveAndVerify(
-    supabase: AdminClient,
-    roomIds: string[],
-    dates: string[],
-    status: string,
-    bookingId: string,
-): Promise<{ date: string; booking_id: string | null; status: string }[]> {
-    const availabilityRows = roomIds.flatMap(room_id =>
-        dates.map(date => ({ room_id, date, status, booking_id: bookingId }))
-    );
-
-    await supabase
-        .from('availability')
-        .upsert(availabilityRows, { onConflict: 'room_id,date' });
-
-    const { data: verifyRows } = await supabase
-        .from('availability')
-        .select('date, booking_id, status')
-        .in('room_id', roomIds)
-        .in('date', dates);
-
-    return (verifyRows || []).filter(
-        row => row.booking_id !== bookingId && row.status !== 'available'
-    );
-}
-
-// Undo a reservation: remove every availability row this booking claimed and
-// mark the booking cancelled. Mirrors the original single-room rollback.
-async function rollbackReservation(
-    supabase: AdminClient,
-    roomIds: string[],
-    bookingId: string,
-) {
-    await supabase
-        .from('availability')
-        .delete()
-        .in('room_id', roomIds)
-        .eq('booking_id', bookingId);
-
+// Undo a claim that lost the race: give back the cells and cancel the booking.
+async function rollbackReservation(supabase: AdminClient, bookingId: string) {
+    await releaseClaim(supabase, bookingId);
     await supabase
         .from('bookings')
         .update({ status: 'cancelled', notes: 'Auto-cancelled: dates taken by another booking' })
         .eq('id', bookingId);
 }
 
-const rateLimitStore = new Map<string, { count: number, resetAt: number }>();
+// Paystack would not give us a link. A caretaker's hold still stands: the
+// pay page can retry, and a transfer can be recorded instead. A website
+// guest has nowhere to go, so give the nights back rather than leave the
+// unit blocked for HOLD_MINUTES.
+async function paystackFailed(
+    supabase: AdminClient,
+    bookingId: string,
+    isHold: boolean,
+    origin: string,
+    expiresAt: Date,
+    message: string | null,
+) {
+    if (isHold) {
+        return NextResponse.json({
+            success: true,
+            bookingId,
+            paystackUrl: null,
+            payUrl: `${origin}/booking/pay/${bookingId}`,
+            expiresAt: expiresAt.toISOString(),
+            holdMinutes: HOLD_MINUTES,
+            warning: 'Payment link could not be generated right now. The unit is still held: send the booking page link below (it retries the payment), or record a transfer on the booking.',
+        });
+    }
+    await rollbackReservation(supabase, bookingId);
+    return NextResponse.json(
+        { error: message || 'Payment initialization failed with Paystack. Please try again or contact support.' },
+        { status: 400 }
+    );
+}
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const rateLimitStore = new Map<string, { count: number, resetAt: number }>();
 
 // Create a new booking
 export async function POST(request: NextRequest) {
@@ -112,6 +103,7 @@ export async function POST(request: NextRequest) {
         
         const body = validation.data;
         const { propertyId, mode, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
+        const isHold = !!(isManualBooking && body.hold);
         let roomId = body.roomId;
 
         if (mode === 'single' && !roomId && !body.roomTypeId) {
@@ -167,13 +159,12 @@ export async function POST(request: NextRequest) {
         }
 
         // 1. Generate date array (check-in to day before check-out)
-        const checkInDate = new Date(checkIn);
-        const checkOutDate = new Date(checkOut);
-        const dates: string[] = [];
-        let current = new Date(checkInDate);
-        while (current < checkOutDate) {
-            dates.push(format(current, 'yyyy-MM-dd'));
-            current = addDays(current, 1);
+        if (!/^\d{4}-\d{2}-\d{2}/.test(checkIn) || !/^\d{4}-\d{2}-\d{2}/.test(checkOut)) {
+            return NextResponse.json({ error: 'Dates must be YYYY-MM-DD' }, { status: 400 });
+        }
+        const dates = stayDates(checkIn, checkOut);
+        if (dates.length === 0) {
+            return NextResponse.json({ error: 'Check-out must be after check-in' }, { status: 400 });
         }
 
         // ============================================================
@@ -181,7 +172,7 @@ export async function POST(request: NextRequest) {
         // Room" backed by 8 units) resolves to one concrete free unit
         // here, then flows through the normal single-room path below.
         // Picking a random free unit softens races between simultaneous
-        // guests; reserveAndVerify still settles any true collision.
+        // guests; claimDates still settles any true collision.
         // ============================================================
         let roomTypePricing: { total: number; perNight: number } | null = null;
         let resolvedRoomTypeId: string | null = null;
@@ -371,14 +362,9 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const subaccount = property.owner?.paystack_subaccount_code;
-            if (!isInternalBooking && !subaccount) {
-                console.error(`[Booking API] Owner has no Paystack subaccount for property ${propertyId}`);
-                return NextResponse.json(
-                    { error: 'Property not configured for online payments. Please contact support.' },
-                    { status: 400 }
-                );
-            }
+            // 9jaRooms manages every property itself now: payments land in the
+            // main Paystack account unless an owner sub-account is still set.
+            const subaccount = property.owner?.paystack_subaccount_code || null;
 
             // Bundles use FIXED bundle pricing — no discount_rules applied.
             const totalAmount = option.price;
@@ -386,9 +372,9 @@ export async function POST(request: NextRequest) {
             const bookingType = body.bookingType || 'guest';
 
             // 4. Create the booking (representative room = first sold room).
-            const initialStatus = isInternalBooking ? 'confirmed' : 'pending';
+            const initialStatus = isInternalBooking && !isHold ? 'confirmed' : 'pending';
             const reference = generateReference();
-            const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+            const expiresAt = holdExpiry();
 
             let source = bookingSource || 'website';
             if (!bookingSource) {
@@ -430,18 +416,13 @@ export async function POST(request: NextRequest) {
             if (bookingError) throw new Error(bookingError.message);
 
             // 5. Atomic reservation across ALL consumed rooms (sold + locked).
-            let availabilityStatus = isInternalBooking ? 'booked' : 'held';
-            if (isInternalBooking && bookingType === 'maintenance') {
-                availabilityStatus = 'booked';
-            }
+            const availabilityStatus: 'held' | 'booked' = initialStatus === 'pending' ? 'held' : 'booked';
 
-            const conflictDates = await reserveAndVerify(
-                supabase, consumedRoomIds, dates, availabilityStatus, booking.id
-            );
+            const conflictDates = await claimDates(supabase, consumedRoomIds, dates, availabilityStatus, booking.id);
 
             if (conflictDates.length > 0) {
                 console.warn(`[Race Condition] Bundle booking ${booking.id} lost race for dates: ${conflictDates.map(d => d.date).join(', ')}`);
-                await rollbackReservation(supabase, consumedRoomIds, booking.id);
+                await rollbackReservation(supabase, booking.id);
                 return NextResponse.json(
                     { error: 'Sorry, those dates were just booked by someone else. Please try different dates.' },
                     { status: 409 }
@@ -461,11 +442,11 @@ export async function POST(request: NextRequest) {
             await supabase.from('booking_rooms').insert(bookingRoomRows);
 
             // 7. Payment — same branch logic as the single path, bundle total.
-            if (!isInternalBooking || bookingSource === 'operator') {
+            if (!isInternalBooking || bookingSource === 'operator' || isHold) {
                 try {
                     let origin = request.nextUrl.origin;
                     const allowedOrigins = ['https://9jarooms.com', 'https://www.9jarooms.com', 'http://localhost:3000'];
-                    if (!allowedOrigins.includes(origin) && !origin.endsWith('.vercel.app')) {
+                    if (!allowedOrigins.includes(origin) && !origin.endsWith('.vercel.app') && !origin.startsWith('http://localhost:')) {
                         origin = process.env.NEXT_PUBLIC_APP_URL || 'https://9jarooms.com';
                     }
 
@@ -473,7 +454,7 @@ export async function POST(request: NextRequest) {
                         email: finalGuestEmail ? finalGuestEmail.trim() : 'booking@9jarooms.com',
                         amount: totalAmount * 100,
                         reference: reference,
-                        subaccount: subaccount as string,
+                        subaccount,
                         callbackUrl: `${origin}/booking/confirm`,
                         metadata: {
                             booking_id: booking.id,
@@ -492,19 +473,23 @@ export async function POST(request: NextRequest) {
                         })
                         .eq('id', booking.id);
 
+                    if (!isInternalBooking) {
+                        notifyCaretakersHold(supabase, booking.id).catch(e => console.warn('[Booking API] caretaker alert failed:', e?.message));
+                    }
+
                     return NextResponse.json({
                         success: true,
                         bookingId: booking.id,
                         paystackUrl: payment.data.authorization_url,
+                        payUrl: `${origin}/booking/pay/${booking.id}`,
                         reference: reference,
+                        expiresAt: expiresAt.toISOString(),
+                        holdMinutes: HOLD_MINUTES,
                     });
                 } catch (payError) {
                     console.error('Paystack Init Error:', payError);
                     const message = payError instanceof Error ? payError.message : null;
-                    return NextResponse.json(
-                        { error: message || 'Payment initialization failed with Paystack. Please try again or contact support.' },
-                        { status: 400 }
-                    );
+                    return paystackFailed(supabase, booking.id, isHold, request.nextUrl.origin, expiresAt, message);
                 }
             } else {
                 return NextResponse.json({
@@ -516,15 +501,18 @@ export async function POST(request: NextRequest) {
         }
 
         // Quick pre-check: fast-fail if dates are obviously unavailable
-        // (This is just an optimization — the real protection is below)
-        const { data: unavailable } = await supabase
+        // (This is just an optimization — the real protection is below).
+        // Expired holds do not count, exactly as the calendar shows them.
+        const { data: slots } = await supabase
             .from('availability')
-            .select('date')
+            .select('date, status, booking:bookings(expires_at)')
             .eq('room_id', roomId)
-            .in('date', dates)
-            .not('status', 'eq', 'available');
+            .in('date', dates);
+        const preNow = new Date();
+        const unavailable = ((slots || []) as unknown as Array<{ status: string; booking?: { expires_at: string | null } | null }>)
+            .filter(slot => isBlockedSlot(slot, preNow));
 
-        if (unavailable && unavailable.length > 0) {
+        if (unavailable.length > 0) {
             return NextResponse.json(
                 { error: `Room not available for selected dates` },
                 { status: 409 }
@@ -579,20 +567,14 @@ export async function POST(request: NextRequest) {
             totalAmount = 0;
         }
 
-        // Get owner's Paystack subaccount from the database
-        const subaccount = (owner as any)?.paystack_subaccount_code;
-        if (!isInternalBooking && !subaccount) {
-            console.error(`[Booking API] Owner has no Paystack subaccount for property ${propertyId}`);
-            return NextResponse.json(
-                { error: 'Property not configured for online payments. Please contact support.' },
-                { status: 400 }
-            );
-        }
+        // Payments land in the main Paystack account unless an owner
+        // sub-account is still set (9jaRooms manages every property now).
+        const subaccount = (owner as any)?.paystack_subaccount_code || null;
 
         // 3. Create Booking
-        const initialStatus = isInternalBooking ? 'confirmed' : 'pending';
+        const initialStatus = isInternalBooking && !isHold ? 'confirmed' : 'pending';
         const reference = generateReference();
-        const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 mins
+        const expiresAt = holdExpiry();
 
         // Determine booking source for CRM tracking
         let source = bookingSource || 'website';
@@ -651,25 +633,20 @@ export async function POST(request: NextRequest) {
         // 4. Atomic date reservation with race-condition protection
         // Strategy: INSERT availability rows. If a row already exists for a date
         // with a non-available status, upsert will overwrite — so we verify after.
-        let availabilityStatus = isInternalBooking ? 'booked' : 'held';
-        if (isInternalBooking && bookingType === 'maintenance') {
-            availabilityStatus = 'booked';
-        }
+        const availabilityStatus: 'held' | 'booked' = initialStatus === 'pending' ? 'held' : 'booked';
 
         // 5. VERIFY: Check that ALL dates now belong to OUR booking
         // This catches the race condition: if another booking snuck in
         // between our check and our upsert, some dates will have a
         // different booking_id
-        const conflictDates = await reserveAndVerify(
-            supabase, [roomId as string], dates, availabilityStatus, booking.id
-        );
+        const conflictDates = await claimDates(supabase, [roomId as string], dates, availabilityStatus, booking.id);
 
         if (conflictDates.length > 0) {
             // RACE LOST: Another booking claimed some dates first
             // Roll back: delete our availability rows and cancel booking
             console.warn(`[Race Condition] Booking ${booking.id} lost race for dates: ${conflictDates.map(d => d.date).join(', ')}`);
 
-            await rollbackReservation(supabase, [roomId as string], booking.id);
+            await rollbackReservation(supabase, booking.id);
 
             return NextResponse.json(
                 { error: 'Sorry, those dates were just booked by someone else. Please try different dates.' },
@@ -678,12 +655,12 @@ export async function POST(request: NextRequest) {
         }
 
         // 6. Initialize Paystack for public bookings AND operator bookings (operator sends link to client)
-        if (!isInternalBooking || bookingSource === 'operator') {
+        if (!isInternalBooking || bookingSource === 'operator' || isHold) {
             try {
                 // Secure the origin against Host Header Injection
                 let origin = request.nextUrl.origin;
                 const allowedOrigins = ['https://9jarooms.com', 'https://www.9jarooms.com', 'http://localhost:3000'];
-                if (!allowedOrigins.includes(origin) && !origin.endsWith('.vercel.app')) {
+                if (!allowedOrigins.includes(origin) && !origin.endsWith('.vercel.app') && !origin.startsWith('http://localhost:')) {
                     origin = process.env.NEXT_PUBLIC_APP_URL || 'https://9jarooms.com';
                 }
 
@@ -711,19 +688,23 @@ export async function POST(request: NextRequest) {
                     })
                     .eq('id', booking.id);
 
+                if (!isInternalBooking) {
+                    notifyCaretakersHold(supabase, booking.id).catch(e => console.warn('[Booking API] caretaker alert failed:', e?.message));
+                }
+
                 return NextResponse.json({
                     success: true,
                     bookingId: booking.id,
                     paystackUrl: payment.data.authorization_url,
+                    payUrl: `${origin}/booking/pay/${booking.id}`,
                     reference: reference,
+                    expiresAt: expiresAt.toISOString(),
+                    holdMinutes: HOLD_MINUTES,
                 });
 
             } catch (payError: any) {
                 console.error('Paystack Init Error:', payError);
-                return NextResponse.json(
-                    { error: payError?.message || 'Payment initialization failed with Paystack. Please try again or contact support.' },
-                    { status: 400 }
-                );
+                return paystackFailed(supabase, booking.id, isHold, request.nextUrl.origin, expiresAt, payError?.message || null);
             }
         } else {
             // Return success for internal booking immediately

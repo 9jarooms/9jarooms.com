@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { verifyPayment } from '@/lib/paystack';
 import { confirmPaidBooking, notifyTeamNewBooking, notifyGuestBookingConfirmed } from '@/lib/booking/payment-confirmed';
+import { notifyCaretakersPaid, notifyCaretakersRefundNeeded } from '@/lib/booking/notify-caretakers';
 import { inngest } from '@/lib/inngest/client';
 
 // Called by /booking/confirm when Paystack redirects the guest back.
@@ -37,16 +38,23 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ status: 'pending', paystack_status: verification.data?.status });
         }
 
-        const { booking: confirmed, alreadyPaid } = await confirmPaidBooking(supabase, {
+        const { booking: confirmed, alreadyPaid, refundNeeded } = await confirmPaidBooking(supabase, {
             reference,
             amountKobo: verification.data.amount,
             raw: verification.data,
         });
 
+        if (refundNeeded) {
+            console.error(`[Verify] ${reference} paid after the hold expired and the unit is taken — refund needed`);
+            await notifyCaretakersRefundNeeded(supabase, confirmed.id);
+            return NextResponse.json({ status: 'refund_needed', booking: confirmed });
+        }
+
         if (!alreadyPaid) {
             const [team, guest] = await Promise.all([
                 notifyTeamNewBooking(supabase, confirmed),
                 notifyGuestBookingConfirmed(confirmed),
+                notifyCaretakersPaid(supabase, confirmed.id),
             ]);
             console.log(`[Verify] ${reference} confirmed · team email: ${team.sent ? team.to?.join(',') : team.reason} · guest email: ${guest.sent ? 'sent' : guest.reason}`);
             try {

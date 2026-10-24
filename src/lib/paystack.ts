@@ -7,7 +7,7 @@ interface InitializePaymentParams {
     email: string;
     amount: number; // In kobo (NGN * 100)
     reference: string;
-    subaccount: string; // Owner's Paystack sub-account code
+    subaccount?: string | null; // Owner's Paystack sub-account code; omitted = main account
     metadata?: Record<string, unknown>;
     callbackUrl?: string;
 }
@@ -42,7 +42,7 @@ export async function initializePayment(
         email: params.email,
         amount: params.amount,
         reference: params.reference,
-        subaccount: params.subaccount,
+        ...(params.subaccount ? { subaccount: params.subaccount } : {}),
         callback_url: params.callbackUrl || `${process.env.NEXT_PUBLIC_APP_URL}/booking/confirm`,
         metadata: {
             ...params.metadata,

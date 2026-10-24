@@ -103,6 +103,20 @@ export default function PropertyDetailClient({ property, rooms, availability, un
     const [bookingSuccess, setBookingSuccess] = useState(false);
     const [copied, setCopied] = useState(false);
 
+    // A caretaker's shared link carries the dates: /property/<id>?in=YYYY-MM-DD&out=YYYY-MM-DD
+    useEffect(() => {
+        const q = new URLSearchParams(window.location.search);
+        const inStr = q.get('in');
+        const outStr = q.get('out');
+        if (!inStr || !outStr || !/^\d{4}-\d{2}-\d{2}$/.test(inStr) || !/^\d{4}-\d{2}-\d{2}$/.test(outStr)) return;
+        const ci = new Date(inStr + 'T00:00:00');
+        const co = new Date(outStr + 'T00:00:00');
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        if (ci < today || co <= ci) return;
+        setCheckIn(ci);
+        setCheckOut(co);
+    }, []);
+
     useEffect(() => {
         const fetchUserForPrefill = async () => {
             try {

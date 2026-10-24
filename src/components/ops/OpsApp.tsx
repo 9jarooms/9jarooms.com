@@ -10,10 +10,12 @@ import {
 import BookingSheet from './BookingSheet';
 import NewBookingSheet, { type NewBookingPreset } from './NewBookingSheet';
 import UnitSheet from './UnitSheet';
+import FindRoomPanel from './FindRoomPanel';
 
-type Tab = 'today' | 'units' | 'bookings';
+type Tab = 'today' | 'find' | 'units' | 'bookings';
 const TABS: { key: Tab; label: string }[] = [
     { key: 'today', label: 'Today' },
+    { key: 'find', label: 'Find' },
     { key: 'units', label: 'Units' },
     { key: 'bookings', label: 'Bookings' },
 ];
@@ -206,7 +208,7 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                     {fmtDay(today, { year: true })}{data && <> · <b className={freeTonight > 0 ? 'text-[#008737]' : 'text-[#c75146]'}>{freeTonight} free</b> of {data.units.length} tonight</>}
                 </p>
 
-                <div className="mt-3 grid grid-cols-3 bg-stone-200/70 rounded-xl p-1">
+                <div className="mt-3 grid grid-cols-4 bg-stone-200/70 rounded-xl p-1">
                     {TABS.map(t => (
                         <button key={t.key} type="button" onClick={() => setTab(t.key)}
                             className={`h-10 rounded-lg text-[14px] font-bold transition-colors ${tab === t.key ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
@@ -283,6 +285,10 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                 </div>
             )}
 
+            {data && tab === 'find' && (
+                <FindRoomPanel data={data} onHold={preset => setNewBooking(preset)} />
+            )}
+
             {data && tab === 'units' && (
                 <div className="space-y-5">
                     {groups.length === 0 && <p className="text-center text-stone-400 py-10">No active units on this property.</p>}
@@ -354,7 +360,7 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
             )}
             {newBooking && data && (
                 <NewBookingSheet data={data} preset={newBooking}
-                    onClose={() => setNewBooking(null)} onCreated={() => { setNewBooking(null); load(true); }} />
+                    onClose={() => setNewBooking(null)} onCreated={() => { setNewBooking(null); load(true); }} onRefresh={() => load(true)} />
             )}
             {unitSheet && data && unitById.get(unitSheet) && (
                 <UnitSheet

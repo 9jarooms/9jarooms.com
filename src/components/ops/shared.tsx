@@ -20,6 +20,7 @@ export interface OpsBooking {
     booking_source: string | null; notes: string | null;
     adults?: number | null; children?: number | null;
     checked_in_at?: string | null; checked_out_at?: string | null;
+    expires_at?: string | null;
     room?: { unit_code: string | null; name: string } | null;
     property?: { id: string; name: string } | null;
 }
@@ -107,7 +108,7 @@ export function waLink(phone: string | null | undefined, text: string) {
 // ------------------------------------------------------------------
 export const LIVE_STATUSES = ['pending', 'confirmed', 'paid', 'checked_in'];
 export const STATUS_LABEL: Record<string, string> = {
-    pending: 'Pending', confirmed: 'Confirmed', paid: 'Paid', checked_in: 'In house',
+    pending: 'Hold', confirmed: 'Confirmed', paid: 'Paid', checked_in: 'In house',
     completed: 'Checked out', cancelled: 'Cancelled', no_show: 'No show', expired: 'Expired',
 };
 export const STATUS_STYLE: Record<string, string> = {
@@ -332,6 +333,15 @@ export function ContactButtons({ phone, name, message, compact }: {
 
 // One booking as a card. Tap the body to open it; check-in / check-out are
 // one tap from the list so the common case never needs the full sheet.
+// "expires in 7 min" for an unpaid hold; null once it has lapsed or when there is no hold
+export function holdCountdown(b: { status: string; expires_at?: string | null }, now = Date.now()) {
+    if (b.status !== 'pending' || !b.expires_at) return null;
+    const ms = new Date(b.expires_at).getTime() - now;
+    if (ms <= 0) return 'hold expired';
+    const min = Math.ceil(ms / 60000);
+    return `${min} min left to pay`;
+}
+
 export function BookingCard({ b, today, unit, onOpen, onCheckIn, onCheckOut, busy }: {
     b: OpsBooking; today: string; unit?: string;
     onOpen: () => void; onCheckIn?: () => void; onCheckOut?: () => void; busy?: boolean;
@@ -364,6 +374,9 @@ export function BookingCard({ b, today, unit, onOpen, onCheckIn, onCheckOut, bus
                                 ? <span className="font-bold text-[#c75146]">{naira(balance)} owing</span>
                                 : <span className="text-stone-400">Paid in full</span>}
                         </div>
+                        {holdCountdown(b) && (
+                            <p className="mt-1.5 text-[12px] font-semibold text-purple-700">Held · {holdCountdown(b)}</p>
+                        )}
                         {(late || overdue) && (
                             <p className="mt-1.5 text-[12px] font-semibold text-[#c75146] flex items-center gap-1">
                                 <AlertTriangle size={12} />

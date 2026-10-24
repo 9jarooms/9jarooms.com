@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Share2, Copy, Check, Lock } from 'lucide-react';
 import {
     Sheet, BigButton, Field, Stepper, Chips, inputCls,
-    naira, shiftIso, fmtDay, unitLabel, unitPrice, groupAllUnits, LIVE_STATUSES, type OpsToday,
+    naira, shiftIso, fmtDay, unitLabel, unitPrice, groupAllUnits, waLink, LIVE_STATUSES, type OpsToday,
 } from './shared';
 
 const SOURCES = [
@@ -18,22 +19,31 @@ const PAY_METHODS = ['Cash', 'Bank Transfer', 'POS', 'Moniepoint', 'Other'];
 export interface NewBookingPreset {
     unitId?: string;
     date?: string;
-    mode?: 'booking' | 'block';
+    nights?: number;
+    // 'hold' = block the unit for 15 minutes and get a payment link to
+    // send the guest; the booking confirms itself when they pay
+    mode?: 'booking' | 'block' | 'hold';
     blockStatus?: 'cleaning' | 'maintenance';
 }
 
-// Walk-in / phone booking, or blocking a unit for cleaning or maintenance.
-// Only what a caretaker needs at the door: unit, dates, name, phone, money.
-export default function NewBookingSheet({ data, preset, onClose, onCreated }: {
+interface HoldResult { bookingId: string; paystackUrl: string | null; payUrl: string; expiresAt: string; holdMinutes: number; warning?: string | null }
+
+// Walk-in / phone booking, a WhatsApp hold, or blocking a unit for cleaning
+// or maintenance. Only what a caretaker needs: unit, dates, name, phone, money.
+export default function NewBookingSheet({ data, preset, onClose, onCreated, onRefresh }: {
     data: OpsToday; preset: NewBookingPreset; onClose: () => void; onCreated: () => void;
+    // a hold keeps the sheet open to show the pay link, so it only refreshes the screen behind
+    onRefresh?: () => void;
 }) {
-    const [mode, setMode] = useState<'booking' | 'block'>(preset.mode || 'booking');
+    const [mode, setMode] = useState<'booking' | 'block' | 'hold'>(preset.mode || 'booking');
     const [unitId, setUnitId] = useState(preset.unitId || '');
     const [checkIn, setCheckIn] = useState(preset.date || data.today);
-    const [nights, setNights] = useState(1);
+    const [nights, setNights] = useState(preset.nights && preset.nights > 0 ? preset.nights : 1);
+    const [hold, setHold] = useState<HoldResult | null>(null);
+    const [copied, setCopied] = useState(false);
     const [guestName, setGuestName] = useState('');
     const [phone, setPhone] = useState('');
-    const [source, setSource] = useState('walk_in');
+    const [source, setSource] = useState(preset.mode === 'hold' ? 'whatsapp' : 'walk_in');
     const [price, setPrice] = useState('');      // '' = the standard price
     const [paidNow, setPaidNow] = useState('');
     const [payMethod, setPayMethod] = useState('Cash');
@@ -51,7 +61,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated }: {
         const booked = data.bookings.some(b =>
             b.room_id === id && LIVE_STATUSES.includes(b.status) && b.check_in < checkOut && b.check_out > checkIn);
         const held = data.held.some(h => h.room_id === id && h.date >= checkIn && h.date < checkOut);
-        const blocked = mode === 'booking' && data.blocks.some(k => k.room_id === id && k.date >= checkIn && k.date < checkOut);
+        const blocked = mode !== 'block' && data.blocks.some(k => k.room_id === id && k.date >= checkIn && k.date < checkOut);
         return !(booked || held || blocked);
     };
 
@@ -90,12 +100,24 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated }: {
                     roomId: unit.id, propertyId: unit.property_id || data.propertyId, mode: 'single',
                     guestName: guestName.trim(), guestPhone: phone.trim() || null,
                     checkIn, checkOut,
-                    isManualBooking: true, bookingSource: source, notes: notes.trim() || null,
+                    isManualBooking: true, hold: mode === 'hold', bookingSource: source, notes: notes.trim() || null,
                 }),
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || 'Could not create the booking');
             const id = json.bookingId as string;
+
+            if (mode === 'hold') {
+                // agreed price must be on the booking before the guest sees the link total
+                if (price !== '' && Number(price) >= 0) {
+                    await fetch(`/api/ops/bookings/${id}`, {
+                        method: 'PATCH', headers, body: JSON.stringify({ totalAmount: Number(price) }),
+                    });
+                }
+                setHold({ bookingId: id, paystackUrl: json.paystackUrl || null, payUrl: json.payUrl, expiresAt: json.expiresAt, holdMinutes: json.holdMinutes || 15, warning: json.warning || null });
+                onRefresh?.();
+                return;
+            }
 
             // agreed price differs from the standard one
             if (price !== '' && Number(price) >= 0) {
@@ -116,17 +138,61 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated }: {
         }
     };
 
+    if (hold && unit) {
+        const link = hold.paystackUrl || hold.payUrl;
+        const payMessage =
+            `Hello ${guestName.trim()}, this is 9jaRooms. ${unitLabel(unit)} is held for you ` +
+            `(${fmtDay(checkIn)} to ${fmtDay(checkOut)}, ${nights} night${nights === 1 ? '' : 's'}, ${naira(total)}). ` +
+            `Please pay within ${hold.holdMinutes} minutes to confirm: ${link}`;
+        const wa = waLink(phone, payMessage);
+        const shareLink = async () => {
+            if (typeof navigator !== 'undefined' && navigator.share && !wa) {
+                try { await navigator.share({ text: payMessage }); return; } catch { /* cancelled */ }
+            }
+            window.open(wa || `https://wa.me/?text=${encodeURIComponent(payMessage)}`, '_blank', 'noopener');
+        };
+        const copyLink = async () => {
+            try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
+        };
+        return (
+            <Sheet title={`${unitLabel(unit)} is held`} subtitle={`For ${hold.holdMinutes} minutes · ${fmtDay(checkIn)} → ${fmtDay(checkOut)}`} onClose={onClose}>
+                {hold.warning && <p className="text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">{hold.warning}</p>}
+                <div className="rounded-2xl bg-green-50 border border-green-200 px-4 py-3 text-[13.5px] text-green-900 space-y-1">
+                    <p className="font-bold flex items-center gap-1.5"><Lock size={15} /> Off the website until {new Date(hold.expiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p>Send {guestName.trim()} the payment link. When they pay, the booking confirms itself and you get a WhatsApp message. If they do not pay in time, the unit frees itself.</p>
+                    <p>Paying by transfer instead? Open the booking and tap <b>Record payment</b>.</p>
+                </div>
+                <BigButton onClick={shareLink} icon={<Share2 size={18} />} className="!bg-[#25D366]">
+                    {wa ? `Send link on WhatsApp` : 'Share payment link'}
+                </BigButton>
+                <BigButton tone="secondary" onClick={copyLink} icon={copied ? <Check size={18} /> : <Copy size={18} />}>
+                    {copied ? 'Copied' : 'Copy payment link'}
+                </BigButton>
+                <BigButton tone="dark" onClick={onClose}>Done</BigButton>
+            </Sheet>
+        );
+    }
+
     return (
         <Sheet
-            title={mode === 'booking' ? 'New booking' : 'Block a unit'}
+            title={mode === 'booking' ? 'New booking' : mode === 'hold' ? 'Hold a unit' : 'Block a unit'}
             subtitle={`${freeCount} of ${data.units.length} units free for these dates`}
             onClose={onClose}
         >
             <Chips
-                options={[{ value: 'booking', label: 'Guest booking' }, { value: 'block', label: 'Cleaning / maintenance' }]}
+                options={[
+                    { value: 'hold', label: 'Hold & send pay link' },
+                    { value: 'booking', label: 'Book now' },
+                    { value: 'block', label: 'Cleaning / maintenance' },
+                ]}
                 value={mode}
-                onChange={v => setMode(v as 'booking' | 'block')}
+                onChange={v => setMode(v as 'booking' | 'block' | 'hold')}
             />
+            {mode === 'hold' && (
+                <p className="text-[12.5px] text-stone-500 -mt-1">
+                    The unit comes off the website for 15 minutes while the guest pays the link you send them. Use this for WhatsApp guests.
+                </p>
+            )}
 
             {error && <p className="text-[13px] text-[#c75146] bg-red-50 rounded-xl px-3 py-2">{error}</p>}
 
@@ -153,7 +219,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated }: {
             </div>
             <p className="text-[13px] text-stone-600 -mt-2">Check-out <b>{fmtDay(checkOut)}</b></p>
 
-            {mode === 'booking' ? (
+            {mode !== 'block' ? (
                 <>
                     <Field label="Guest name">
                         <input className={inputCls} value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="e.g. Mr Okeke" autoFocus={!!preset.unitId} />
@@ -171,9 +237,9 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated }: {
                         <input type="number" inputMode="numeric" min={0} className={inputCls}
                             placeholder={autoTotal != null ? String(autoTotal) : '0'} value={price} onChange={e => setPrice(e.target.value)} />
                     </Field>
-                    <Field label="Paid now (₦) — optional">
+                    {mode === 'booking' && <Field label="Paid now (₦) — optional">
                         <input type="number" inputMode="numeric" min={0} className={inputCls} value={paidNow} onChange={e => setPaidNow(e.target.value)} placeholder="0" />
-                    </Field>
+                    </Field>}
                     {deposit > 0 && (
                         <Field label="How was it paid?">
                             <Chips options={PAY_METHODS.map(m => ({ value: m, label: m }))} value={payMethod} onChange={setPayMethod} />
@@ -189,8 +255,9 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated }: {
                         <span>Balance <b className={total - deposit > 0 ? 'text-[#c75146]' : ''}>{naira(Math.max(total - deposit, 0))}</b></span>
                     </div>
 
-                    <BigButton onClick={submit} busy={busy} disabled={!unit || !unitFree || guestName.trim().length < 2}>
-                        Create booking
+                    <BigButton onClick={submit} busy={busy} disabled={!unit || !unitFree || guestName.trim().length < 2}
+                        icon={mode === 'hold' ? <Lock size={18} /> : undefined}>
+                        {mode === 'hold' ? 'Hold unit & get payment link' : 'Create booking'}
                     </BigButton>
                 </>
             ) : (

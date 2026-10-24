@@ -70,7 +70,7 @@ export default async function BookingPayPage({ params }: Props) {
 
                             <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex gap-3 text-sm text-amber-800">
                                 <Clock className="shrink-0" size={20} />
-                                <p>Please complete payment within 30 minutes to secure your reservation. This link expires soon.</p>
+                                <p>Please complete payment within 15 minutes to secure your reservation. This link expires soon.</p>
                             </div>
 
                             {hasPaymentUrl ? (

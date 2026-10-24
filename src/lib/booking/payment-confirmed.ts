@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import type { createAdminClient } from '@/lib/supabase/server';
+import { claimDates, roomsOfBooking, stayDates } from '@/lib/booking/hold';
 
 // Everything that must happen when Paystack says a booking is paid.
 // Called directly from the Paystack webhook and from /api/bookings/verify
@@ -25,7 +26,12 @@ function esc(s: unknown) {
 export interface PaidBookingResult {
     booking: any;
     alreadyPaid: boolean;
+    // money arrived after the hold expired and the unit was gone: the
+    // booking is cancelled, the payment logged, and someone must refund
+    refundNeeded?: boolean;
 }
+
+
 
 // Mark the booking paid, log the transaction, turn held dates into booked
 // and write the payment to the ledger. Safe to call more than once.
@@ -48,6 +54,20 @@ export async function confirmPaidBooking(supabase: Db, input: {
         return { booking, alreadyPaid: true };
     }
 
+    // Paystack links outlive the hold. If this booking already expired (or
+    // was cancelled) its nights were released, so claim them again before
+    // calling it paid. Lost them to someone else: log the money, cancel,
+    // and flag a refund rather than double-book the unit.
+    let refundNeeded = false;
+    if (['expired', 'cancelled', 'no_show'].includes(booking.status)) {
+        const roomIds = await roomsOfBooking(supabase, booking);
+        const conflicts = await claimDates(supabase, roomIds, stayDates(booking.check_in, booking.check_out), 'booked', booking.id);
+        if (conflicts.length > 0) {
+            await supabase.from('availability').delete().eq('booking_id', booking.id);
+            refundNeeded = true;
+        }
+    }
+
     // transaction log (once per reference)
     const { data: existingTx } = await supabase
         .from('transactions')
@@ -65,6 +85,15 @@ export async function confirmPaidBooking(supabase: Db, input: {
             booking_id: booking.id,
             raw_payload: input.raw ?? null,
         });
+    }
+
+    if (refundNeeded) {
+        const note = `PAID AFTER HOLD EXPIRED (${input.reference}): unit no longer free, refund or move the guest.`;
+        await supabase
+            .from('bookings')
+            .update({ status: 'cancelled', expires_at: null, notes: booking.notes ? `${booking.notes}\n${note}` : note })
+            .eq('id', booking.id);
+        return { booking: { ...booking, status: 'cancelled' }, alreadyPaid: false, refundNeeded: true };
     }
 
     const { error: upErr } = await supabase

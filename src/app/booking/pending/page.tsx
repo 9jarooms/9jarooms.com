@@ -31,10 +31,10 @@ export default async function BookingPendingPage({ searchParams }: Props) {
                         </div>
                     )}
 
-                    {/* 30-min warning */}
+                    {/* 15-min warning */}
                     <div className="mt-6 p-4 bg-amber-50 border border-amber-100 rounded-xl text-sm text-amber-700">
                         <p className="font-semibold mb-1">⏰ 30-Minute Payment Window</p>
-                        <p>Complete your payment within 30 minutes. After that, the booking will expire and you'll need to start over.</p>
+                        <p>Complete your payment within 15 minutes. After that, the booking will expire and you'll need to start over.</p>
                     </div>
 
                     <div className="mt-8 flex flex-col gap-3">

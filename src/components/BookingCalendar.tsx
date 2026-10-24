@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
     format,
     startOfMonth,
@@ -40,6 +40,13 @@ export default function BookingCalendar({
     const [checkIn, setCheckIn] = useState<Date | null>(externalCheckIn || null);
     const [checkOut, setCheckOut] = useState<Date | null>(externalCheckOut || null);
     const [feedback, setFeedback] = useState<{ date: string; message: string } | null>(null);
+
+    // Dates chosen outside the calendar (a shared link with ?in=&out=)
+    useEffect(() => {
+        if (externalCheckIn !== undefined) setCheckIn(externalCheckIn || null);
+        if (externalCheckOut !== undefined) setCheckOut(externalCheckOut || null);
+        if (externalCheckIn) setCurrentMonth(externalCheckIn);
+    }, [externalCheckIn, externalCheckOut]);
 
     const today = startOfDay(new Date());
 

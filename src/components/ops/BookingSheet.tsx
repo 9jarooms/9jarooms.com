@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { LogIn, LogOut, Banknote, CalendarDays, Pencil, ChevronDown, ChevronUp, Trash2, Ban, UserX } from 'lucide-react';
+import { LogIn, LogOut, Banknote, CalendarDays, Pencil, ChevronDown, ChevronUp, Trash2, Ban, UserX, Share2, Unlock } from 'lucide-react';
 import {
     Sheet, StatusPill, BigButton, Field, Stepper, Chips, ContactButtons, inputCls,
-    naira, balanceOf, owes, fmtDay, shiftIso, unitLabel, type OpsRole,
+    naira, balanceOf, owes, fmtDay, shiftIso, unitLabel, waLink, holdCountdown, type OpsRole,
 } from './shared';
 
 const PAY_METHODS = ['Cash', 'Bank Transfer', 'POS', 'Moniepoint', 'Other'];
@@ -156,6 +156,28 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                 name={b.guest_name}
                 message={`Hello ${b.guest_name}, this is 9jaRooms about your stay (${fmtDay(b.check_in)} to ${fmtDay(b.check_out)}).${owing ? ` Outstanding balance: ${naira(balance)}.` : ''}`}
             />
+
+            {/* an unpaid hold: chase the link or let the unit go */}
+            {b.status === 'pending' && (
+                <div className="rounded-2xl bg-purple-50 border border-purple-200 p-4 space-y-2">
+                    <p className="text-[13px] text-purple-900 font-semibold">
+                        Unit held · {holdCountdown(b) || 'no expiry'}. It frees itself if the guest does not pay.
+                    </p>
+                    {b.paystack_authorization_url && (
+                        <a
+                            href={waLink(b.guest_phone, `Hello ${b.guest_name}, this is 9jaRooms. Your payment link for ${unitLabel(b.room)} (${fmtDay(b.check_in)} to ${fmtDay(b.check_out)}, ${naira(b.total_amount)}): ${b.paystack_authorization_url}`) || `https://wa.me/?text=${encodeURIComponent(b.paystack_authorization_url)}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="h-12 w-full rounded-xl bg-[#25D366] text-white font-bold text-[15px] flex items-center justify-center gap-2"
+                        >
+                            <Share2 size={18} /> Send payment link again
+                        </a>
+                    )}
+                    <BigButton tone="secondary" busy={busy} icon={<Unlock size={18} />}
+                        onClick={() => { if (confirm(`Release ${unitLabel(b.room)}? The unit goes back on the website now.`)) patch({ status: 'cancelled' }); }}>
+                        Release hold
+                    </BigButton>
+                </div>
+            )}
 
             {/* the three things that happen every day */}
             <div className="space-y-2">

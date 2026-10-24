@@ -383,7 +383,7 @@ export default function OperatorDashboardClient({ properties, allProperties, ava
                 
                 let message: string;
                 if (paystackLink) {
-                    message = `Hi ${guestName}! 🏠\n\nHere's your booking payment link for *${selectedProperty?.name}*:\n\n📅 ${globalCheckIn && format(globalCheckIn, 'MMM d')} → ${globalCheckOut && format(globalCheckOut, 'MMM d, yyyy')}\n💰 ₦${totalAmount.toLocaleString()}\n\n🔗 ${paystackLink}\n\nPlease complete payment within 30 minutes to secure your booking. Thank you!\n\n— 9jaRooms`;
+                    message = `Hi ${guestName}! 🏠\n\nHere's your booking payment link for *${selectedProperty?.name}*:\n\n📅 ${globalCheckIn && format(globalCheckIn, 'MMM d')} → ${globalCheckOut && format(globalCheckOut, 'MMM d, yyyy')}\n💰 ₦${totalAmount.toLocaleString()}\n\n🔗 ${paystackLink}\n\nPlease complete payment within 15 minutes to secure your booking. Thank you!\n\n— 9jaRooms`;
                 } else {
                      message = `Hi ${guestName}! 🏠\n\nYour stay request for *${selectedProperty?.name}* has been received:\n\n📅 ${globalCheckIn && format(globalCheckIn, 'MMM d')} → ${globalCheckOut && format(globalCheckOut, 'MMM d, yyyy')}\n💰 ₦${totalAmount.toLocaleString()}\n\nWe will follow up with you shortly regarding payment details to confirm your booking. Thank you!\n\n— 9jaRooms`;
                 }
@@ -938,7 +938,7 @@ export default function OperatorDashboardClient({ properties, allProperties, ava
                                                 <div className="bg-green-50 border border-green-200 rounded-xl p-4">
                                                     <div className="flex items-center gap-2 mb-2">
                                                         <CheckCircle size={16} className="text-green-600" />
-                                                        <p className="text-sm text-green-800 font-medium">Room blocked for 30 minutes</p>
+                                                        <p className="text-sm text-green-800 font-medium">Room blocked for 15 minutes</p>
                                                     </div>
                                                     <p className="text-xs text-green-700 mb-3">Send this payment link to the customer:</p>
                                                     <div className="flex bg-white border border-green-100 p-2 rounded-lg gap-1">

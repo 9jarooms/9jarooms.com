@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateWebhookSignature } from '@/lib/paystack';
 import { createAdminClient } from '@/lib/supabase/server';
 import { confirmPaidBooking, notifyTeamNewBooking, notifyGuestBookingConfirmed } from '@/lib/booking/payment-confirmed';
+import { notifyCaretakersPaid, notifyCaretakersRefundNeeded } from '@/lib/booking/notify-caretakers';
 import { inngest } from '@/lib/inngest/client';
 
 // Paystack webhook: https://www.9jarooms.com/api/webhooks/paystack
@@ -32,17 +33,21 @@ export async function POST(request: NextRequest) {
     const { reference, amount, metadata } = event.data || {};
     try {
         const supabase = createAdminClient();
-        const { booking, alreadyPaid } = await confirmPaidBooking(supabase, {
+        const { booking, alreadyPaid, refundNeeded } = await confirmPaidBooking(supabase, {
             reference,
             bookingId: metadata?.booking_id || null,
             amountKobo: amount,
             raw: event.data,
         });
 
-        if (!alreadyPaid) {
+        if (refundNeeded) {
+            console.error(`[Paystack] ${reference} paid after the hold expired and the unit is taken — refund needed`);
+            await notifyCaretakersRefundNeeded(supabase, booking.id);
+        } else if (!alreadyPaid) {
             const [team, guest] = await Promise.all([
                 notifyTeamNewBooking(supabase, booking),
                 notifyGuestBookingConfirmed(booking),
+                notifyCaretakersPaid(supabase, booking.id),
             ]);
             console.log(`[Paystack] ${reference} confirmed · team email: ${team.sent ? team.to?.join(',') : team.reason} · guest email: ${guest.sent ? 'sent' : guest.reason}`);
 
