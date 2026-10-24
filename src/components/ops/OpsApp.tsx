@@ -66,6 +66,8 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
     }, [propertyId]);
 
     useEffect(() => { load(); }, [load]);
+    // the bottom nav links to ?tab=find; follow it when the page re-renders
+    useEffect(() => { setTab(initialTab); }, [initialTab]);
 
     // Keep the screen fresh: every minute while visible, and whenever the
     // phone comes back to the app.
@@ -163,16 +165,16 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
     if (error && !data) {
         return (
             <div className="max-w-2xl mx-auto py-16 text-center">
-                <p className="text-stone-600 mb-4">{error}</p>
-                <button type="button" onClick={() => load()} className="h-11 px-5 rounded-xl bg-[#008737] text-white font-bold">Try again</button>
+                <p className="text-gray-600 mb-4">{error}</p>
+                <button type="button" onClick={() => load()} className="h-11 px-5 rounded-xl bg-green-500 text-white font-bold">Try again</button>
             </div>
         );
     }
 
     if (data && data.properties.length === 0) {
         return (
-            <div className="max-w-2xl mx-auto py-16 text-center text-stone-500">
-                <p className="font-semibold text-stone-800 mb-1">No properties assigned to you yet</p>
+            <div className="max-w-2xl mx-auto py-16 text-center text-gray-500">
+                <p className="font-semibold text-gray-800 mb-1">No properties assigned to you yet</p>
                 <p className="text-sm">Ask the 9jaRooms team to link your account to a property.</p>
             </div>
         );
@@ -187,7 +189,7 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                         <select
                             value={data.propertyId || ''}
                             onChange={e => selectProperty(e.target.value)}
-                            className="flex-1 min-w-0 h-12 rounded-xl border border-stone-300 bg-white px-3 text-[16px] font-bold text-stone-900"
+                            className="flex-1 min-w-0 h-12 rounded-xl border border-gray-200 bg-white px-3 text-[16px] font-semibold text-gray-900 shadow-sm"
                         >
                             <option value="all">All properties</option>
                             {data.properties.map(p => (
@@ -195,30 +197,30 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                             ))}
                         </select>
                     ) : (
-                        <h1 className="flex-1 min-w-0 text-[22px] font-extrabold tracking-tight text-stone-900 truncate">
+                        <h1 className="flex-1 min-w-0 text-[22px] font-semibold tracking-tight text-gray-900 truncate">
                             {allMode ? 'All properties' : (property?.name || (loading ? 'Loading…' : 'Today'))}
                         </h1>
                     )}
                     <button type="button" onClick={() => load(true)} aria-label="Refresh"
-                        className="w-12 h-12 rounded-xl border border-stone-200 bg-white flex items-center justify-center text-stone-500 active:bg-stone-50 shrink-0">
+                        className="w-12 h-12 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all duration-150 shrink-0">
                         <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                     </button>
                 </div>
-                <p className="text-[13px] text-stone-500 mt-1.5">
-                    {fmtDay(today, { year: true })}{data && <> · <b className={freeTonight > 0 ? 'text-[#008737]' : 'text-[#c75146]'}>{freeTonight} free</b> of {data.units.length} tonight</>}
+                <p className="text-[13px] text-gray-500 mt-1.5">
+                    {fmtDay(today, { year: true })}{data && <> · <b className={freeTonight > 0 ? 'text-green-600' : 'text-red-600'}>{freeTonight} free</b> of {data.units.length} tonight</>}
                 </p>
 
-                <div className="mt-3 grid grid-cols-4 bg-stone-200/70 rounded-xl p-1">
+                <div className="mt-3 grid grid-cols-4 bg-gray-100 rounded-full p-1">
                     {TABS.map(t => (
                         <button key={t.key} type="button" onClick={() => setTab(t.key)}
-                            className={`h-10 rounded-lg text-[14px] font-bold transition-colors ${tab === t.key ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
+                            className={`h-9 rounded-full text-sm font-medium transition-colors duration-150 ${tab === t.key ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}>
                             {t.label}
                         </button>
                     ))}
                 </div>
             </div>
 
-            {loading && !data && <p className="text-center text-stone-400 py-16">Loading…</p>}
+            {loading && !data && <p className="text-center text-gray-400 py-16">Loading…</p>}
 
             {data && tab === 'today' && (
                 <div className="space-y-6">
@@ -230,9 +232,9 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                             { label: 'In house', value: lists.inHouse.length },
                         ].map(t => (
                             <button key={t.label} type="button" onClick={() => t.go && setTab(t.go)}
-                                className="bg-white rounded-2xl border border-stone-200/80 px-1 py-3 text-center">
-                                <p className={`text-[22px] font-extrabold tabular-nums leading-none ${t.accent ? (t.value > 0 ? 'text-[#008737]' : 'text-[#c75146]') : 'text-stone-900'}`}>{t.value}</p>
-                                <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400 mt-1.5">{t.label}</p>
+                                className="bg-white rounded-2xl border border-gray-100 shadow-sm px-1 py-3 text-center btn-press">
+                                <p className={`text-[22px] font-semibold tabular-nums leading-none ${t.accent ? (t.value > 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-900'}`}>{t.value}</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mt-1.5">{t.label}</p>
                             </button>
                         ))}
                     </div>
@@ -272,7 +274,7 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                         count={lists.upcoming.length}
                         empty="Nothing booked for the next 30 days"
                         right={lists.upcoming.length > 5 && (
-                            <button type="button" onClick={() => setTab('bookings')} className="text-[13px] font-bold text-[#008737] flex items-center gap-0.5">
+                            <button type="button" onClick={() => setTab('bookings')} className="text-[13px] font-bold text-green-600 flex items-center gap-0.5">
                                 See all <ChevronRight size={14} />
                             </button>
                         )}
@@ -291,36 +293,36 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
 
             {data && tab === 'units' && (
                 <div className="space-y-5">
-                    {groups.length === 0 && <p className="text-center text-stone-400 py-10">No active units on this property.</p>}
+                    {groups.length === 0 && <p className="text-center text-gray-400 py-10">No active units on this property.</p>}
                     {groups.map(g => {
                         const free = g.units.filter(u => unitStatus.get(u.id)?.kind === 'free').length;
                         return (
                             <div key={g.key}>
                                 <div className="flex items-center justify-between px-1 mb-2">
-                                    <h2 className="text-[13px] font-extrabold uppercase tracking-wide text-stone-500">
-                                        {g.label}{g.price != null && <span className="font-semibold text-stone-400 normal-case tracking-normal"> · {naira(g.price)}/night</span>}
+                                    <h2 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500">
+                                        {g.label}{g.price != null && <span className="font-semibold text-gray-400 normal-case tracking-normal"> · {naira(g.price)}/night</span>}
                                     </h2>
-                                    <span className={`text-[12px] font-bold ${free > 0 ? 'text-[#008737]' : 'text-[#c75146]'}`}>{free} free</span>
+                                    <span className={`text-[12px] font-bold ${free > 0 ? 'text-green-600' : 'text-red-600'}`}>{free} free</span>
                                 </div>
-                                <div className="bg-white rounded-2xl border border-stone-200/80 divide-y divide-stone-100 overflow-hidden">
+                                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100 overflow-hidden">
                                     {g.units.map(u => {
                                         const st = unitStatus.get(u.id) || { kind: 'free' as const };
                                         const price = unitPrice(u, data.roomTypes);
                                         return (
                                             <button key={u.id} type="button" onClick={() => setUnitSheet(u.id)}
-                                                className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-stone-50">
-                                                <span className="w-12 shrink-0 font-extrabold text-[15px] text-stone-900">{unitLabel(u)}</span>
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-gray-50">
+                                                <span className="w-12 shrink-0 font-bold text-[15px] text-gray-900">{unitLabel(u)}</span>
                                                 <span className="flex-1 min-w-0">
                                                     {st.booking ? (
                                                         <>
-                                                            <span className="block font-semibold text-[14px] text-stone-800 truncate">{st.booking.guest_name}</span>
-                                                            <span className="block text-[12px] text-stone-500">
+                                                            <span className="block font-semibold text-[14px] text-gray-800 truncate">{st.booking.guest_name}</span>
+                                                            <span className="block text-[12px] text-gray-500">
                                                                 {st.kind === 'arriving' ? 'arrives' : 'leaves'} {relDayLower(st.kind === 'arriving' ? st.booking.check_in : st.booking.check_out, today)}
-                                                                {owes(st.booking) && <span className="font-bold text-[#c75146]"> · {naira(balanceOf(st.booking))} owing</span>}
+                                                                {owes(st.booking) && <span className="font-bold text-red-600"> · {naira(balanceOf(st.booking))} owing</span>}
                                                             </span>
                                                         </>
                                                     ) : (
-                                                        <span className="block text-[13px] text-stone-400">
+                                                        <span className="block text-[13px] text-gray-400">
                                                             {g.price == null && typeById.get(u.room_type_id || '')?.name}
                                                             {g.price == null && price != null && ` · ${naira(price)}/night`}
                                                             {g.price != null && (st.kind === 'free' ? 'Ready for a guest' : '')}
@@ -328,7 +330,7 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                                                     )}
                                                 </span>
                                                 <KindPill kind={st.kind} />
-                                                <ChevronRight size={16} className="text-stone-300 shrink-0" />
+                                                <ChevronRight size={16} className="text-gray-300 shrink-0" />
                                             </button>
                                         );
                                     })}
@@ -348,7 +350,7 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                 <button
                     type="button"
                     onClick={() => setNewBooking({})}
-                    className={`fixed right-4 z-30 h-14 pl-4 pr-5 rounded-full bg-[#008737] text-white font-bold text-[15px] shadow-[0_8px_24px_rgba(0,135,55,0.35)] flex items-center gap-2 active:bg-[#00762e] ${bottomBar ? 'bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-8' : 'bottom-[calc(1.25rem+env(safe-area-inset-bottom))] sm:bottom-8'}`}
+                    className={`fixed right-4 z-30 h-14 pl-4 pr-5 rounded-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold text-[15px] shadow-lg shadow-green-500/30 flex items-center gap-2 transition-all ${bottomBar ? 'bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-8' : 'bottom-[calc(1.25rem+env(safe-area-inset-bottom))] sm:bottom-8'}`}
                 >
                     <Plus size={20} strokeWidth={2.5} /> New booking
                 </button>
@@ -396,13 +398,13 @@ function Section({ title, count, empty, right, children }: {
     return (
         <section>
             <div className="flex items-center justify-between px-1 mb-2">
-                <h2 className="text-[13px] font-extrabold uppercase tracking-wide text-stone-500">
-                    {title}<span className="ml-1.5 text-stone-400">{count}</span>
+                <h2 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500">
+                    {title}<span className="ml-1.5 text-gray-400">{count}</span>
                 </h2>
                 {right}
             </div>
             {count === 0
-                ? <p className="text-[13px] text-stone-400 bg-white/60 border border-dashed border-stone-200 rounded-2xl px-4 py-4 text-center">{empty}</p>
+                ? <p className="text-[13px] text-gray-400 bg-white/60 border border-dashed border-gray-200 rounded-2xl px-4 py-4 text-center">{empty}</p>
                 : <div className="space-y-2.5">{children}</div>}
         </section>
     );
@@ -454,19 +456,19 @@ function BookingSearch({ propertyId, today, unitNameOf, onOpen }: {
     return (
         <div className="space-y-3">
             <div className="relative">
-                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                     placeholder="Search guest name or phone…"
                     value={q}
                     onChange={e => setQ(e.target.value)}
-                    className="w-full h-12 pl-10 pr-3 rounded-xl border border-stone-300 bg-white text-[16px] outline-none focus:border-[#008737]"
+                    className="w-full h-12 pl-10 pr-3 rounded-full border border-gray-200 bg-white text-[16px] outline-none shadow-sm focus:border-green-500"
                 />
             </div>
             {!q.trim() && (
                 <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {SCOPES.map(s => (
                         <button key={s.value} type="button" onClick={() => setScope(s.value)}
-                            className={`shrink-0 px-3.5 h-9 rounded-full text-[13px] font-semibold border ${scope === s.value ? 'bg-[#02572a] text-white border-[#02572a]' : 'bg-white text-stone-600 border-stone-300'}`}>
+                            className={`shrink-0 px-3.5 h-9 rounded-full text-xs font-medium border transition-colors ${scope === s.value ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-900'}`}>
                             {s.label}
                         </button>
                     ))}
@@ -476,8 +478,8 @@ function BookingSearch({ propertyId, today, unitNameOf, onOpen }: {
                 {rows.map(b => (
                     <BookingCard key={b.id} b={b} today={today} unit={unitNameOf(b)} onOpen={() => onOpen(b.id)} />
                 ))}
-                {!loading && rows.length === 0 && <p className="text-center text-stone-400 py-10">No bookings found.</p>}
-                {loading && rows.length === 0 && <p className="text-center text-stone-400 py-10">Loading…</p>}
+                {!loading && rows.length === 0 && <p className="text-center text-gray-400 py-10">No bookings found.</p>}
+                {loading && rows.length === 0 && <p className="text-center text-gray-400 py-10">Loading…</p>}
             </div>
         </div>
     );

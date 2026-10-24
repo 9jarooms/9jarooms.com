@@ -1,14 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Home, Building2, UserCircle, LogOut, Smartphone, X } from 'lucide-react';
+import { Home, Search, Building2, UserCircle, LogOut, Smartphone, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 
 const navItems = [
     { href: '/dashboard', label: 'Today', icon: Home },
+    { href: '/dashboard?tab=find', label: 'Find', icon: Search },
     { href: '/dashboard/properties', label: 'Properties', icon: Building2 },
     { href: '/dashboard/account', label: 'Account', icon: UserCircle },
 ];
@@ -23,7 +24,9 @@ interface Props {
 // desktop. No hamburger — every section is one tap away.
 export default function DashboardShell({ user, caretakerName, children }: Props) {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
     const router = useRouter();
+    const onFind = pathname === '/dashboard' && searchParams.get('tab') === 'find';
     const [showInstall, setShowInstall] = useState(false);
     const [platform, setPlatform] = useState<'ios' | 'android' | 'other'>('other');
 
@@ -48,10 +51,11 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
         try { localStorage.setItem('install-hint-dismissed', '1'); } catch { /* ignore */ }
     };
 
-    const isActive = (href: string) =>
-        href === '/dashboard'
-            ? pathname === '/dashboard' || pathname.startsWith('/dashboard/bookings')
-            : pathname.startsWith(href);
+    const isActive = (href: string) => {
+        if (href === '/dashboard?tab=find') return onFind;
+        if (href === '/dashboard') return !onFind && (pathname === '/dashboard' || pathname.startsWith('/dashboard/bookings'));
+        return pathname.startsWith(href);
+    };
 
     const handleLogout = async () => {
         const supabase = createClient();
@@ -61,25 +65,27 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
     };
 
     return (
-        <div className="min-h-screen bg-[#f4f5f1] text-stone-800">
+        <div className="min-h-screen bg-gray-50 text-gray-800">
             {/* Mobile top bar */}
-            <header className="lg:hidden fixed top-0 inset-x-0 z-40 h-14 bg-white border-b border-stone-200 px-4 flex items-center justify-between">
-                <span className="font-extrabold text-[17px] tracking-tight">9ja<span className="text-[#008737]">Rooms</span></span>
+            <header className="lg:hidden fixed top-0 inset-x-0 z-40 h-14 bg-white/95 backdrop-blur-md border-b border-black/[0.06] shadow-sm px-4 flex items-center justify-between">
+                <Link href="/dashboard" className="shrink-0 flex items-center">
+                    <img src="/logo-transparent.png" alt="9jaRooms" className="h-7 w-auto object-contain" />
+                </Link>
                 <div className="flex items-center gap-1 min-w-0">
-                    <span className="text-[12px] font-semibold text-stone-500 truncate max-w-[40vw]">{caretakerName}</span>
-                    <button type="button" onClick={handleLogout} aria-label="Sign out" className="p-2 -mr-2 rounded-lg text-stone-400 active:bg-stone-100">
+                    <span className="text-[12px] font-semibold text-gray-500 truncate max-w-[40vw]">{caretakerName}</span>
+                    <button type="button" onClick={handleLogout} aria-label="Sign out" className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
                         <LogOut size={18} />
                     </button>
                 </div>
             </header>
 
             {/* Desktop sidebar */}
-            <aside className="hidden lg:flex fixed top-0 left-0 bottom-0 w-64 bg-white border-r border-stone-200 flex-col z-40">
-                <div className="p-6 border-b border-stone-200">
+            <aside className="hidden lg:flex fixed top-0 left-0 bottom-0 w-64 bg-white border-r border-black/[0.06] flex-col z-40">
+                <div className="p-6 border-b border-gray-100">
                     <Link href="/" className="block">
-                        <img src="/WHITE.jpg" alt="9jaRooms" className="h-14 w-auto object-contain" />
+                        <img src="/logo-transparent.png" alt="9jaRooms" className="h-8 w-auto object-contain" />
                     </Link>
-                    <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
+                    <div className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
                         Caretaker Portal
                     </div>
                 </div>
@@ -91,9 +97,9 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${active
-                                    ? 'bg-[#7ed957]/15 text-[#02572a] font-semibold'
-                                    : 'text-stone-600 hover:bg-stone-50'}`}
+                                className={`flex items-center gap-3 px-4 py-2.5 rounded-full text-sm font-medium transition-colors duration-150 ${active
+                                    ? 'bg-green-50 text-green-700'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'}`}
                             >
                                 <Icon size={18} />
                                 {item.label}
@@ -101,20 +107,20 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
                         );
                     })}
                 </nav>
-                <div className="p-4 border-t border-stone-200">
+                <div className="p-4 border-t border-gray-100">
                     <div className="flex items-center gap-3 mb-3">
-                        <div className="w-9 h-9 bg-[#7ed957]/25 rounded-full flex items-center justify-center text-[#02572a] font-semibold text-sm">
+                        <div className="w-9 h-9 bg-green-50 rounded-full flex items-center justify-center text-green-700 font-semibold text-sm">
                             {caretakerName.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-stone-900 truncate">{caretakerName}</p>
-                            <p className="text-xs text-stone-400 truncate">{user.email}</p>
+                            <p className="text-sm font-medium text-gray-900 truncate">{caretakerName}</p>
+                            <p className="text-xs text-gray-400 truncate">{user.email}</p>
                         </div>
                     </div>
                     <button
                         type="button"
                         onClick={handleLogout}
-                        className="flex items-center gap-2 text-sm text-stone-500 hover:text-red-600 transition-colors w-full px-3 py-2 rounded-xl hover:bg-red-50"
+                        className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-600 transition-colors w-full px-3 py-2 rounded-xl hover:bg-red-50"
                     >
                         <LogOut size={16} />
                         Sign Out
@@ -125,10 +131,10 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
             {/* Main content */}
             <main className="lg:ml-64 pt-14 lg:pt-0 pb-24 lg:pb-8 min-h-screen">
                 {showInstall && (
-                    <div className="lg:hidden mx-4 mt-3 rounded-2xl bg-[#02572a] text-white px-4 py-3 flex items-start gap-3">
-                        <Smartphone size={20} className="shrink-0 mt-0.5 text-[#7ed957]" />
+                    <div className="lg:hidden mx-4 mt-3 rounded-2xl bg-gradient-to-br from-green-600 to-green-700 text-white px-4 py-3 flex items-start gap-3 shadow-md">
+                        <Smartphone size={20} className="shrink-0 mt-0.5 text-green-300" />
                         <div className="text-[13px] leading-snug flex-1">
-                            <p className="font-bold">Add 9jaRooms to your home screen</p>
+                            <p className="font-semibold">Add 9jaRooms to your home screen</p>
                             <p className="text-white/80 mt-0.5">
                                 {platform === 'ios'
                                     ? 'Tap the Share button below, then “Add to Home Screen”.'
@@ -145,8 +151,8 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
             </main>
 
             {/* Mobile bottom tabs */}
-            <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-stone-200 safe-area-inset-bottom">
-                <div className="grid grid-cols-3 h-16">
+            <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-black/[0.06] safe-area-inset-bottom">
+                <div className="grid grid-cols-4 h-16">
                     {navItems.map(item => {
                         const active = isActive(item.href);
                         const Icon = item.icon;
@@ -154,7 +160,7 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`flex flex-col items-center justify-center gap-1 text-[11px] font-bold ${active ? 'text-[#008737]' : 'text-stone-400'}`}
+                                className={`flex flex-col items-center justify-center gap-1 text-[11px] font-semibold ${active ? 'text-green-600' : 'text-gray-400'}`}
                             >
                                 <Icon size={22} strokeWidth={active ? 2.5 : 2} />
                                 {item.label}

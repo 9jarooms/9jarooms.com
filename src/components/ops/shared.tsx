@@ -115,21 +115,21 @@ export const STATUS_STYLE: Record<string, string> = {
     pending: 'bg-purple-100 text-purple-700',
     confirmed: 'bg-amber-100 text-amber-800',
     paid: 'bg-green-100 text-green-800',
-    checked_in: 'bg-[#02572a] text-white',
-    completed: 'bg-stone-200 text-stone-600',
+    checked_in: 'bg-green-700 text-white',
+    completed: 'bg-gray-200 text-gray-600',
     cancelled: 'bg-red-100 text-red-700',
-    no_show: 'bg-stone-100 text-stone-500',
-    expired: 'bg-stone-100 text-stone-500',
+    no_show: 'bg-gray-100 text-gray-500',
+    expired: 'bg-gray-100 text-gray-500',
 };
 export const UNIT_KIND_LABEL: Record<UnitKind, string> = {
     free: 'Free', occupied: 'Occupied', arriving: 'Arriving', cleaning: 'Cleaning', maintenance: 'Maintenance',
 };
 export const UNIT_KIND_STYLE: Record<UnitKind, string> = {
     free: 'bg-green-100 text-green-800',
-    occupied: 'bg-[#02572a] text-white',
+    occupied: 'bg-green-700 text-white',
     arriving: 'bg-amber-100 text-amber-800',
     cleaning: 'bg-blue-100 text-blue-800',
-    maintenance: 'bg-stone-200 text-stone-700',
+    maintenance: 'bg-gray-200 text-gray-700',
 };
 
 export function unitLabel(u: { unit_code?: string | null; name?: string | null } | null | undefined) {
@@ -187,29 +187,29 @@ export function unitPrice(u: OpsUnit, roomTypes: OpsRoomType[]): number | null {
 // ------------------------------------------------------------------
 // UI atoms — big touch targets, 16px inputs (no iOS zoom)
 // ------------------------------------------------------------------
-export const inputCls = 'w-full rounded-xl border border-stone-300 bg-white px-3.5 py-3 text-[16px] text-stone-900 outline-none focus:border-[#008737] focus:ring-2 focus:ring-[#008737]/20';
+export const inputCls = 'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-[16px] text-gray-900 outline-none shadow-sm focus:border-green-500 focus:ring-2 focus:ring-green-500/20';
 
 export function StatusPill({ status }: { status: string }) {
     return (
-        <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10.5px] font-bold whitespace-nowrap ${STATUS_STYLE[status] || 'bg-stone-100 text-stone-600'}`}>
+        <span className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap ${STATUS_STYLE[status] || 'bg-gray-100 text-gray-600'}`}>
             {STATUS_LABEL[status] || status.replace('_', ' ')}
         </span>
     );
 }
 export function KindPill({ kind }: { kind: UnitKind }) {
     return (
-        <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10.5px] font-bold whitespace-nowrap ${UNIT_KIND_STYLE[kind]}`}>
+        <span className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap ${UNIT_KIND_STYLE[kind]}`}>
             {UNIT_KIND_LABEL[kind]}
         </span>
     );
 }
 
 const TONE: Record<string, string> = {
-    primary: 'bg-[#008737] text-white active:bg-[#00762e]',
-    dark: 'bg-[#02572a] text-white active:bg-[#03471f]',
-    amber: 'bg-amber-500 text-white active:bg-amber-600',
-    secondary: 'bg-white border border-stone-300 text-stone-800 active:bg-stone-50',
-    danger: 'bg-white border border-[#c75146]/40 text-[#c75146] active:bg-red-50',
+    primary: 'bg-green-500 text-white hover:bg-green-600 shadow-sm',
+    dark: 'bg-gray-900 text-white hover:bg-black',
+    amber: 'bg-amber-500 text-white hover:bg-amber-600',
+    secondary: 'bg-white border border-gray-200 text-gray-800 hover:border-gray-900',
+    danger: 'bg-white border border-red-200 text-red-600 hover:bg-red-50',
 };
 export function BigButton({ children, onClick, tone = 'primary', disabled, busy, icon, className = '' }: {
     children: ReactNode; onClick?: () => void;
@@ -221,7 +221,7 @@ export function BigButton({ children, onClick, tone = 'primary', disabled, busy,
             type="button"
             onClick={onClick}
             disabled={disabled || busy}
-            className={`h-12 w-full rounded-xl font-bold text-[15px] flex items-center justify-center gap-2 disabled:opacity-50 transition-colors ${TONE[tone]} ${className}`}
+            className={`h-12 w-full rounded-xl font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-50 transition-colors btn-press ${TONE[tone]} ${className}`}
         >
             {busy ? 'Please wait…' : <>{icon}{children}</>}
         </button>
@@ -231,19 +231,19 @@ export function BigButton({ children, onClick, tone = 'primary', disabled, busy,
 export function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children: ReactNode }) {
     return (
         <div>
-            <span className="block text-[12px] font-semibold text-stone-600 mb-1.5">{label}</span>
+            <span className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">{label}</span>
             {children}
-            {hint && <span className="block text-[12px] text-stone-400 mt-1">{hint}</span>}
+            {hint && <span className="block text-[12px] text-gray-400 mt-1">{hint}</span>}
         </div>
     );
 }
 
 export function Stepper({ value, onChange, min = 1, max = 90 }: { value: number; onChange: (n: number) => void; min?: number; max?: number }) {
     return (
-        <div className="inline-flex items-center rounded-xl border border-stone-300 bg-white overflow-hidden">
-            <button type="button" aria-label="Fewer" onClick={() => onChange(Math.max(min, value - 1))} className="w-11 h-11 flex items-center justify-center active:bg-stone-100"><Minus size={16} /></button>
+        <div className="inline-flex items-center rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+            <button type="button" aria-label="Fewer" onClick={() => onChange(Math.max(min, value - 1))} className="w-11 h-11 flex items-center justify-center active:bg-gray-100"><Minus size={16} /></button>
             <span className="w-12 text-center font-bold text-[16px] tabular-nums">{value}</span>
-            <button type="button" aria-label="More" onClick={() => onChange(Math.min(max, value + 1))} className="w-11 h-11 flex items-center justify-center active:bg-stone-100"><Plus size={16} /></button>
+            <button type="button" aria-label="More" onClick={() => onChange(Math.min(max, value + 1))} className="w-11 h-11 flex items-center justify-center active:bg-gray-100"><Plus size={16} /></button>
         </div>
     );
 }
@@ -256,7 +256,7 @@ export function Chips({ options, value, onChange }: { options: { value: string; 
                     key={o.value}
                     type="button"
                     onClick={() => onChange(o.value)}
-                    className={`px-3.5 h-10 rounded-full text-[13px] font-semibold border transition-colors ${value === o.value ? 'bg-[#02572a] text-white border-[#02572a]' : 'bg-white text-stone-600 border-stone-300 active:bg-stone-50'}`}
+                    className={`px-3.5 h-10 rounded-full text-xs font-medium border transition-colors ${value === o.value ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-900'}`}
                 >
                     {o.label}
                 </button>
@@ -288,15 +288,15 @@ export function Sheet({ title, subtitle, right, onClose, children }: {
                 className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col"
                 onClick={e => e.stopPropagation()}
             >
-                <div className="sm:hidden absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-stone-300" />
-                <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-stone-200">
+                <div className="sm:hidden absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-gray-300" />
+                <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-gray-100">
                     <div className="min-w-0">
-                        <h2 className="font-extrabold text-[18px] text-stone-900 leading-tight truncate">{title}</h2>
-                        {subtitle && <p className="text-[13px] text-stone-500 mt-0.5">{subtitle}</p>}
+                        <h2 className="font-semibold text-[18px] tracking-tight text-gray-900 leading-tight truncate">{title}</h2>
+                        {subtitle && <p className="text-[13px] text-gray-500 mt-0.5">{subtitle}</p>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                         {right}
-                        <button type="button" onClick={onClose} aria-label="Close" className="p-2 -mr-2 rounded-full active:bg-stone-100"><X size={20} /></button>
+                        <button type="button" onClick={onClose} aria-label="Close" className="p-2 -mr-2 rounded-full active:bg-gray-100"><X size={20} /></button>
                     </div>
                 </div>
                 <div className="overflow-y-auto px-5 py-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-4">
@@ -313,20 +313,20 @@ export function ContactButtons({ phone, name, message, compact }: {
     const tel = telLink(phone);
     const wa = waLink(phone, message || `Hello ${name}, this is 9jaRooms.`);
     if (!tel || !wa) {
-        return compact ? null : <p className="text-[13px] text-stone-400">No phone number on this booking.</p>;
+        return compact ? null : <p className="text-[13px] text-gray-400">No phone number on this booking.</p>;
     }
     if (compact) {
         return (
             <div className="flex items-center gap-2">
-                <a href={tel} aria-label="Call guest" className="w-10 h-10 rounded-xl border border-stone-200 bg-white flex items-center justify-center text-stone-700 active:bg-stone-50"><Phone size={16} /></a>
+                <a href={tel} aria-label="Call guest" className="w-10 h-10 rounded-xl border border-gray-200 bg-white flex items-center justify-center text-gray-700 active:bg-gray-50"><Phone size={16} /></a>
                 <a href={wa} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp guest" className="w-10 h-10 rounded-xl bg-[#25D366] text-white flex items-center justify-center"><MessageCircle size={17} /></a>
             </div>
         );
     }
     return (
         <div className="grid grid-cols-2 gap-2">
-            <a href={tel} className="h-12 rounded-xl border border-stone-300 bg-white flex items-center justify-center gap-2 font-bold text-[14px] text-stone-800 active:bg-stone-50"><Phone size={17} /> Call</a>
-            <a href={wa} target="_blank" rel="noopener noreferrer" className="h-12 rounded-xl bg-[#25D366] text-white flex items-center justify-center gap-2 font-bold text-[14px]"><MessageCircle size={18} /> WhatsApp</a>
+            <a href={tel} className="h-12 rounded-xl border border-gray-200 bg-white flex items-center justify-center gap-2 font-semibold text-[14px] text-gray-800 hover:border-gray-900 transition-colors"><Phone size={17} /> Call</a>
+            <a href={wa} target="_blank" rel="noopener noreferrer" className="h-12 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] text-white flex items-center justify-center gap-2 font-semibold text-[14px] transition-colors shadow-sm"><MessageCircle size={18} /> WhatsApp</a>
         </div>
     );
 }
@@ -353,32 +353,32 @@ export function BookingCard({ b, today, unit, onOpen, onCheckIn, onCheckOut, bus
     const when = (s: string) => relDayLower(s, today);
 
     return (
-        <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
-            <button type="button" onClick={onOpen} className="w-full text-left p-4 active:bg-stone-50">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <button type="button" onClick={onOpen} className="w-full text-left p-4 active:bg-gray-50">
                 <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#7ed957]/25 text-[#02572a] font-bold flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-green-100 text-green-700 font-bold flex items-center justify-center shrink-0">
                         {(b.guest_name || 'G').charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                            <p className="font-bold text-stone-900 truncate text-[15px]">{b.guest_name}</p>
+                            <p className="font-semibold text-gray-900 truncate text-[15px]">{b.guest_name}</p>
                             <StatusPill status={b.status} />
                         </div>
-                        <p className="text-[13px] text-stone-500 mt-0.5 truncate">
-                            {unit && <span className="font-semibold text-stone-700">{unit} · </span>}
+                        <p className="text-[13px] text-gray-500 mt-0.5 truncate">
+                            {unit && <span className="font-semibold text-gray-700">{unit} · </span>}
                             {relDay(b.check_in, today)} → {relDay(b.check_out, today)} · {b.nights} night{b.nights === 1 ? '' : 's'}
                         </p>
                         <div className="flex items-center justify-between mt-1.5 text-[13px]">
-                            <span className="font-semibold text-stone-800">{naira(b.total_amount)}</span>
+                            <span className="font-semibold text-gray-900 tabular-nums">{naira(b.total_amount)}</span>
                             {owing
-                                ? <span className="font-bold text-[#c75146]">{naira(balance)} owing</span>
-                                : <span className="text-stone-400">Paid in full</span>}
+                                ? <span className="font-bold text-red-600">{naira(balance)} owing</span>
+                                : <span className="text-gray-400">Paid in full</span>}
                         </div>
                         {holdCountdown(b) && (
                             <p className="mt-1.5 text-[12px] font-semibold text-purple-700">Held · {holdCountdown(b)}</p>
                         )}
                         {(late || overdue) && (
-                            <p className="mt-1.5 text-[12px] font-semibold text-[#c75146] flex items-center gap-1">
+                            <p className="mt-1.5 text-[12px] font-semibold text-red-600 flex items-center gap-1">
                                 <AlertTriangle size={12} />
                                 {overdue ? `Was due to leave ${when(b.check_out)}` : `Was due to arrive ${when(b.check_in)}`}
                             </p>
@@ -392,13 +392,13 @@ export function BookingCard({ b, today, unit, onOpen, onCheckIn, onCheckOut, bus
                     <div className="flex-1" />
                     {onCheckIn && (
                         <button type="button" onClick={onCheckIn} disabled={busy}
-                            className="h-10 px-4 rounded-xl bg-[#008737] text-white font-bold text-[13px] flex items-center gap-1.5 disabled:opacity-50 active:bg-[#00762e]">
+                            className="h-10 px-4 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold text-[13px] flex items-center gap-1.5 disabled:opacity-50 transition-colors">
                             <LogIn size={15} /> Check in
                         </button>
                     )}
                     {onCheckOut && (
                         <button type="button" onClick={onCheckOut} disabled={busy}
-                            className="h-10 px-4 rounded-xl bg-[#02572a] text-white font-bold text-[13px] flex items-center gap-1.5 disabled:opacity-50 active:bg-[#03471f]">
+                            className="h-10 px-4 rounded-xl bg-gray-900 hover:bg-black text-white font-semibold text-[13px] flex items-center gap-1.5 disabled:opacity-50 transition-colors">
                             <LogOut size={15} /> Check out
                         </button>
                     )}

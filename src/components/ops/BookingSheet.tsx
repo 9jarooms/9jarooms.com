@@ -94,7 +94,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     if (!data) {
         return (
             <Sheet title="Booking" onClose={onClose}>
-                <p className="text-sm text-stone-500 py-6 text-center">{error || 'Loading…'}</p>
+                <p className="text-sm text-gray-500 py-6 text-center">{error || 'Loading…'}</p>
             </Sheet>
         );
     }
@@ -133,21 +133,21 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
             right={<StatusPill status={b.status} />}
             onClose={onClose}
         >
-            {error && <p className="text-[13px] text-[#c75146] bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+            {error && <p className="text-[13px] text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
 
             {/* money strip */}
-            <div className="grid grid-cols-3 rounded-2xl border border-stone-200 divide-x divide-stone-200 text-center overflow-hidden">
+            <div className="grid grid-cols-3 rounded-2xl border border-gray-200 divide-x divide-gray-200 text-center overflow-hidden">
                 <div className="py-3">
-                    <p className="text-[10.5px] uppercase tracking-wide text-stone-400 font-bold">Total</p>
-                    <p className="font-extrabold text-[15px]">{naira(b.total_amount)}</p>
+                    <p className="text-[10.5px] uppercase tracking-wide text-gray-400 font-bold">Total</p>
+                    <p className="font-bold text-[15px]">{naira(b.total_amount)}</p>
                 </div>
                 <div className="py-3">
-                    <p className="text-[10.5px] uppercase tracking-wide text-stone-400 font-bold">Paid</p>
-                    <p className="font-extrabold text-[15px] text-[#008737]">{naira(data.paid)}</p>
+                    <p className="text-[10.5px] uppercase tracking-wide text-gray-400 font-bold">Paid</p>
+                    <p className="font-bold text-[15px] text-green-600">{naira(data.paid)}</p>
                 </div>
                 <div className={`py-3 ${owing ? 'bg-red-50' : ''}`}>
-                    <p className="text-[10.5px] uppercase tracking-wide text-stone-400 font-bold">Balance</p>
-                    <p className={`font-extrabold text-[15px] ${owing ? 'text-[#c75146]' : 'text-stone-500'}`}>{naira(balance)}</p>
+                    <p className="text-[10.5px] uppercase tracking-wide text-gray-400 font-bold">Balance</p>
+                    <p className={`font-bold text-[15px] ${owing ? 'text-red-600' : 'text-gray-500'}`}>{naira(balance)}</p>
                 </div>
             </div>
 
@@ -213,7 +213,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                 <>
                     <Row onClick={() => toggle('stay')} icon={<CalendarDays size={18} />} label="Extend stay or change unit" open={panel === 'stay'} />
                     {panel === 'stay' && (
-                        <div className="rounded-2xl bg-stone-50 border border-stone-200 p-4 space-y-3">
+                        <div className="rounded-2xl bg-gray-50 border border-gray-200 p-4 space-y-3">
                             <Field label="Unit">
                                 <select className={inputCls} value={stay.unitId} onChange={e => setStay({ ...stay, unitId: e.target.value })}>
                                     {data.units.map((u: any) => <option key={u.id} value={u.id}>{unitLabel(u)}</option>)}
@@ -226,14 +226,14 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <Stepper value={stayNights} onChange={n => setStay({ ...stay, nights: n })} />
                                     <button type="button" onClick={() => setStay(s => ({ ...s, nights: (Number(s.nights) || 0) + 7 }))}
-                                        className="h-11 px-3 rounded-xl border border-stone-300 bg-white text-[13px] font-semibold">+7</button>
+                                        className="h-11 px-3 rounded-xl border border-gray-300 bg-white text-[13px] font-semibold">+7</button>
                                 </div>
                             </Field>
-                            <p className="text-[13px] text-stone-600">
+                            <p className="text-[13px] text-gray-600">
                                 Check-out <b>{stayCheckOut ? fmtDay(stayCheckOut) : '—'}</b>
                                 {stay.autoPrice && stayNights > 0 && <> · new total <b>{naira(autoTotal)}</b></>}
                             </p>
-                            <label className="flex items-center gap-2 text-[13px] text-stone-600">
+                            <label className="flex items-center gap-2 text-[13px] text-gray-600">
                                 <input type="checkbox" className="w-4 h-4" checked={stay.autoPrice} onChange={e => setStay({ ...stay, autoPrice: e.target.checked })} />
                                 Recalculate price ({naira(b.price_per_night)}/night)
                             </label>
@@ -245,7 +245,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
 
             <Row onClick={() => toggle('guest')} icon={<Pencil size={18} />} label="Guest details & notes" open={panel === 'guest'} />
             {panel === 'guest' && (
-                <div className="rounded-2xl bg-stone-50 border border-stone-200 p-4 space-y-3">
+                <div className="rounded-2xl bg-gray-50 border border-gray-200 p-4 space-y-3">
                     <Field label="Guest name">
                         <input className={inputCls} value={guest.guestName} onChange={e => setGuest({ ...guest, guestName: e.target.value })} />
                     </Field>
@@ -258,23 +258,23 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                     <BigButton tone="dark" onClick={saveGuest} busy={busy}>Save</BigButton>
                 </div>
             )}
-            {panel !== 'guest' && b.notes && <p className="text-[13px] text-stone-500 italic px-1">“{b.notes}”</p>}
+            {panel !== 'guest' && b.notes && <p className="text-[13px] text-gray-500 italic px-1">“{b.notes}”</p>}
 
             {(data.payments.length > 0 || b.status === 'paid') && (
                 <div>
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-stone-400 mb-1.5">Payments</p>
-                    <ul className="divide-y divide-stone-100 rounded-2xl border border-stone-200 overflow-hidden bg-white">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">Payments</p>
+                    <ul className="divide-y divide-gray-100 rounded-2xl border border-gray-200 overflow-hidden bg-white">
                         {b.status === 'paid' && data.payments.length === 0 && (
-                            <li className="px-4 py-2.5 text-[13px] text-[#008737] font-semibold">Paid online via Paystack · {naira(b.total_amount)}</li>
+                            <li className="px-4 py-2.5 text-[13px] text-green-600 font-semibold">Paid online via Paystack · {naira(b.total_amount)}</li>
                         )}
                         {data.payments.map((p: any) => (
                             <li key={p.id} className="flex items-center justify-between px-4 py-2.5 text-[13px]">
                                 <span>
                                     <b>{naira(p.amount)}</b>
-                                    <span className="text-stone-400"> · {p.method || '—'} · {new Date(p.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                                    <span className="text-gray-400"> · {p.method || '—'} · {new Date(p.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
                                 </span>
                                 {role !== 'caretaker' && (
-                                    <button type="button" onClick={() => removePayment(p.id)} className="p-2 -mr-2 text-stone-300 hover:text-[#c75146]" aria-label="Remove payment">
+                                    <button type="button" onClick={() => removePayment(p.id)} className="p-2 -mr-2 text-gray-300 hover:text-red-600" aria-label="Remove payment">
                                         <Trash2 size={15} />
                                     </button>
                                 )}
@@ -310,10 +310,10 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
 function Row({ onClick, icon, label, open }: { onClick: () => void; icon: ReactNode; label: string; open: boolean }) {
     return (
         <button type="button" onClick={onClick}
-            className="w-full h-12 px-4 rounded-xl border border-stone-200 bg-white flex items-center gap-3 text-[14px] font-semibold text-stone-800 active:bg-stone-50">
-            <span className="text-stone-500">{icon}</span>
+            className="w-full h-12 px-4 rounded-xl border border-gray-200 bg-white flex items-center gap-3 text-[14px] font-semibold text-gray-800 active:bg-gray-50">
+            <span className="text-gray-500">{icon}</span>
             <span className="flex-1 text-left">{label}</span>
-            {open ? <ChevronUp size={16} className="text-stone-400" /> : <ChevronDown size={16} className="text-stone-400" />}
+            {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
         </button>
     );
 }

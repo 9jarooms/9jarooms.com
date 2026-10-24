@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Search, Share2, Lock, Copy, Check } from 'lucide-react';
+import { Search, Share2, Lock, Copy, Check, MapPin } from 'lucide-react';
 import { Field, Stepper, inputCls, naira, fmtDay, shiftIso, isoToday, type OpsToday } from './shared';
 import type { NewBookingPreset } from './NewBookingSheet';
 
@@ -85,7 +85,7 @@ export default function FindRoomPanel({ data, onHold }: {
 
     return (
         <div className="space-y-4">
-            <div className="bg-white rounded-2xl border border-stone-200/80 p-4 space-y-3">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                     <Field label="Check-in">
                         <input type="date" className={inputCls} value={checkIn} min={data.today}
@@ -95,68 +95,83 @@ export default function FindRoomPanel({ data, onHold }: {
                         <Stepper value={nights} onChange={setNights} />
                     </Field>
                 </div>
-                <p className="text-[13px] text-stone-600">
+                <p className="text-[13px] text-gray-600">
                     Check-out <b>{fmtDay(checkOut)}</b>
-                    {loading && <span className="text-stone-400"> · checking…</span>}
+                    {loading && <span className="text-gray-400"> · checking…</span>}
                 </p>
-                {free.length > 1 && (
-                    <button type="button" onClick={() => share(messageForAll(free), 'all')}
-                        className="h-11 w-full rounded-xl bg-[#25D366] text-white font-bold text-[14px] flex items-center justify-center gap-2">
-                        <Share2 size={17} /> Share all {free.length} options on WhatsApp
-                    </button>
-                )}
             </div>
 
-            {error && <p className="text-[13px] text-[#c75146] bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+            {free.length > 1 && (
+                <div className="rounded-2xl bg-gradient-to-br from-green-600 to-green-700 p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-green-200">Send to the guest</p>
+                        <p className="font-semibold text-lg leading-snug mt-1">{free.length} options free for {stayLabel}</p>
+                        <p className="text-white/70 text-sm mt-1">One message with every option and its booking link. Nothing is held until they pay.</p>
+                    </div>
+                    <button type="button" onClick={() => share(messageForAll(free), 'all')}
+                        className="shrink-0 flex items-center justify-center gap-2 px-4 py-3 bg-white text-green-700 hover:bg-green-50 rounded-xl text-sm font-semibold transition-all shadow-sm">
+                        <Share2 size={16} /> Share all on WhatsApp
+                    </button>
+                </div>
+            )}
+
+            {error && <p className="text-[13px] text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
 
             {groups && free.length === 0 && !loading && (
-                <p className="text-[13px] text-stone-500 bg-white/60 border border-dashed border-stone-200 rounded-2xl px-4 py-5 text-center">
+                <p className="text-sm text-gray-500 bg-white border border-dashed border-gray-200 rounded-2xl px-4 py-6 text-center">
                     Nothing is free for {stayLabel}. Try other dates.
                 </p>
             )}
 
             {free.map(g => (
-                <div key={g.key} className="bg-white rounded-2xl border border-stone-200/80 p-4">
-                    <div className="flex items-start justify-between gap-2">
+                <div key={g.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                    <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                            <p className="font-extrabold text-[15px] text-stone-900 truncate">{g.label}</p>
-                            <p className="text-[12.5px] text-stone-500 truncate">{g.propertyName}{g.area ? ` · ${g.area}` : ''}</p>
+                            <span className="inline-block bg-green-50 text-green-700 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">
+                                {g.units.length} of {g.unitCount} free
+                            </span>
+                            <h3 className="mt-2 text-base font-semibold text-gray-900 leading-snug truncate">{g.label}</h3>
+                            <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1 truncate">
+                                <MapPin size={11} /> {g.propertyName}{g.area ? `, ${g.area}` : ''}
+                            </p>
                         </div>
-                        <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold bg-green-100 text-green-800">
-                            {g.units.length} of {g.unitCount} free
-                        </span>
+                        <div className="text-right shrink-0">
+                            {g.total != null ? (
+                                <>
+                                    <p className="text-sm font-semibold text-gray-900 tabular-nums">{naira(g.perNight)}<span className="font-normal text-gray-400 text-xs ml-1">/ night</span></p>
+                                    <p className="text-xs text-gray-500 tabular-nums mt-0.5">{naira(g.total)} for {nights} night{nights === 1 ? '' : 's'}</p>
+                                </>
+                            ) : (
+                                <p className="text-xs text-gray-400">Agree a price</p>
+                            )}
+                        </div>
                     </div>
-                    <p className="mt-2 text-[14px]">
-                        {g.total != null
-                            ? <><b>{naira(g.perNight)}</b>/night · <b>{naira(g.total)}</b> for the stay</>
-                            : <span className="text-stone-400">No standard price · agree one with the guest</span>}
-                    </p>
-                    <p className="mt-1 text-[12px] text-stone-400 truncate">Free: {g.units.map(u => u.label).join(', ')}</p>
+                    <p className="mt-3 text-xs text-gray-400 truncate">Free units: {g.units.map(u => u.label).join(', ')}</p>
 
-                    <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="mt-4 grid grid-cols-2 gap-2">
                         <button type="button" onClick={() => share(messageFor(g), g.key)}
-                            className="h-11 rounded-xl bg-[#25D366] text-white font-bold text-[13px] flex items-center justify-center gap-1.5">
+                            className="h-11 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-sm btn-press">
                             <Share2 size={16} /> Share option
                         </button>
                         <button type="button"
                             onClick={() => onHold({ unitId: g.units[0].id, date: checkIn, nights, mode: 'hold' })}
-                            className="h-11 rounded-xl bg-[#008737] text-white font-bold text-[13px] flex items-center justify-center gap-1.5">
+                            className="h-11 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-sm btn-press">
                             <Lock size={16} /> Hold a unit
                         </button>
                     </div>
                     <button type="button" onClick={() => copy(g.link, g.key)}
-                        className="mt-2 h-9 w-full rounded-xl border border-stone-200 text-stone-600 text-[12.5px] font-semibold flex items-center justify-center gap-1.5">
+                        className="mt-2 h-9 w-full rounded-full border border-gray-200 bg-white text-gray-600 text-xs font-medium flex items-center justify-center gap-1.5 hover:border-gray-900 transition-colors">
                         {copied === g.key ? <><Check size={14} /> Link copied</> : <><Copy size={14} /> Copy booking link</>}
                     </button>
                 </div>
             ))}
 
             {full.length > 0 && (
-                <div className="text-[12.5px] text-stone-400 px-1">
+                <div className="text-xs text-gray-400 px-1">
                     Fully booked: {full.map(g => `${g.propertyName} ${g.label}`).join(' · ')}
                 </div>
             )}
-            {!groups && !error && <p className="text-center text-stone-400 py-6 flex items-center justify-center gap-2"><Search size={15} /> Checking…</p>}
+            {!groups && !error && <p className="text-center text-gray-400 py-6 flex items-center justify-center gap-2"><Search size={15} /> Checking…</p>}
         </div>
     );
 }

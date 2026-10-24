@@ -189,12 +189,12 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                 onChange={v => setMode(v as 'booking' | 'block' | 'hold')}
             />
             {mode === 'hold' && (
-                <p className="text-[12.5px] text-stone-500 -mt-1">
+                <p className="text-[12.5px] text-gray-500 -mt-1">
                     The unit comes off the website for 15 minutes while the guest pays the link you send them. Use this for WhatsApp guests.
                 </p>
             )}
 
-            {error && <p className="text-[13px] text-[#c75146] bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+            {error && <p className="text-[13px] text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
 
             <Field label="Unit">
                 <select className={inputCls} value={effectiveUnitId} onChange={e => setUnitId(e.target.value)}>
@@ -206,7 +206,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                         </optgroup>
                     ))}
                 </select>
-                {unit && !unitFree && <p className="text-[12px] text-[#c75146] mt-1 font-semibold">{unitLabel(unit)} is not free for these dates.</p>}
+                {unit && !unitFree && <p className="text-[12px] text-red-600 mt-1 font-semibold">{unitLabel(unit)} is not free for these dates.</p>}
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -217,7 +217,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                     <Stepper value={nights} onChange={setNights} />
                 </Field>
             </div>
-            <p className="text-[13px] text-stone-600 -mt-2">Check-out <b>{fmtDay(checkOut)}</b></p>
+            <p className="text-[13px] text-gray-600 -mt-2">Check-out <b>{fmtDay(checkOut)}</b></p>
 
             {mode !== 'block' ? (
                 <>
@@ -249,10 +249,10 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                         <input className={inputCls} value={notes} onChange={e => setNotes(e.target.value)} />
                     </Field>
 
-                    <div className="rounded-2xl bg-stone-50 border border-stone-200 px-4 py-3 flex items-center justify-between gap-2 text-[13px]">
+                    <div className="rounded-2xl bg-gray-50 border border-gray-200 px-4 py-3 flex items-center justify-between gap-2 text-[13px]">
                         <span>Total <b>{naira(total)}</b></span>
-                        {deposit > 0 && <span>Paid <b className="text-[#008737]">{naira(deposit)}</b></span>}
-                        <span>Balance <b className={total - deposit > 0 ? 'text-[#c75146]' : ''}>{naira(Math.max(total - deposit, 0))}</b></span>
+                        {deposit > 0 && <span>Paid <b className="text-green-600">{naira(deposit)}</b></span>}
+                        <span>Balance <b className={total - deposit > 0 ? 'text-red-600' : ''}>{naira(Math.max(total - deposit, 0))}</b></span>
                     </div>
 
                     <BigButton onClick={submit} busy={busy} disabled={!unit || !unitFree || guestName.trim().length < 2}
