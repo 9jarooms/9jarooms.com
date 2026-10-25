@@ -50,7 +50,7 @@ export default function MobileNav({ role, email }: { role: string; email: string
                                     9ja<span className="text-[#7ed957]">Rooms</span>
                                 </span>
                                 <p className="text-[10.5px] font-semibold tracking-[0.16em] uppercase text-white/40 mt-1">
-                                    {role === 'admin' ? 'Admin' : 'Customer Rep'} Console
+                                    {role === 'admin' ? 'Admin' : role === 'caretaker' ? 'Caretaker' : 'Customer Rep'} Console
                                 </p>
                             </div>
                             <button onClick={() => setOpen(false)} aria-label="Close menu" className="p-2 -mr-2 rounded-lg active:bg-white/10">

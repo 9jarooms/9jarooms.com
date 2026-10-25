@@ -51,8 +51,13 @@ export default function LoginPage() {
                     window.location.href = '/owner';
                     break;
                 case 'caretaker':
-                    router.refresh();
-                    router.push('/dashboard');
+                    // phone -> the Today app; computer -> the full console
+                    if (window.matchMedia('(min-width: 1024px)').matches) {
+                        window.location.href = '/crm/calendar';
+                    } else {
+                        router.refresh();
+                        router.push('/dashboard');
+                    }
                     break;
                 case 'call_operator':
                     router.refresh();

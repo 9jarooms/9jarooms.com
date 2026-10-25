@@ -22,6 +22,7 @@ export interface FreeGroup {
     units: { id: string; label: string; perNight: number | null; total: number | null }[];
     unitCount: number;      // every active unit in the group, free or not
     link: string;           // public page with the dates pre-filled
+    hidden?: boolean;       // room type switched off the website (still bookable by staff)
 }
 
 export async function GET(request: NextRequest) {
@@ -54,9 +55,8 @@ export async function GET(request: NextRequest) {
 
     const [{ data: roomTypes }, { data: units }] = await Promise.all([
         supabase.from('room_types')
-            .select('id, name, price_per_night, sort_order, property_id')
+            .select('id, name, price_per_night, sort_order, property_id, is_active')
             .in('property_id', propertyIds)
-            .eq('is_active', true)
             .order('sort_order'),
         supabase.from('rooms')
             .select('id, name, unit_code, room_type_id, price_per_night, property_id')
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
             const price = await priceRoomTypeStay(supabase, { id: t.id, price_per_night: Number(t.price_per_night) }, dates);
             groups.push({
                 key: `${p.id}:${t.id}`, propertyId: p.id, propertyName: p.name, area: p.area,
-                label: t.name, perNight: price.perNight, total: price.total,
+                label: t.name, perNight: price.perNight, total: price.total, hidden: t.is_active === false,
                 units: all.filter(u => !blocked.has(u.id)).map(u => ({
                     id: u.id, label: u.unit_code || u.name, perNight: price.perNight, total: price.total,
                 })),

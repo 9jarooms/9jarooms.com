@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Plus, RefreshCw, Search, ChevronRight } from 'lucide-react';
+import { Plus, RefreshCw, Search, ChevronRight, Pencil, EyeOff, ImageOff } from 'lucide-react';
 import {
     BookingCard, KindPill, isoToday, fmtDay, naira, balanceOf, owes, shiftIso,
     unitLabel, groupAllUnits, unitPrice, relDayLower,
@@ -11,6 +11,7 @@ import BookingSheet from './BookingSheet';
 import NewBookingSheet, { type NewBookingPreset } from './NewBookingSheet';
 import UnitSheet from './UnitSheet';
 import FindRoomPanel from './FindRoomPanel';
+import RoomTypeSheet from './RoomTypeSheet';
 
 type Tab = 'today' | 'find' | 'units' | 'bookings';
 const TABS: { key: Tab; label: string }[] = [
@@ -34,6 +35,7 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
     const [openBooking, setOpenBooking] = useState<string | null>(null);
     const [newBooking, setNewBooking] = useState<NewBookingPreset | null>(null);
     const [unitSheet, setUnitSheet] = useState<string | null>(null);
+    const [typeSheet, setTypeSheet] = useState<string | null>(null);
 
     // remembered property (read after mount so server + client render the same)
     useEffect(() => {
@@ -299,11 +301,21 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                         const free = g.units.filter(u => unitStatus.get(u.id)?.kind === 'free').length;
                         return (
                             <div key={g.key}>
-                                <div className="flex items-center justify-between px-1 mb-2">
-                                    <h2 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500">
+                                <div className="flex items-center justify-between gap-2 px-1 mb-2">
+                                    <h2 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 min-w-0">
                                         {g.label}{g.price != null && <span className="font-semibold text-gray-400 normal-case tracking-normal"> · {naira(g.price)}/night</span>}
+                                        {g.hidden && <span className="ml-1.5 inline-flex items-center gap-1 normal-case tracking-normal text-amber-700"><EyeOff size={11} /> not on website</span>}
+                                        {g.typeId && g.photos === 0 && <span className="ml-1.5 inline-flex items-center gap-1 normal-case tracking-normal text-amber-700"><ImageOff size={11} /> no photos</span>}
                                     </h2>
-                                    <span className={`text-[12px] font-bold ${free > 0 ? 'text-green-600' : 'text-red-600'}`}>{free} free</span>
+                                    <span className="flex items-center gap-2 shrink-0">
+                                        <span className={`text-[12px] font-bold ${free > 0 ? 'text-green-600' : 'text-red-600'}`}>{free} free</span>
+                                        {g.typeId && (
+                                            <button type="button" onClick={() => setTypeSheet(g.typeId!)} aria-label={`Edit ${g.label}`}
+                                                className="h-8 px-3 rounded-full border border-gray-200 bg-white text-[12px] font-medium text-gray-700 flex items-center gap-1 hover:border-gray-900">
+                                                <Pencil size={12} /> Photos & price
+                                            </button>
+                                        )}
+                                    </span>
                                 </div>
                                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100 overflow-hidden">
                                     {g.units.map(u => {
@@ -364,6 +376,15 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
             {newBooking && data && (
                 <NewBookingSheet data={data} preset={newBooking}
                     onClose={() => setNewBooking(null)} onCreated={() => { setNewBooking(null); load(true); }} onRefresh={() => load(true)} />
+            )}
+            {typeSheet && data && typeById.get(typeSheet) && (
+                <RoomTypeSheet
+                    type={typeById.get(typeSheet)!}
+                    unitCount={data.units.filter(u => u.room_type_id === typeSheet).length}
+                    propertyName={propertyById.get(typeById.get(typeSheet)!.property_id || '')?.name}
+                    onClose={() => setTypeSheet(null)}
+                    onSaved={() => { setTypeSheet(null); load(true); }}
+                />
             )}
             {unitSheet && data && unitById.get(unitSheet) && (
                 <UnitSheet

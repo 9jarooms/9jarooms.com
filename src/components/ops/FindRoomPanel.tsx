@@ -9,7 +9,7 @@ interface FreeUnit { id: string; label: string; perNight: number | null; total: 
 interface FreeGroup {
     key: string; propertyId: string; propertyName: string; area: string | null;
     label: string; perNight: number | null; total: number | null;
-    units: FreeUnit[]; unitCount: number; link: string;
+    units: FreeUnit[]; unitCount: number; link: string; hidden?: boolean;
 }
 
 // The caretaker's answer to "do you have a room from X to Y?": type the
@@ -130,6 +130,7 @@ export default function FindRoomPanel({ data, onHold }: {
                             <span className="inline-block bg-green-50 text-green-700 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">
                                 {g.units.length} of {g.unitCount} free
                             </span>
+                            {g.hidden && <span className="ml-1.5 inline-block bg-amber-50 text-amber-700 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">Not on website</span>}
                             <h3 className="mt-2 text-base font-semibold text-gray-900 leading-snug truncate">{g.label}</h3>
                             <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1 truncate">
                                 <MapPin size={11} /> {g.propertyName}{g.area ? `, ${g.area}` : ''}

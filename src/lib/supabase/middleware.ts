@@ -38,7 +38,7 @@ export async function updateSession(request: NextRequest) {
 
     // Define protected routes and their required roles
     const protectedRoutes = [
-        { path: '/crm', roles: ['customer_rep', 'admin'] },
+        { path: '/crm', roles: ['customer_rep', 'admin', 'caretaker'] },
         { path: '/admin', roles: ['admin'] },
         { path: '/owner', roles: ['owner', 'admin'] },
         { path: '/operator', roles: ['call_operator', 'admin'] },

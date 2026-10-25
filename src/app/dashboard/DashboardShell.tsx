@@ -107,6 +107,9 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
                         );
                     })}
                 </nav>
+                <Link href="/crm/calendar" className="mx-4 mb-3 flex items-center gap-2 rounded-full border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-900 transition-colors">
+                    Desktop console →
+                </Link>
                 <div className="p-4 border-t border-gray-100">
                     <div className="flex items-center gap-3 mb-3">
                         <div className="w-9 h-9 bg-green-50 rounded-full flex items-center justify-center text-green-700 font-semibold text-sm">

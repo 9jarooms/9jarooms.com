@@ -7,7 +7,7 @@ import { X, Minus, Plus, Phone, MessageCircle, LogIn, LogOut, AlertTriangle } fr
 // Types — mirror what /api/ops/today returns
 // ------------------------------------------------------------------
 export interface OpsProperty { id: string; name: string; area: string | null }
-export interface OpsRoomType { id: string; name: string; price_per_night: number | string | null; property_id?: string }
+export interface OpsRoomType { id: string; name: string; price_per_night: number | string | null; property_id?: string; images?: string[] | null; is_active?: boolean | null }
 export interface OpsUnit {
     id: string; name: string; unit_code: string | null;
     room_type_id: string | null; price_per_night: number | string | null; property_id?: string;
@@ -141,7 +141,7 @@ export function unitLabel(u: { unit_code?: string | null; name?: string | null }
 // Unit grouping — same rule as the CRM calendar: duplex properties
 // (codes like 1A/1B/1C) group by unit number, everything else by type.
 // ------------------------------------------------------------------
-export interface UnitGroup { key: string; label: string; price: number | null; units: OpsUnit[] }
+export interface UnitGroup { key: string; label: string; price: number | null; units: OpsUnit[]; typeId?: string; hidden?: boolean; photos?: number }
 export function groupUnits(units: OpsUnit[], roomTypes: OpsRoomType[]): UnitGroup[] {
     const isDuplex = units.length > 0 && units.every(u => /^\d+[A-Za-z]/.test(u.unit_code || ''));
     if (isDuplex) {
@@ -160,7 +160,7 @@ export function groupUnits(units: OpsUnit[], roomTypes: OpsRoomType[]): UnitGrou
     }
     const groups: UnitGroup[] = roomTypes
         .map(t => ({
-            key: t.id, label: t.name,
+            key: t.id, label: t.name, typeId: t.id, hidden: t.is_active === false, photos: (t.images || []).length,
             price: t.price_per_night == null ? null : Number(t.price_per_night),
             units: units.filter(u => u.room_type_id === t.id),
         }))

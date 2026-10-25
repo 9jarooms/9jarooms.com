@@ -56,7 +56,8 @@ export async function initializePayment(
         email: params.email,
         amount: params.amount,
         reference: params.reference,
-        ...(params.subaccount ? { subaccount: params.subaccount } : {}),
+        // 9jaRooms manages every property itself: no owner split, all money settles to the main account.
+        // (params.subaccount is accepted for old callers and ignored on purpose.)
         callback_url: params.callbackUrl || `${process.env.NEXT_PUBLIC_APP_URL}/booking/confirm`,
         metadata: {
             ...params.metadata,

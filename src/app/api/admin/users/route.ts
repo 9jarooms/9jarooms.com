@@ -34,7 +34,9 @@ export async function POST(request: NextRequest) {
         const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, '');
 
         // Operators use their real email for auth; caretakers/owners use fake internal email
-        const authEmail = isOperator && realEmail ? realEmail : `${cleanUsername}@9jarooms.internal`;
+        // Anyone given an email signs in with it (caretakers included); otherwise the username
+        // maps to an internal address.
+        const authEmail = realEmail ? String(realEmail).trim().toLowerCase() : `${cleanUsername}@9jarooms.internal`;
 
         // 1. Check email/username isn't already taken
         const { data: existingUsers } = await supabase.auth.admin.listUsers();

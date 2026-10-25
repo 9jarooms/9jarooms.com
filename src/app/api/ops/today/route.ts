@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     const [{ data: roomTypes }, { data: units }] = await Promise.all([
         supabase.from('room_types')
-            .select('id, name, price_per_night, sort_order, property_id')
+            .select('id, name, price_per_night, sort_order, property_id, images, is_active')
             .in('property_id', propertyIds)
             .order('sort_order'),
         supabase.from('rooms')

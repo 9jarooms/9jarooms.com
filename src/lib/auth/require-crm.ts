@@ -1,6 +1,6 @@
 import { createServerClient, createAdminClient } from '@/lib/supabase/server';
 
-// Guard for the CRM: customer reps and admins only.
+// Guard for the CRM: admins, customer reps and caretakers (caretakers run the properties end to end).
 // Returns { user, adminClient } on success, { error, status } otherwise.
 export async function requireCrm() {
     const sessionClient = await createServerClient();
@@ -15,12 +15,14 @@ export async function requireCrm() {
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
-        .in('role', ['admin', 'customer_rep'])
+        .in('role', ['admin', 'customer_rep', 'caretaker'])
+        .order('role')
+        .limit(1)
         .maybeSingle();
 
     if (roleError || !roleData) {
         return { error: 'Forbidden: CRM access required', status: 403 };
     }
 
-    return { user, adminClient, role: roleData.role as 'admin' | 'customer_rep' };
+    return { user, adminClient, role: roleData.role as 'admin' | 'customer_rep' | 'caretaker' };
 }

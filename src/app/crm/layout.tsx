@@ -17,7 +17,9 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
-        .in('role', ['admin', 'customer_rep'])
+        .in('role', ['admin', 'customer_rep', 'caretaker'])
+        .order('role')
+        .limit(1)
         .maybeSingle();
     if (!role) redirect('/login');
 
@@ -29,10 +31,13 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
                         9ja<span className="text-[#7ed957]">Rooms</span>
                     </Link>
                     <p className="text-[10.5px] font-semibold tracking-[0.18em] uppercase text-white/40 mt-1.5">
-                        {role.role === 'admin' ? 'Admin' : 'Customer Rep'} Console
+                        {role.role === 'admin' ? 'Admin' : role.role === 'caretaker' ? 'Caretaker' : 'Customer Rep'} Console
                     </p>
                 </div>
                 <SidebarNav />
+                <Link href="/dashboard" className="mx-4 mb-3 rounded-xl border border-white/15 px-3 py-2 text-[12.5px] font-semibold text-white/80 hover:bg-white/10">
+                    ← Phone app (Today · Find)
+                </Link>
                 <div className="px-6 py-4 border-t border-white/[0.08]">
                     <p className="text-[11px] text-white/45 truncate">{user.email}</p>
                 </div>

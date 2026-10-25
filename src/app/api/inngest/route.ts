@@ -2,15 +2,12 @@ import { serve } from 'inngest/next';
 import { inngest } from '@/lib/inngest/client';
 import { paymentConfirmed } from '@/lib/inngest/functions/payment-confirmed';
 import { expirePendingBookings } from '@/lib/inngest/functions/expire-bookings';
-import { aiMessageReceived } from '@/lib/inngest/functions/ai-message';
-import { whatsappMessageBuffer, whatsappMessageProcessor } from '@/lib/inngest/functions/whatsapp-agent';
+// The "Mary" WhatsApp AI agent (ai-message, whatsapp-agent) is retired (Oct 2026): caretakers answer
+// WhatsApp themselves. Its functions are no longer served, so it can never reply to a guest.
 export const { GET, POST, PUT } = serve({
     client: inngest,
     functions: [
         paymentConfirmed,
         expirePendingBookings,
-        aiMessageReceived,
-        whatsappMessageBuffer,
-        whatsappMessageProcessor,
     ],
 });
