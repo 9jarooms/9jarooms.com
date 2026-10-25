@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Home, Search, Building2, UserCircle, LogOut, Smartphone, X, Layers, ClipboardList } from 'lucide-react';
+import { Home, Search, Building2, UserCircle, LogOut, Smartphone, X, Layers, ClipboardList, GraduationCap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 
@@ -15,6 +15,7 @@ const navItems = [
 ];
 // the desktop sidebar also has property details and the account page
 const moreItems = [
+    { href: '/dashboard/training', label: 'Training', icon: GraduationCap },
     { href: '/dashboard/properties', label: 'Properties', icon: Building2 },
     { href: '/dashboard/account', label: 'Account', icon: UserCircle },
 ];
@@ -77,6 +78,9 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
                     <img src="/logo-transparent.png" alt="9jaRooms" className="h-7 w-auto object-contain" />
                 </Link>
                 <div className="flex items-center gap-1 min-w-0">
+                    <Link href="/dashboard/training" className={`h-8 px-3 mr-1 rounded-full text-[12.5px] font-semibold flex items-center gap-1.5 shrink-0 ${pathname.startsWith('/dashboard/training') ? 'bg-green-500 text-white' : 'bg-green-50 text-green-700'}`}>
+                        <GraduationCap size={15} /> Training
+                    </Link>
                     <span className="text-[12px] font-semibold text-gray-500 truncate max-w-[40vw]">{caretakerName}</span>
                     <button type="button" onClick={handleLogout} aria-label="Sign out" className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
                         <LogOut size={18} />

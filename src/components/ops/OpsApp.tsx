@@ -36,6 +36,12 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
     const [newBooking, setNewBooking] = useState<NewBookingPreset | null>(null);
     const [unitSheet, setUnitSheet] = useState<string | null>(null);
     const [typeSheet, setTypeSheet] = useState<string | null>(null);
+    const [showTraining, setShowTraining] = useState(false);
+    useEffect(() => {
+        const t = setTimeout(() => { try { setShowTraining(localStorage.getItem('training-nudge-off') !== '1'); } catch { /* ignore */ } }, 0);
+        return () => clearTimeout(t);
+    }, []);
+    const hideTraining = () => { setShowTraining(false); try { localStorage.setItem('training-nudge-off', '1'); } catch { /* ignore */ } };
 
     // remembered property (read after mount so server + client render the same)
     useEffect(() => {
@@ -227,6 +233,16 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
 
             {data && tab === 'today' && (
                 <div className="space-y-6">
+                    {showTraining && (
+                        <div className="rounded-2xl bg-gradient-to-br from-green-600 to-green-700 text-white p-4 flex items-start gap-3 shadow-md">
+                            <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-[15px]">New to the app? Start with Training</p>
+                                <p className="text-[13px] text-white/80 mt-0.5">Eight one-minute lessons with step-by-step guides.</p>
+                                <a href="/dashboard/training" className="inline-flex mt-3 h-9 px-4 rounded-xl bg-white text-green-700 font-semibold text-[13px] items-center">Open Training</a>
+                            </div>
+                            <button type="button" onClick={hideTraining} aria-label="Hide" className="text-white/70 text-[13px] px-2 py-1">Hide</button>
+                        </div>
+                    )}
                     <div className="grid grid-cols-4 gap-2">
                         {[
                             { label: 'Free tonight', value: freeTonight, accent: true, go: 'units' as Tab },
