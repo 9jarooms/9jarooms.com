@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sun, LayoutDashboard, CalendarDays, List, Users, Building2, BarChart3, Settings } from 'lucide-react';
+import { Sun, LayoutDashboard, CalendarDays, List, Users, Building2, BarChart3, Settings, Layers, ClipboardList } from 'lucide-react';
 
 const NAV = [
     { href: '/crm/today', label: 'Today', icon: Sun },
@@ -10,6 +10,8 @@ const NAV = [
     { href: '/crm/calendar', label: 'Calendar', icon: CalendarDays },
     { href: '/crm/reservations', label: 'Reservations', icon: List },
     { href: '/crm/guests', label: 'Guests', icon: Users },
+    { href: '/crm/occupancy', label: 'Daily log', icon: ClipboardList },
+    { href: '/crm/rooms', label: 'Rooms & prices', icon: Layers },
     { href: '/crm/properties', label: 'Properties', icon: Building2 },
     { href: '/crm/reports', label: 'Reports', icon: BarChart3 },
     { href: '/crm/settings', label: 'Settings', icon: Settings },

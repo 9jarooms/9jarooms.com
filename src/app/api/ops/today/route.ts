@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOps } from '@/lib/auth/require-ops';
 import { paidByBooking } from '@/lib/booking/crm-ops';
+import { operatedProperties } from '@/lib/booking/occupancy';
 
 // Everything the Today / Units screens need for one property in a single
 // call: the properties this user may operate, the property's units and
@@ -37,19 +38,12 @@ export async function GET(request: NextRequest) {
         roomTypes: [], units: [], bookings: [], blocks: [], held: [],
     });
 
-    let propsQuery = supabase
-        .from('properties')
-        .select('id, name, area')
-        .eq('is_deleted', false)
-        .order('name');
+    // everything staff operate: live properties plus switched-off ones with real rooms (not on the website yet)
+    let propertyRows = (await operatedProperties(supabase)).map(p => ({ id: p.id, name: p.name, area: p.area }));
     if (auth.propertyIds) {
         if (auth.propertyIds.length === 0) return empty([], null);
-        propsQuery = propsQuery.in('id', auth.propertyIds);
-    } else {
-        propsQuery = propsQuery.eq('is_active', true);
+        propertyRows = propertyRows.filter(p => auth.propertyIds!.includes(p.id));
     }
-    const { data: propertyRows, error: propError } = await propsQuery;
-    if (propError) return NextResponse.json({ error: propError.message }, { status: 500 });
 
     const properties = propertyRows || [];
     // 'all' = every property at once (the default for a two-person team)

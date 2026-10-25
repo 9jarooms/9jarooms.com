@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOps } from '@/lib/auth/require-ops';
 import { dateRange } from '@/lib/booking/crm-ops';
 import { isBlockedSlot, priceRoomTypeStay } from '@/lib/booking/room-types';
+import { operatedProperties } from '@/lib/booking/occupancy';
 
 // "Find a room": every unit free for a stay, grouped the way guests buy
 // them (room type, or plain rooms), priced for the whole stay, with a
@@ -42,9 +43,9 @@ export async function GET(request: NextRequest) {
 
     let propsQuery = supabase
         .from('properties')
-        .select('id, name, area, price_per_night, minimum_stay')
+        .select('id, name, area, price_per_night, minimum_stay, is_active')
         .eq('is_deleted', false)
-        .eq('is_active', true)
+        .in('id', (await operatedProperties(supabase)).map(p => p.id))
         .order('name');
     if (auth.propertyIds) propsQuery = propsQuery.in('id', auth.propertyIds);
     if (requested && requested !== 'all') propsQuery = propsQuery.eq('id', requested);
@@ -91,7 +92,7 @@ export async function GET(request: NextRequest) {
             const price = await priceRoomTypeStay(supabase, { id: t.id, price_per_night: Number(t.price_per_night) }, dates);
             groups.push({
                 key: `${p.id}:${t.id}`, propertyId: p.id, propertyName: p.name, area: p.area,
-                label: t.name, perNight: price.perNight, total: price.total, hidden: t.is_active === false,
+                label: t.name, perNight: price.perNight, total: price.total, hidden: t.is_active === false || !p.is_active,
                 units: all.filter(u => !blocked.has(u.id)).map(u => ({
                     id: u.id, label: u.unit_code || u.name, perNight: price.perNight, total: price.total,
                 })),
@@ -113,7 +114,7 @@ export async function GET(request: NextRequest) {
                     const pn = perNightOf(u);
                     return { id: u.id, label: u.unit_code || u.name, perNight: pn, total: pn != null ? pn * nights : null };
                 }),
-                unitCount: untyped.length, link,
+                unitCount: untyped.length, link, hidden: !p.is_active,
             });
         }
     }

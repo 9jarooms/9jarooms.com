@@ -3,13 +3,18 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Home, Search, Building2, UserCircle, LogOut, Smartphone, X } from 'lucide-react';
+import { Home, Search, Building2, UserCircle, LogOut, Smartphone, X, Layers, ClipboardList } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 
 const navItems = [
     { href: '/dashboard', label: 'Today', icon: Home },
     { href: '/dashboard?tab=find', label: 'Find', icon: Search },
+    { href: '/dashboard/rooms', label: 'Rooms', icon: Layers },
+    { href: '/dashboard/log', label: 'Daily log', icon: ClipboardList },
+];
+// the desktop sidebar also has property details and the account page
+const moreItems = [
     { href: '/dashboard/properties', label: 'Properties', icon: Building2 },
     { href: '/dashboard/account', label: 'Account', icon: UserCircle },
 ];
@@ -90,7 +95,7 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
                     </div>
                 </div>
                 <nav className="flex-1 py-6 px-4 space-y-1">
-                    {navItems.map(item => {
+                    {[...navItems, ...moreItems].map(item => {
                         const active = isActive(item.href);
                         const Icon = item.icon;
                         return (
