@@ -18,6 +18,8 @@ export async function GET() {
     return NextResponse.json({
         properties: props.map(p => ({
             id: p.id, name: p.name, area: p.area, live: !!p.is_active,
+            wholePrice: p.whole_apartment_price != null ? Number(p.whole_apartment_price) : null,
+            twoBedPrice: p.two_bed_price != null ? Number(p.two_bed_price) : null,
             photos: ((full || []).find(f => f.id === p.id)?.images || []).length,
             units: (units || []).filter(u => u.property_id === p.id)
                 .map(u => ({ id: u.id, code: u.unit_code || u.name, typeId: u.room_type_id, price: u.price_per_night != null ? Number(u.price_per_night) : null }))

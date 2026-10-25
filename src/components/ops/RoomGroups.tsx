@@ -7,7 +7,7 @@ import RoomTypeSheet from './RoomTypeSheet';
 
 interface Unit { id: string; code: string; typeId: string | null; price: number | null }
 interface Group { id: string; name: string; price: number; live: boolean; images: string[] }
-interface Prop { id: string; name: string; area: string | null; live: boolean; photos: number; units: Unit[]; groups: Group[] }
+interface Prop { id: string; name: string; area: string | null; live: boolean; photos: number; units: Unit[]; groups: Group[]; wholePrice: number | null; twoBedPrice: number | null }
 
 // Rooms & prices: every room the team runs, grouped the way the website sells them.
 // Rooms that are the same (same size, same price) go in one group: one name, one price, one set of
@@ -79,6 +79,8 @@ export default function RoomGroups() {
                     <span className={`w-12 h-7 rounded-full p-1 shrink-0 ${prop.live ? 'bg-green-500' : 'bg-gray-300'}`}><span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${prop.live ? 'translate-x-5' : ''}`} /></span>
                 </button>
             )}
+
+            {prop && <WholeFlat prop={prop} onSaved={load} />}
 
             <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 px-1 mb-2">Tap rooms to select them, then group them</p>
 
@@ -206,5 +208,62 @@ function GroupSheet({ prop, units, groups, onClose, onDone }: {
                 Group {units.length} room{units.length === 1 ? '' : 's'}
             </BigButton>
         </Sheet>
+    );
+}
+
+// Whole-flat booking: rooms whose codes share a flat number (1A, 1B, 1C = flat 1) can also be sold together
+// as one apartment. Only shown when the property has such rooms. 2-bed = two rooms of the flat, the third kept empty.
+function WholeFlat({ prop, onSaved }: { prop: Prop; onSaved: () => void }) {
+    const flats = new Map<string, string[]>();
+    for (const u of prop.units) {
+        const m = u.code.match(/^(\d+)[A-Za-z]/);
+        if (m) flats.set(m[1], [...(flats.get(m[1]) || []), u.code]);
+    }
+    const multi = [...flats.entries()].filter(([, codes]) => codes.length > 1);
+    const [whole, setWhole] = useState(prop.wholePrice != null ? String(prop.wholePrice) : '');
+    const [two, setTwo] = useState(prop.twoBedPrice != null ? String(prop.twoBedPrice) : '');
+    const [busy, setBusy] = useState(false);
+    const [msg, setMsg] = useState<string | null>(null);
+    useEffect(() => {
+        setWhole(prop.wholePrice != null ? String(prop.wholePrice) : '');
+        setTwo(prop.twoBedPrice != null ? String(prop.twoBedPrice) : '');
+        setMsg(null);
+    }, [prop.id, prop.wholePrice, prop.twoBedPrice]);
+    if (multi.length === 0) return null;
+    const hasThree = multi.some(([, c]) => c.length >= 3);
+
+    const save = async () => {
+        setBusy(true); setMsg(null);
+        const res = await fetch('/api/crm/properties', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ propertyId: prop.id, wholeApartmentPrice: whole ? Number(whole) : null, twoBedPrice: hasThree && two ? Number(two) : null }) });
+        setBusy(false);
+        if (!res.ok) { setMsg((await res.json()).error || 'Could not save'); return; }
+        setMsg('Saved'); onSaved();
+    };
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
+            <p className="font-semibold text-[15px] text-gray-900">Whole flat booking</p>
+            <p className="text-[12.5px] text-gray-500 mt-0.5">
+                Rooms with the same flat number can also be booked together as one apartment
+                ({multi.slice(0, 3).map(([n, c]) => `flat ${n}: ${c.join(', ')}`).join(' · ')}{multi.length > 3 ? ' …' : ''}).
+                Leave empty to sell rooms only.
+            </p>
+            <div className={`grid gap-2 mt-3 ${hasThree ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                <Field label="Whole flat, per night (₦)">
+                    <input type="number" inputMode="numeric" min={0} className={inputCls} value={whole} onChange={e => setWhole(e.target.value)} placeholder="not offered" />
+                </Field>
+                {hasThree && (
+                    <Field label="2 rooms of a flat (₦)">
+                        <input type="number" inputMode="numeric" min={0} className={inputCls} value={two} onChange={e => setTwo(e.target.value)} placeholder="not offered" />
+                    </Field>
+                )}
+            </div>
+            <div className="flex items-center gap-3 mt-3">
+                <button type="button" onClick={save} disabled={busy}
+                    className="h-10 px-4 rounded-xl bg-gray-900 text-white text-[13.5px] font-semibold disabled:opacity-50">{busy ? 'Saving…' : 'Save flat prices'}</button>
+                {msg && <span className={`text-[12.5px] ${msg === 'Saved' ? 'text-green-700' : 'text-red-600'}`}>{msg}</span>}
+            </div>
+        </div>
     );
 }

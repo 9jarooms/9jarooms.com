@@ -43,7 +43,7 @@ export async function updateSession(request: NextRequest) {
         { path: '/owner', roles: ['owner', 'admin'] },
         { path: '/operator', roles: ['call_operator', 'admin'] },
         { path: '/caretaker', roles: ['caretaker', 'admin'] },
-        { path: '/dashboard', roles: ['caretaker', 'owner', 'admin'] },
+        { path: '/dashboard', roles: ['caretaker', 'owner', 'admin', 'customer_rep'] },
     ];
 
     const matchedRoute = protectedRoutes.find(r => pathname.startsWith(r.path));

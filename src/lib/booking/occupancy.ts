@@ -27,7 +27,7 @@ export interface LogProperty { id: string; name: string; live: boolean; rows: Lo
 // (rooms imported from the occupancy log that are not on the website yet).
 export async function operatedProperties(supabase: Db) {
     const { data: props } = await supabase.from('properties')
-        .select('id, name, area, is_active').eq('is_deleted', false).order('name');
+        .select('id, name, area, is_active, whole_apartment_price, two_bed_price').eq('is_deleted', false).order('name');
     const ids = (props || []).map(p => p.id);
     const { data: coded } = ids.length
         ? await supabase.from('rooms').select('property_id').in('property_id', ids).not('unit_code', 'is', null).eq('is_active', true)

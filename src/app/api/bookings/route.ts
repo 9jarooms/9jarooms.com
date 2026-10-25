@@ -317,7 +317,7 @@ export async function POST(request: NextRequest) {
                     const perNight = bundlePrice;
                     if (mode === 'whole') {
                         option = {
-                            type: 'whole', label: '3-Bed Duplex', key: `whole:${unit.duplexNo}`,
+                            type: 'whole', label: unit.roomIds.length >= 3 ? `${unit.roomIds.length}-Bed Duplex` : `${unit.roomIds.length}-Bed Flat`, key: `whole:${unit.duplexNo}`,
                             pricePerNight: perNight, price: perNight * nights,
                             roomIds: unit.roomIds, lockedRoomIds: [], available: true,
                         };

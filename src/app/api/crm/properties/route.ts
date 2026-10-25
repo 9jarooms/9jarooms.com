@@ -158,6 +158,8 @@ const patchSchema = z.object({
     description: z.string().max(3000).optional().nullable(),
     images: z.array(z.string().url()).max(40).optional(),
     thumbnail: z.string().url().optional().nullable(),
+    wholeApartmentPrice: z.number().positive().nullable().optional(),
+    twoBedPrice: z.number().positive().nullable().optional(),
 });
 
 export async function PATCH(request: NextRequest) {
@@ -180,6 +182,8 @@ export async function PATCH(request: NextRequest) {
     if (body.city !== undefined) update.city = body.city;
     if (body.address !== undefined) update.address = body.address;
     if (body.maxGuests !== undefined) update.max_guests = body.maxGuests;
+    if (body.wholeApartmentPrice !== undefined) update.whole_apartment_price = body.wholeApartmentPrice;
+    if (body.twoBedPrice !== undefined) update.two_bed_price = body.twoBedPrice;
 
     const { error } = await supabase.from('properties').update(update).eq('id', body.propertyId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -271,7 +271,10 @@ export default function PropertyDetailClient({ property, rooms, availability, un
             ? (duplexData?.twoBedPrice ?? 0)
             : 0;
     const duplexTotal = duplexUnitPrice * nights;
-    const duplexLabel = selectedDuplex === 'whole' ? '3-Bed Duplex' : selectedDuplex === 'two_bed' ? '2-Bed Duplex' : '';
+    // whole-flat label follows the flat's size: 3 rooms = "3-Bed Duplex" (Kaura), 2 rooms = "2-Bed Flat"
+    const flatRooms = duplexData?.units[0]?.roomIds.length ?? 3;
+    const wholeLabel = flatRooms >= 3 ? `${flatRooms}-Bed Duplex` : `${flatRooms}-Bed Flat`;
+    const duplexLabel = selectedDuplex === 'whole' ? wholeLabel : selectedDuplex === 'two_bed' ? '2-Bed Duplex' : '';
 
     const canEnquire = !!checkIn && !!checkOut && nights > 0 && (
         isApartment ? !!selectedOption :
@@ -641,7 +644,7 @@ export default function PropertyDetailClient({ property, rooms, availability, un
                                         {(['whole', 'two_bed'] as const).map((m) => {
                                             const price = m === 'whole' ? duplexData!.threeBedPrice : duplexData!.twoBedPrice;
                                             if (price == null) return null;
-                                            const label = m === 'whole' ? '3-Bed Duplex' : '2-Bed Duplex';
+                                            const label = m === 'whole' ? wholeLabel : '2-Bed Duplex';
                                             const sub = m === 'whole' ? 'Entire unit — 3 bedrooms' : '2 bedrooms — third room kept private';
                                             const isSel = selectedDuplex === m;
                                             return (

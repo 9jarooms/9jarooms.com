@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { UserPlus, Trash2 } from 'lucide-react';
 
+const ROLE_LABEL: Record<string, string> = { admin: 'Admin', customer_rep: 'Customer rep', caretaker: 'Caretaker' };
+
 export default function SettingsClient() {
     const [staff, setStaff] = useState<any[]>([]);
-    const [form, setForm] = useState({ name: '', email: '', password: '' });
+    const [form, setForm] = useState({ name: '', email: '', password: '', role: 'customer_rep' });
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [ok, setOk] = useState<string | null>(null);
@@ -26,14 +28,15 @@ export default function SettingsClient() {
         const json = await res.json();
         setBusy(false);
         if (!res.ok) { setError(json.error); return; }
-        setOk(`Customer rep created: ${form.email}`);
-        setForm({ name: '', email: '', password: '' });
+        setOk(`${ROLE_LABEL[form.role]} account created: ${form.email}`);
+        setForm({ name: '', email: '', password: '', role: form.role });
         load();
     };
 
-    const removeRep = async (userId: string) => {
-        if (!confirm('Remove CRM access for this rep?')) return;
-        await fetch(`/api/crm/staff?userId=${userId}`, { method: 'DELETE' });
+    const removeRep = async (userId: string, role: string, email: string) => {
+        if (!confirm(`Remove ${ROLE_LABEL[role]} access for ${email}?`)) return;
+        const res = await fetch(`/api/crm/staff?userId=${userId}&role=${role}`, { method: 'DELETE' });
+        if (!res.ok) { setError((await res.json()).error || 'Could not remove'); return; }
         load();
     };
 
@@ -48,13 +51,13 @@ export default function SettingsClient() {
                         {staff.map(s => (
                             <li key={s.userId} className="flex items-center justify-between py-2.5 text-sm">
                                 <div>
-                                    <span className="font-medium text-stone-800">{s.email}</span>
-                                    <span className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-bold ${s.role === 'admin' ? 'bg-stone-800 text-white' : 'bg-[#7ed957]/20 text-[#02572a]'}`}>
-                                        {s.role === 'admin' ? 'Admin' : 'Customer rep'}
+                                    <span className="font-medium text-stone-800">{s.name ? `${s.name} · ` : ''}{s.email}</span>
+                                    <span className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-bold ${s.role === 'admin' ? 'bg-stone-800 text-white' : s.role === 'caretaker' ? 'bg-amber-100 text-amber-800' : 'bg-[#7ed957]/20 text-[#02572a]'}`}>
+                                        {ROLE_LABEL[s.role] || s.role}
                                     </span>
                                 </div>
-                                {s.role === 'customer_rep' && (
-                                    <button onClick={() => removeRep(s.userId)} className="text-stone-300 hover:text-[#c75146]">
+                                {(
+                                    <button onClick={() => removeRep(s.userId, s.role, s.email)} aria-label="Remove access" className="text-stone-300 hover:text-[#c75146]">
                                         <Trash2 size={15} />
                                     </button>
                                 )}
@@ -63,7 +66,7 @@ export default function SettingsClient() {
                     </ul>
 
                     <h3 className="text-xs font-semibold text-stone-600 mb-2 flex items-center gap-1.5">
-                        <UserPlus size={14} /> Create customer rep
+                        <UserPlus size={14} /> Add a team member
                     </h3>
                     <p className="text-[11px] text-stone-400 mb-3">
                         Customer reps run the whole CRM: bookings, blocking dates, guests, properties and reports.
@@ -71,7 +74,12 @@ export default function SettingsClient() {
                     </p>
                     {error && <p className="text-xs text-[#c75146] bg-red-50 rounded-md px-3 py-2 mb-2">{error}</p>}
                     {ok && <p className="text-xs text-[#02572a] bg-[#7ed957]/15 rounded-md px-3 py-2 mb-2">{ok}</p>}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                        <select className="border border-stone-300 rounded-md px-2.5 py-2 text-sm bg-white" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
+                            <option value="customer_rep">Customer rep</option>
+                            <option value="caretaker">Caretaker</option>
+                            <option value="admin">Admin</option>
+                        </select>
                         <input placeholder="Name" className="border border-stone-300 rounded-md px-2.5 py-2 text-sm"
                             value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                         <input placeholder="Email" className="border border-stone-300 rounded-md px-2.5 py-2 text-sm"
@@ -84,7 +92,7 @@ export default function SettingsClient() {
                             disabled={busy || !form.email || form.password.length < 8}
                             onClick={createRep}
                             className="px-4 py-2 rounded-md bg-[#008737] text-white text-sm font-semibold disabled:opacity-50">
-                            {busy ? 'Creating…' : 'Create rep account'}
+                            {busy ? 'Creating…' : `Create ${ROLE_LABEL[form.role].toLowerCase()} account`}
                         </button>
                     </div>
                 </div>
@@ -93,10 +101,10 @@ export default function SettingsClient() {
             <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
                 <h2 className="px-5 py-3.5 text-sm font-bold text-stone-700 border-b border-stone-200">How roles work now</h2>
                 <div className="px-5 py-4 text-sm text-stone-600 space-y-2">
-                    <p><b className="text-stone-800">Customer reps</b> — full control: create/edit/cancel bookings, block dates, record payments, manage properties and listings.</p>
-                    <p><b className="text-stone-800">Caretakers</b> — the Today screen for every 9jaRooms property: check guests in and out, record cash/transfer payments, take walk-in bookings, extend stays and block units for cleaning or maintenance. They cannot remove payments or edit listings.</p>
+                    <p><b className="text-stone-800">Customer reps</b> — full control: create/edit/cancel bookings, block dates, record payments, manage properties, rooms, prices, photos and the daily log. Phone app on a phone, this console on a computer.</p>
+                    <p><b className="text-stone-800">Caretakers</b> — the Today screen for every 9jaRooms property: check guests in and out, record cash/transfer payments, take walk-in bookings, extend stays and block units for cleaning or maintenance. They can also group rooms and set prices and photos.</p>
                     <p><b className="text-stone-800">Owners</b> — read-only overview of their own properties: bookings and numbers.</p>
-                    <p><b className="text-stone-800">Admins</b> — everything reps can do, plus this settings page and the legacy admin panel.</p>
+                    <p><b className="text-stone-800">Admins</b> — everything reps can do, plus adding or removing other admins.</p>
                 </div>
             </div>
         </div>
