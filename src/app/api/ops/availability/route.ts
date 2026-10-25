@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOps } from '@/lib/auth/require-ops';
 import { dateRange } from '@/lib/booking/crm-ops';
-import { isBlockedSlot, priceRoomTypeStay } from '@/lib/booking/room-types';
-import { operatedProperties } from '@/lib/booking/occupancy';
+import { isBlockedSlot } from '@/lib/booking/room-types';
+import { operatedInventory } from '@/lib/booking/occupancy';
 
 // "Find a room": every unit free for a stay, grouped the way guests buy
 // them (room type, or plain rooms), priced for the whole stay, with a
@@ -41,32 +41,22 @@ export async function GET(request: NextRequest) {
     const dates = dateRange(from, to);
     const nights = dates.length;
 
-    let propsQuery = supabase
-        .from('properties')
-        .select('id, name, area, price_per_night, minimum_stay, is_active')
-        .eq('is_deleted', false)
-        .in('id', (await operatedProperties(supabase)).map(p => p.id))
-        .order('name');
-    if (auth.propertyIds) propsQuery = propsQuery.in('id', auth.propertyIds);
-    if (requested && requested !== 'all') propsQuery = propsQuery.eq('id', requested);
-    const { data: properties, error } = await propsQuery;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    const propertyIds = (properties || []).map(p => p.id as string);
+    const inv = await operatedInventory(supabase);
+    const properties = inv.properties
+        .filter(p => !auth.propertyIds || auth.propertyIds.includes(p.id))
+        .filter(p => !requested || requested === 'all' || p.id === requested);
+    const propertyIds = properties.map(p => p.id as string);
     if (propertyIds.length === 0) return NextResponse.json({ from, to, nights, groups: [] });
-
-    const [{ data: roomTypes }, { data: units }] = await Promise.all([
-        supabase.from('room_types')
-            .select('id, name, price_per_night, sort_order, property_id, is_active')
-            .in('property_id', propertyIds)
-            .order('sort_order'),
-        supabase.from('rooms')
-            .select('id, name, unit_code, room_type_id, price_per_night, property_id')
-            .in('property_id', propertyIds)
-            .eq('is_active', true)
-            .order('unit_code'),
-    ]);
+    const inScope = new Set(propertyIds);
+    const roomTypes = inv.types.filter(t => inScope.has(t.property_id));
+    const units = inv.units.filter(u => inScope.has(u.property_id))
+        .sort((a, b) => (a.unit_code || '').localeCompare(b.unit_code || '', 'en', { numeric: true }));
     const unitIds = (units || []).map(u => u.id as string);
 
+    const typeIds = roomTypes.map(t => t.id);
+    const overridesP = typeIds.length
+        ? supabase.from('price_overrides').select('room_type_id, start_date, end_date, price_per_night').in('room_type_id', typeIds)
+        : Promise.resolve({ data: [] as any[] });
     const { data: slots } = unitIds.length
         ? await supabase
             .from('availability')
@@ -80,6 +70,18 @@ export async function GET(request: NextRequest) {
         if (isBlockedSlot(slot, now)) blocked.add(slot.room_id);
     }
 
+    // nightly total per room type: date-range overrides win over the base rate (same rule as priceRoomTypeStay)
+    const { data: overrides } = await overridesP;
+    const stayPrice = (typeId: string, base: number) => {
+        const own = (overrides || []).filter(o => o.room_type_id === typeId);
+        let total = 0;
+        for (const d of dates) {
+            const o = own.find(x => d >= x.start_date && d <= x.end_date);
+            total += Number(o ? o.price_per_night : base);
+        }
+        return { total, perNight: dates.length ? Math.round(total / dates.length) : base };
+    };
+
     const groups: FreeGroup[] = [];
     for (const p of properties || []) {
         const link = `${SITE}/property/${p.id}?in=${from}&out=${to}`;
@@ -89,7 +91,7 @@ export async function GET(request: NextRequest) {
         for (const t of pTypes) {
             const all = pUnits.filter(u => u.room_type_id === t.id);
             if (all.length === 0) continue;
-            const price = await priceRoomTypeStay(supabase, { id: t.id, price_per_night: Number(t.price_per_night) }, dates);
+            const price = stayPrice(t.id, Number(t.price_per_night));
             groups.push({
                 key: `${p.id}:${t.id}`, propertyId: p.id, propertyName: p.name, area: p.area,
                 label: t.name, perNight: price.perNight, total: price.total, hidden: t.is_active === false || !p.is_active,

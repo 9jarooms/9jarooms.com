@@ -28,10 +28,15 @@ export default async function DashboardLayout({
         .eq('id', user.id)
         .single();
 
+    const { data: roleRows } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
+    const roles = (roleRows || []).map(r => r.role as string);
+    const role = roles.includes('admin') ? 'admin' : roles.includes('customer_rep') ? 'customer_rep' : 'caretaker';
+
     return (
         <DashboardShell
             user={user}
-            caretakerName={caretaker?.name || user.email || 'Caretaker'}
+            role={role}
+            caretakerName={caretaker?.name || (user.user_metadata?.name as string | undefined) || user.email || 'Caretaker'}
         >
             {children}
         </DashboardShell>

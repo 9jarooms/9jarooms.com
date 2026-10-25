@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOps } from '@/lib/auth/require-ops';
 import { paidByBooking } from '@/lib/booking/crm-ops';
-import { operatedProperties } from '@/lib/booking/occupancy';
+import { operatedInventory } from '@/lib/booking/occupancy';
 
 // Everything the Today / Units screens need for one property in a single
 // call: the properties this user may operate, the property's units and
@@ -39,7 +39,8 @@ export async function GET(request: NextRequest) {
     });
 
     // everything staff operate: live properties plus switched-off ones with real rooms (not on the website yet)
-    let propertyRows = (await operatedProperties(supabase)).map(p => ({ id: p.id, name: p.name, area: p.area }));
+    const inv = await operatedInventory(supabase);
+    let propertyRows = inv.properties.map(p => ({ id: p.id, name: p.name, area: p.area }));
     if (auth.propertyIds) {
         if (auth.propertyIds.length === 0) return empty([], null);
         propertyRows = propertyRows.filter(p => auth.propertyIds!.includes(p.id));
@@ -55,17 +56,12 @@ export async function GET(request: NextRequest) {
     if (!propertyId) return empty(properties, null);
     const propertyIds = propertyId === 'all' ? properties.map(p => p.id as string) : [propertyId];
 
-    const [{ data: roomTypes }, { data: units }] = await Promise.all([
-        supabase.from('room_types')
-            .select('id, name, price_per_night, sort_order, property_id, images, is_active')
-            .in('property_id', propertyIds)
-            .order('sort_order'),
-        supabase.from('rooms')
-            .select('id, name, unit_code, room_type_id, price_per_night, property_id')
-            .in('property_id', propertyIds)
-            .eq('is_active', true)
-            .order('unit_code'),
-    ]);
+    const inScope = new Set(propertyIds);
+    const roomTypes = inv.types.filter(t => inScope.has(t.property_id))
+        .map(t => ({ id: t.id, name: t.name, price_per_night: t.price_per_night, sort_order: t.sort_order, property_id: t.property_id, images: t.images, is_active: t.is_active }));
+    const units = inv.units.filter(u => inScope.has(u.property_id))
+        .map(u => ({ id: u.id, name: u.name, unit_code: u.unit_code, room_type_id: u.room_type_id, price_per_night: u.price_per_night, property_id: u.property_id }))
+        .sort((a, b) => (a.unit_code || '').localeCompare(b.unit_code || '', 'en', { numeric: true }));
     const unitIds = (units || []).map(u => u.id);
 
     const windowBookingsP = supabase.from('bookings')

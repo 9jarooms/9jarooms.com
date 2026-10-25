@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Plus, RefreshCw, Search, ChevronRight, Pencil, EyeOff, ImageOff } from 'lucide-react';
 import {
-    BookingCard, KindPill, isoToday, fmtDay, naira, balanceOf, owes, shiftIso,
+    BookingCard, KindPill, isoToday, fmtDay, naira, balanceOf, owes, shiftIso, cacheGet, fetchCached,
     unitLabel, groupAllUnits, unitPrice, relDayLower,
     type OpsToday, type OpsBooking, type UnitState,
 } from './shared';
@@ -55,17 +55,19 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
 
     const load = useCallback(async (silent = false) => {
         if (propertyId === null) return;
-        if (!silent) setLoading(true);
+        const url = `/api/ops/today?propertyId=${encodeURIComponent(propertyId)}&today=${isoToday()}`;
+        // last known data first (instant), fresh data right after
+        const cached = cacheGet<OpsToday>(url);
+        if (cached) { setData(cached); setLoading(false); } else if (!silent) setLoading(true);
         setError(null);
         try {
-            const res = await fetch(
-                `/api/ops/today?propertyId=${encodeURIComponent(propertyId)}&today=${isoToday()}`,
-                { cache: 'no-store' }
-            );
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error || 'Could not load');
+            const json = await fetchCached<OpsToday>(url);
             setData(json);
             if (json.propertyId && json.propertyId !== propertyId) setPropertyId(json.propertyId);
+            // warm the Find tab for tonight so it opens instantly
+            const t = isoToday(), p = new URLSearchParams({ from: t, to: shiftIso(t, 1) });
+            if (json.propertyId && json.propertyId !== 'all') p.set('propertyId', json.propertyId);
+            fetchCached(`/api/ops/availability?${p}`).catch(() => {});
         } catch (e: any) {
             setError(e?.message || 'Could not load');
         } finally {
@@ -478,10 +480,12 @@ function BookingSearch({ propertyId, today, unitNameOf, onOpen }: {
         } else if (scope === 'past') {
             p.set('outTo', shiftIso(today, -1));
         }
+        const url = `/api/ops/bookings?${p}`;
+        const cached = cacheGet<{ bookings: OpsBooking[] }>(url);
+        if (cached) { setRows(cached.bookings || []); setLoading(false); }
         try {
-            const res = await fetch(`/api/ops/bookings?${p}`, { cache: 'no-store' });
-            if (res.ok) setRows((await res.json()).bookings || []);
-        } finally {
+            setRows((await fetchCached<{ bookings: OpsBooking[] }>(url)).bookings || []);
+        } catch { /* keep what we have */ } finally {
             setLoading(false);
         }
     }, [propertyId, q, scope, today]);

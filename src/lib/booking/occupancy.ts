@@ -25,27 +25,41 @@ export interface LogProperty { id: string; name: string; live: boolean; rows: Lo
 
 // Properties staff operate: everything live, plus switched-off ones that have real coded units
 // (rooms imported from the occupancy log that are not on the website yet).
+export interface InvUnit { id: string; name: string; unit_code: string | null; room_type_id: string | null; price_per_night: number | null; property_id: string; is_active: boolean | null }
+export interface InvType { id: string; name: string; price_per_night: number; sort_order: number | null; property_id: string; is_active: boolean | null; images: string[] | null; description: string | null }
+export interface InvProperty { id: string; name: string; area: string | null; is_active: boolean | null; price_per_night: number | null; minimum_stay: number | null; whole_apartment_price: number | null; two_bed_price: number | null; images: string[] | null }
+
+// Everything staff screens need about the inventory in ONE database round trip: operated properties
+// (live, plus switched-off ones with real coded rooms), their active rooms and their room types.
+export async function operatedInventory(supabase: Db) {
+    const { data } = await supabase.from('properties')
+        .select('id, name, area, is_active, price_per_night, minimum_stay, whole_apartment_price, two_bed_price, images, ' +
+            'rooms(id, name, unit_code, room_type_id, price_per_night, property_id, is_active), ' +
+            'room_types(id, name, price_per_night, sort_order, property_id, is_active, images, description)')
+        .eq('is_deleted', false).order('name');
+    const all = (data || []) as unknown as (InvProperty & { rooms: InvUnit[]; room_types: InvType[] })[];
+    const operated = all.filter(p => p.is_active || p.rooms.some(r => r.is_active && r.unit_code));
+    return {
+        properties: operated.map(({ rooms: _r, room_types: _t, ...p }) => p as InvProperty),
+        units: operated.flatMap(p => p.rooms.filter(r => r.is_active)),
+        types: operated.flatMap(p => p.room_types).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+    };
+}
+
 export async function operatedProperties(supabase: Db) {
-    const { data: props } = await supabase.from('properties')
-        .select('id, name, area, is_active, whole_apartment_price, two_bed_price').eq('is_deleted', false).order('name');
-    const ids = (props || []).map(p => p.id);
-    const { data: coded } = ids.length
-        ? await supabase.from('rooms').select('property_id').in('property_id', ids).not('unit_code', 'is', null).eq('is_active', true)
-        : { data: [] as { property_id: string }[] };
-    const withUnits = new Set((coded || []).map(r => r.property_id));
-    return (props || []).filter(p => p.is_active || withUnits.has(p.id));
+    return (await operatedInventory(supabase)).properties;
 }
 
 export async function dailyLog(supabase: Db, date: string, propertyId?: string | null) {
-    let props = await operatedProperties(supabase);
+    const inv = await operatedInventory(supabase);
+    let props = inv.properties;
     if (propertyId && propertyId !== 'all') props = props.filter(p => p.id === propertyId);
     const ids = props.map(p => p.id);
     if (!ids.length) return { date, properties: [], future: [], owing: [], totals: { units: 0, occupied: 0, revenueToday: 0, owing: 0 } };
 
-    const [{ data: units }, { data: types }] = await Promise.all([
-        supabase.from('rooms').select('id, property_id, unit_code, name, room_type_id, price_per_night').in('property_id', ids).eq('is_active', true),
-        supabase.from('room_types').select('id, name').in('property_id', ids),
-    ]);
+    const scope = new Set(ids);
+    const units = inv.units.filter(u => scope.has(u.property_id));
+    const types = inv.types.filter(t => scope.has(t.property_id));
     const unitIds = (units || []).map(u => u.id);
     const typeName = new Map((types || []).map(t => [t.id, t.name] as const));
     const cols = 'id, room_id, property_id, guest_name, guest_phone, check_in, check_out, nights, price_per_night, total_amount, status, booking_source, expires_at';

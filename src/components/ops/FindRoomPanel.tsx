@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Search, Share2, Lock, Copy, Check, MapPin } from 'lucide-react';
-import { Field, Stepper, inputCls, naira, fmtDay, shiftIso, isoToday, type OpsToday } from './shared';
+import { Field, Stepper, inputCls, naira, fmtDay, shiftIso, isoToday, cacheGet, fetchCached, type OpsToday } from './shared';
 import type { NewBookingPreset } from './NewBookingSheet';
 
 interface FreeUnit { id: string; label: string; perNight: number | null; total: number | null }
@@ -29,13 +29,14 @@ export default function FindRoomPanel({ data, onHold }: {
     const checkOut = shiftIso(checkIn, Math.max(nights, 1));
 
     const search = useCallback(async () => {
-        setLoading(true); setError(null);
+        setError(null);
+        const p = new URLSearchParams({ from: checkIn, to: checkOut });
+        if (data.propertyId && data.propertyId !== 'all') p.set('propertyId', data.propertyId);
+        const url = `/api/ops/availability?${p}`;
+        const cached = cacheGet<{ groups: FreeGroup[] }>(url);
+        if (cached) setGroups(cached.groups || []); else setLoading(true);
         try {
-            const p = new URLSearchParams({ from: checkIn, to: checkOut });
-            if (data.propertyId && data.propertyId !== 'all') p.set('propertyId', data.propertyId);
-            const res = await fetch(`/api/ops/availability?${p}`, { cache: 'no-store' });
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error || 'Could not check availability');
+            const json = await fetchCached<{ groups: FreeGroup[] }>(url);
             setGroups(json.groups || []);
         } catch (e: any) {
             setError(e?.message || 'Could not check availability');
@@ -47,7 +48,7 @@ export default function FindRoomPanel({ data, onHold }: {
     // search as soon as the dates change (small debounce for the stepper),
     // and again whenever the screen behind reloads (a hold was just placed)
     useEffect(() => {
-        const t = setTimeout(search, 250);
+        const t = setTimeout(search, 120);
         return () => clearTimeout(t);
     }, [search, data]);
 

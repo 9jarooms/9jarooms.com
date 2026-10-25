@@ -20,15 +20,18 @@ const moreItems = [
     { href: '/dashboard/account', label: 'Account', icon: UserCircle },
 ];
 
+const ROLE_NAME: Record<string, string> = { admin: 'Admin', customer_rep: 'Customer rep', caretaker: 'Caretaker' };
+
 interface Props {
     user: User;
+    role?: string;
     caretakerName: string;
     children: React.ReactNode;
 }
 
 // Phone-first shell: slim top bar + bottom tab bar on mobile, a sidebar on
 // desktop. No hamburger — every section is one tap away.
-export default function DashboardShell({ user, caretakerName, children }: Props) {
+export default function DashboardShell({ user, role = 'caretaker', caretakerName, children }: Props) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -81,7 +84,13 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
                     <Link href="/dashboard/training" className={`h-8 px-3 mr-1 rounded-full text-[12.5px] font-semibold flex items-center gap-1.5 shrink-0 ${pathname.startsWith('/dashboard/training') ? 'bg-green-500 text-white' : 'bg-green-50 text-green-700'}`}>
                         <GraduationCap size={15} /> Training
                     </Link>
-                    <span className="text-[12px] font-semibold text-gray-500 truncate max-w-[40vw]">{caretakerName}</span>
+                    {role !== 'caretaker' ? (
+                        <Link href="/crm/calendar" className="h-8 px-3 rounded-full bg-gray-900 text-white text-[12px] font-semibold flex items-center shrink-0">
+                            {ROLE_NAME[role]} · Console
+                        </Link>
+                    ) : (
+                        <span className="text-[12px] font-semibold text-gray-500 truncate max-w-[34vw]">{caretakerName}</span>
+                    )}
                     <button type="button" onClick={handleLogout} aria-label="Sign out" className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
                         <LogOut size={18} />
                     </button>
@@ -95,7 +104,7 @@ export default function DashboardShell({ user, caretakerName, children }: Props)
                         <img src="/logo-transparent.png" alt="9jaRooms" className="h-8 w-auto object-contain" />
                     </Link>
                     <div className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-                        Caretaker Portal
+                        {ROLE_NAME[role] || 'Caretaker'} · phone app
                     </div>
                 </div>
                 <nav className="flex-1 py-6 px-4 space-y-1">

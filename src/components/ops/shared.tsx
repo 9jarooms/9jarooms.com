@@ -407,3 +407,30 @@ export function BookingCard({ b, today, unit, onOpen, onCheckIn, onCheckOut, bus
         </div>
     );
 }
+
+// ------------------------------------------------------------------
+// Stale-while-revalidate: screens show the last data for a request at once
+// (this tab session), then refresh it. Keeps tab switches instant on slow data.
+// ------------------------------------------------------------------
+const memCache = new Map<string, unknown>();
+export function cacheGet<T>(key: string): T | null {
+    if (memCache.has(key)) return memCache.get(key) as T;
+    try { const v = sessionStorage.getItem('swr:' + key); if (v) { const j = JSON.parse(v); memCache.set(key, j); return j as T; } } catch { /* ignore */ }
+    return null;
+}
+export function cacheSet(key: string, value: unknown) {
+    memCache.set(key, value);
+    try { sessionStorage.setItem('swr:' + key, JSON.stringify(value)); } catch { /* quota or private mode */ }
+}
+// fetch JSON and remember it; the same request made while one is in flight shares it
+const inflight = new Map<string, Promise<any>>();
+export function fetchCached<T>(url: string): Promise<T> {
+    if (inflight.has(url)) return inflight.get(url)!;
+    const p = fetch(url, { cache: 'no-store' }).then(async r => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || 'Could not load');
+        cacheSet(url, j); return j as T;
+    }).finally(() => inflight.delete(url));
+    inflight.set(url, p);
+    return p;
+}
