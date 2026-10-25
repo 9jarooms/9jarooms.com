@@ -15,7 +15,8 @@ interface Prop { id: string; name: string; area: string | null; live: boolean; p
 // A room that is different stays in its own group. Select rooms -> "Group" -> pick or create a group.
 export default function RoomGroups() {
     const [data, setData] = useState<Prop[] | null>(null);
-    const [pid, setPid] = useState<string>('');
+    const [pid, setPid] = useState<string>('all');           // 'all' = every property
+    const [view, setView] = useState<'groups' | 'price'>('groups');
     const [sel, setSel] = useState<Set<string>>(new Set());
     const [grouping, setGrouping] = useState(false);
     const [edit, setEdit] = useState<string | null>(null);
@@ -27,24 +28,43 @@ export default function RoomGroups() {
         const json = await res.json();
         if (!res.ok) { setError(json.error || 'Could not load rooms'); return; }
         setData(json.properties);
-        setPid(p => p && json.properties.some((x: Prop) => x.id === p) ? p : (json.properties[0]?.id || ''));
+        setPid(p => p === 'all' || json.properties.some((x: Prop) => x.id === p) ? p : 'all');
     }, []);
     useEffect(() => { load(); }, [load]);
 
-    const prop = data?.find(p => p.id === pid) || null;
-    const groups = useMemo(() => {
-        if (!prop) return [];
-        return prop.groups
-            .map(g => ({ ...g, units: prop.units.filter(u => u.typeId === g.id) }))
-            .filter(g => g.units.length > 0);
-    }, [prop]);
-    const loose = prop ? prop.units.filter(u => !u.typeId || !prop.groups.some(g => g.id === u.typeId)) : [];
-    const toggle = (id: string) => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    const prop = pid !== 'all' ? data?.find(p => p.id === pid) || null : null;
+    const shown = useMemo(() => (data || []).filter(p => pid === 'all' || p.id === pid), [data, pid]);
+    const propOfUnit = useMemo(() => new Map((data || []).flatMap(p => p.units.map(u => [u.id, p] as const))), [data]);
+    const groupsOf = (p: Prop) => p.groups
+        .map(g => ({ ...g, units: p.units.filter(u => u.typeId === g.id) }))
+        .filter(g => g.units.length > 0);
+    const looseOf = (p: Prop) => p.units.filter(u => !u.typeId || !p.groups.some(g => g.id === u.typeId));
+    const priceOf = (p: Prop, u: Unit) => u.price ?? p.groups.find(g => g.id === u.typeId)?.price ?? null;
 
-    const setPropertyLive = async (live: boolean) => {
-        if (!prop) return;
+    // By price: every room with the same nightly rate side by side (within each property)
+    const buckets = useMemo(() => {
+        const m = new Map<number, Map<string, { prop: Prop; units: Unit[] }>>();
+        for (const p of shown) for (const u of p.units) {
+            const pr = priceOf(p, u) ?? 0;
+            if (!m.has(pr)) m.set(pr, new Map());
+            const byProp = m.get(pr)!;
+            if (!byProp.has(p.id)) byProp.set(p.id, { prop: p, units: [] });
+            byProp.get(p.id)!.units.push(u);
+        }
+        return [...m.entries()].sort((a, b) => b[0] - a[0]);
+    }, [shown]);
+
+    const toggle = (id: string) => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    const selectMany = (ids: string[]) => setSel(s => {
+        const n = new Set(s); const all = ids.every(i => n.has(i));
+        ids.forEach(i => all ? n.delete(i) : n.add(i)); return n;
+    });
+    const selProps = [...new Set([...sel].map(id => propOfUnit.get(id)?.id).filter(Boolean))] as string[];
+    const selProp = selProps.length === 1 ? data?.find(p => p.id === selProps[0]) || null : null;
+
+    const setPropertyLive = async (p: Prop, live: boolean) => {
         setBusy(true); setError(null);
-        const res = await fetch('/api/crm/properties', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId: prop.id, isActive: live }) });
+        const res = await fetch('/api/crm/properties', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId: p.id, isActive: live }) });
         setBusy(false);
         if (!res.ok) { setError((await res.json()).error || 'Could not update'); return; }
         load();
@@ -53,23 +73,54 @@ export default function RoomGroups() {
     if (error && !data) return <p className="text-center text-gray-500 py-16">{error}</p>;
     if (!data) return <p className="text-center text-gray-400 py-16">Loading rooms…</p>;
 
-    const editing = edit && prop ? prop.groups.find(g => g.id === edit) : null;
+    const editProp = edit ? data.find(p => p.groups.some(g => g.id === edit)) || null : null;
+    const editing = edit && editProp ? editProp.groups.find(g => g.id === edit) : null;
+    const totalRooms = shown.reduce((n, p) => n + p.units.length, 0);
+
+    const groupCard = (p: Prop, g: Group & { units: Unit[] }) => (
+        <div key={g.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="font-semibold text-[15px] text-gray-900 truncate">{g.name}</p>
+                    <p className="text-[12.5px] text-gray-500 mt-0.5 flex flex-wrap items-center gap-x-2">
+                        <span className="font-semibold text-gray-900 tabular-nums">{naira(g.price)}<span className="font-normal text-gray-400"> / night</span></span>
+                        <span>{g.units.length} room{g.units.length === 1 ? '' : 's'}</span>
+                        {g.live && p.live ? <span className="text-green-700 inline-flex items-center gap-1"><Globe size={11} /> on website</span>
+                            : g.live ? <span className="text-gray-500 inline-flex items-center gap-1"><Globe size={11} /> shows once the property is live</span>
+                            : <span className="text-amber-700 inline-flex items-center gap-1"><EyeOff size={11} /> hidden</span>}
+                        {g.images.length === 0 && <span className="text-amber-700 inline-flex items-center gap-1"><ImageOff size={11} /> no photos</span>}
+                    </p>
+                </div>
+                <button type="button" onClick={() => setEdit(g.id)} aria-label={`Edit ${g.name}`}
+                    className="h-9 px-3 rounded-full border border-gray-200 text-[12.5px] font-medium text-gray-700 flex items-center gap-1.5 hover:border-gray-900 shrink-0">
+                    <Pencil size={13} /> Photos & price
+                </button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+                {g.units.map(u => <UnitChip key={u.id} u={u} on={sel.has(u.id)} onTap={() => toggle(u.id)} />)}
+            </div>
+        </div>
+    );
 
     return (
         <div className="max-w-3xl mx-auto pb-10">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-2">
                 <select value={pid} onChange={e => { setPid(e.target.value); setSel(new Set()); }}
                     className="flex-1 min-w-0 h-12 rounded-xl border border-gray-200 bg-white px-3 text-[16px] font-semibold text-gray-900 shadow-sm">
+                    <option value="all">All rooms (every property)</option>
                     {data.map(p => <option key={p.id} value={p.id}>{p.name}{p.live ? '' : ' — not on website'}</option>)}
                 </select>
                 <button type="button" onClick={load} aria-label="Refresh" className="w-12 h-12 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-900 hover:text-white transition-all shrink-0"><RefreshCw size={18} /></button>
             </div>
-            <p className="text-[13px] text-gray-500 mb-4 px-1">{prop?.units.length} rooms · {groups.length} group{groups.length === 1 ? '' : 's'} on this property</p>
+            <div className="flex items-center justify-between gap-2 mb-4">
+                <p className="text-[13px] text-gray-500 px-1">{totalRooms} rooms{pid === 'all' ? ` in ${shown.length} properties` : ''}</p>
+                <Chips options={[{ value: 'groups', label: 'By group' }, { value: 'price', label: 'By price' }]} value={view} onChange={v => setView(v as 'groups' | 'price')} />
+            </div>
 
             {error && <p className="text-[13px] text-red-600 bg-red-50 rounded-xl px-3 py-2 mb-3">{error}</p>}
 
             {prop && (
-                <button type="button" onClick={() => setPropertyLive(!prop.live)} disabled={busy}
+                <button type="button" onClick={() => setPropertyLive(prop, !prop.live)} disabled={busy}
                     className={`w-full rounded-2xl border px-4 py-3.5 flex items-center gap-3 text-left mb-5 ${prop.live ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-white shadow-sm'}`}>
                     {prop.live ? <Globe size={20} className="text-green-600 shrink-0" /> : <EyeOff size={20} className="text-gray-400 shrink-0" />}
                     <span className="flex-1 min-w-0">
@@ -79,69 +130,92 @@ export default function RoomGroups() {
                     <span className={`w-12 h-7 rounded-full p-1 shrink-0 ${prop.live ? 'bg-green-500' : 'bg-gray-300'}`}><span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${prop.live ? 'translate-x-5' : ''}`} /></span>
                 </button>
             )}
-
             {prop && <WholeFlat prop={prop} onSaved={load} />}
 
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 px-1 mb-2">Tap rooms to select them, then group them</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 px-1 mb-2">
+                {view === 'price' ? 'Rooms at the same price, side by side. Tap to select, then Group' : 'Tap rooms to select them, then group them'}
+            </p>
 
-            <div className="space-y-3">
-                {groups.map(g => (
-                    <div key={g.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <p className="font-semibold text-[15px] text-gray-900 truncate">{g.name}</p>
-                                <p className="text-[12.5px] text-gray-500 mt-0.5 flex flex-wrap items-center gap-x-2">
-                                    <span className="font-semibold text-gray-900 tabular-nums">{naira(g.price)}<span className="font-normal text-gray-400"> / night</span></span>
-                                    <span>{g.units.length} room{g.units.length === 1 ? '' : 's'}</span>
-                                    {g.live && prop?.live ? <span className="text-green-700 inline-flex items-center gap-1"><Globe size={11} /> on website</span>
-                                        : g.live ? <span className="text-gray-500 inline-flex items-center gap-1"><Globe size={11} /> shows once the property is live</span>
-                                        : <span className="text-amber-700 inline-flex items-center gap-1"><EyeOff size={11} /> hidden</span>}
-                                    {g.images.length === 0 && <span className="text-amber-700 inline-flex items-center gap-1"><ImageOff size={11} /> no photos</span>}
-                                </p>
+            {view === 'groups' ? (
+                <div className="space-y-6">
+                    {shown.map(p => {
+                        const gs = groupsOf(p), loose = looseOf(p);
+                        return (
+                            <section key={p.id} className="space-y-3">
+                                {pid === 'all' && (
+                                    <div className="flex items-center justify-between gap-2 px-1">
+                                        <h3 className="font-semibold text-[14px] text-gray-900 truncate">{p.name}</h3>
+                                        <button type="button" onClick={() => { setPid(p.id); setSel(new Set()); }} className="text-[12px] font-medium text-green-700 shrink-0">
+                                            {p.live ? 'Live' : 'Not on website'} · open →
+                                        </button>
+                                    </div>
+                                )}
+                                {gs.map(g => groupCard(p, g))}
+                                {loose.length > 0 && (
+                                    <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-4">
+                                        <p className="font-semibold text-[14px] text-gray-900">Not in a group yet</p>
+                                        <div className="mt-3 flex flex-wrap gap-2">{loose.map(u => <UnitChip key={u.id} u={u} on={sel.has(u.id)} onTap={() => toggle(u.id)} />)}</div>
+                                    </div>
+                                )}
+                            </section>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {buckets.map(([price, byProp]) => (
+                        <div key={price} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                            <p className="font-semibold text-[16px] text-gray-900 tabular-nums">{price ? naira(price) : 'No price yet'}<span className="font-normal text-gray-400 text-[13px]"> / night · {(() => { const n = [...byProp.values()].reduce((k, x) => k + x.units.length, 0); return `${n} room${n === 1 ? '' : 's'}`; })()}</span></p>
+                            <div className="mt-2 space-y-3">
+                                {[...byProp.values()].map(({ prop: p, units }) => (
+                                    <div key={p.id}>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="text-[12px] font-medium text-gray-500 truncate">{p.name}</p>
+                                            <button type="button" onClick={() => selectMany(units.map(u => u.id))} className="text-[12px] font-semibold text-green-700 shrink-0">
+                                                {units.every(u => sel.has(u.id)) ? 'Unselect' : `Select all ${units.length}`}
+                                            </button>
+                                        </div>
+                                        <div className="mt-1.5 flex flex-wrap gap-2">
+                                            {units.map(u => <UnitChip key={u.id} u={u} on={sel.has(u.id)} onTap={() => toggle(u.id)} />)}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                            <button type="button" onClick={() => setEdit(g.id)} aria-label={`Edit ${g.name}`}
-                                className="h-9 px-3 rounded-full border border-gray-200 text-[12.5px] font-medium text-gray-700 flex items-center gap-1.5 hover:border-gray-900 shrink-0">
-                                <Pencil size={13} /> Photos & price
-                            </button>
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                            {g.units.map(u => <UnitChip key={u.id} u={u} on={sel.has(u.id)} onTap={() => toggle(u.id)} />)}
-                        </div>
-                    </div>
-                ))}
-                {loose.length > 0 && (
-                    <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-4">
-                        <p className="font-semibold text-[14px] text-gray-900">Not in a group yet</p>
-                        <div className="mt-3 flex flex-wrap gap-2">{loose.map(u => <UnitChip key={u.id} u={u} on={sel.has(u.id)} onTap={() => toggle(u.id)} />)}</div>
-                    </div>
-                )}
-            </div>
+                    ))}
+                </div>
+            )}
 
             {sel.size > 0 && (
                 <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] lg:bottom-6 z-40 mt-4">
+                    {selProps.length > 1 && (
+                        <p className="mb-2 text-[12.5px] text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 shadow-sm">
+                            You picked rooms from {selProps.length} properties. A group is one listing in one building, so pick rooms from one property at a time.
+                        </p>
+                    )}
                     <div className="flex items-center gap-2">
-                        <div className="flex-1 h-14 rounded-full bg-gray-900 text-white px-5 flex items-center gap-3 shadow-lg">
-                            <span className="font-semibold text-[15px]">{sel.size} selected</span>
-                            <button type="button" onClick={() => setSel(new Set())} className="ml-auto text-white/70 flex items-center gap-1 text-[13px]"><X size={14} /> Clear</button>
+                        <div className="flex-1 h-14 rounded-full bg-gray-900 text-white px-5 flex items-center gap-3 shadow-lg min-w-0">
+                            <span className="font-semibold text-[15px] truncate">{sel.size} selected{selProp && pid === 'all' ? ` · ${selProp.name}` : ''}</span>
+                            <button type="button" onClick={() => setSel(new Set())} className="ml-auto text-white/70 flex items-center gap-1 text-[13px] shrink-0"><X size={14} /> Clear</button>
                         </div>
-                        <button type="button" onClick={() => setGrouping(true)}
-                            className="h-14 px-6 rounded-full bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold text-[15px] shadow-lg shadow-green-500/30 flex items-center gap-2">
+                        <button type="button" onClick={() => setGrouping(true)} disabled={!selProp}
+                            className="h-14 px-6 rounded-full bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold text-[15px] shadow-lg shadow-green-500/30 flex items-center gap-2 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none">
                             <Layers size={18} /> Group
                         </button>
                     </div>
                 </div>
             )}
 
-            {grouping && prop && (
-                <GroupSheet prop={prop} units={prop.units.filter(u => sel.has(u.id))} groups={groups}
+            {grouping && selProp && (
+                <GroupSheet prop={selProp} units={selProp.units.filter(u => sel.has(u.id))} groups={groupsOf(selProp)}
                     onClose={() => setGrouping(false)}
                     onDone={() => { setGrouping(false); setSel(new Set()); load(); }} />
             )}
-            {editing && prop && (
+            {editing && editProp && (
                 <RoomTypeSheet
-                    type={{ id: editing.id, name: editing.name, price_per_night: editing.price, property_id: prop.id, images: editing.images, is_active: editing.live }}
-                    unitCount={prop.units.filter(u => u.typeId === editing.id).length}
-                    propertyName={prop.name}
+                    type={{ id: editing.id, name: editing.name, price_per_night: editing.price, property_id: editProp.id, images: editing.images, is_active: editing.live }}
+                    unitCount={editProp.units.filter(u => u.typeId === editing.id).length}
+                    propertyName={editProp.name}
                     onClose={() => setEdit(null)}
                     onSaved={() => { setEdit(null); load(); }} />
             )}
