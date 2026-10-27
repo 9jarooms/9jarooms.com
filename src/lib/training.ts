@@ -126,6 +126,8 @@ export const LESSONS: Lesson[] = [
             'Tap Group. Those rooms now share one listing. A room that is different stays on its own.',
             'Tap Photos & price on the group: add a few photos of one room, check the price, and switch Showing on the website on or off.',
             'When the property is ready, switch the property on at the top. Then guests can book it online.',
+            'New room? Tap + Add rooms on the property, type the names (e.g. 9A, 9B, 9C), and put them in a group or give them a price.',
+            'Room no longer used? Select it and tap the bin. Rooms with a current or upcoming booking cannot be removed until that stay is finished or moved.',
         ],
         tips: ['A guest books the group, and the app gives them whichever room in it is free. You never upload the same photos twice.'],
         links: [{ label: 'Open Rooms', href: '/dashboard/rooms' }],

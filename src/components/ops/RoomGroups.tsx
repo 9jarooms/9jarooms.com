@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Globe, EyeOff, Layers, ImageOff, Pencil, X, RefreshCw } from 'lucide-react';
+import { Check, Globe, EyeOff, Layers, ImageOff, Pencil, X, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import { Sheet, BigButton, Field, Chips, inputCls, naira } from './shared';
 import RoomTypeSheet from './RoomTypeSheet';
 
@@ -19,6 +19,7 @@ export default function RoomGroups() {
     const [view, setView] = useState<'groups' | 'price'>('groups');
     const [sel, setSel] = useState<Set<string>>(new Set());
     const [grouping, setGrouping] = useState(false);
+    const [adding, setAdding] = useState<string | null>(null);   // property id
     const [edit, setEdit] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -68,6 +69,18 @@ export default function RoomGroups() {
         setBusy(false);
         if (!res.ok) { setError((await res.json()).error || 'Could not update'); return; }
         load();
+    };
+
+    const removeSelected = async () => {
+        if (!selProp) return;
+        const codes = selProp.units.filter(u => sel.has(u.id)).map(u => u.code);
+        if (!confirm(`Remove ${codes.length} room${codes.length === 1 ? '' : 's'} from ${selProp.name}?\n\n${codes.join(', ')}\n\nThey disappear from the app and the website. Past bookings and the daily log history are kept.`)) return;
+        setBusy(true); setError(null);
+        const res = await fetch('/api/crm/rooms', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomIds: [...sel] }) });
+        setBusy(false);
+        const json = await res.json();
+        if (!res.ok) { setError(json.error || 'Could not remove'); return; }
+        setSel(new Set()); load();
     };
 
     if (error && !data) return <p className="text-center text-gray-500 py-16">{error}</p>;
@@ -142,14 +155,18 @@ export default function RoomGroups() {
                         const gs = groupsOf(p), loose = looseOf(p);
                         return (
                             <section key={p.id} className="space-y-3">
-                                {pid === 'all' && (
-                                    <div className="flex items-center justify-between gap-2 px-1">
-                                        <h3 className="font-semibold text-[14px] text-gray-900 truncate">{p.name}</h3>
-                                        <button type="button" onClick={() => { setPid(p.id); setSel(new Set()); }} className="text-[12px] font-medium text-green-700 shrink-0">
-                                            {p.live ? 'Live' : 'Not on website'} · open →
+                                <div className="flex items-center justify-between gap-2 px-1">
+                                    {pid === 'all' ? (
+                                        <button type="button" onClick={() => { setPid(p.id); setSel(new Set()); }} className="min-w-0 text-left">
+                                            <span className="block font-semibold text-[14px] text-gray-900 truncate">{p.name}</span>
+                                            <span className="block text-[11.5px] font-medium text-green-700">{p.live ? 'Live' : 'Not on website'} · {p.units.length} rooms · open →</span>
                                         </button>
-                                    </div>
-                                )}
+                                    ) : <span className="text-[13px] text-gray-500">{p.units.length} rooms</span>}
+                                    <button type="button" onClick={() => setAdding(p.id)}
+                                        className="h-9 px-3 rounded-full border border-gray-200 bg-white text-[12.5px] font-semibold text-gray-800 flex items-center gap-1.5 hover:border-gray-900 shrink-0">
+                                        <Plus size={14} /> Add rooms
+                                    </button>
+                                </div>
                                 {gs.map(g => groupCard(p, g))}
                                 {loose.length > 0 && (
                                     <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-4">
@@ -198,6 +215,10 @@ export default function RoomGroups() {
                             <span className="font-semibold text-[15px] truncate">{sel.size} selected{selProp && pid === 'all' ? ` · ${selProp.name}` : ''}</span>
                             <button type="button" onClick={() => setSel(new Set())} className="ml-auto text-white/70 flex items-center gap-1 text-[13px] shrink-0"><X size={14} /> Clear</button>
                         </div>
+                        <button type="button" onClick={removeSelected} disabled={!selProp || busy} aria-label="Remove selected rooms"
+                            className="h-14 w-14 rounded-full bg-white border border-red-200 text-red-600 flex items-center justify-center shadow-lg disabled:text-gray-300 disabled:border-gray-200 shrink-0">
+                            <Trash2 size={19} />
+                        </button>
                         <button type="button" onClick={() => setGrouping(true)} disabled={!selProp}
                             className="h-14 px-6 rounded-full bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold text-[15px] shadow-lg shadow-green-500/30 flex items-center gap-2 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none">
                             <Layers size={18} /> Group
@@ -206,6 +227,10 @@ export default function RoomGroups() {
                 </div>
             )}
 
+            {adding && data.find(p => p.id === adding) && (
+                <AddRoomsSheet prop={data.find(p => p.id === adding)!} groups={groupsOf(data.find(p => p.id === adding)!)}
+                    onClose={() => setAdding(null)} onDone={() => { setAdding(null); load(); }} />
+            )}
             {grouping && selProp && (
                 <GroupSheet prop={selProp} units={selProp.units.filter(u => sel.has(u.id))} groups={groupsOf(selProp)}
                     onClose={() => setGrouping(false)}
@@ -339,5 +364,57 @@ function WholeFlat({ prop, onSaved }: { prop: Prop; onSaved: () => void }) {
                 {msg && <span className={`text-[12.5px] ${msg === 'Saved' ? 'text-green-700' : 'text-red-600'}`}>{msg}</span>}
             </div>
         </div>
+    );
+}
+
+// Add one or more rooms to a property: codes separated by commas; into an existing group (its price and
+// photos) or each as its own new group at a price.
+function AddRoomsSheet({ prop, groups, onClose, onDone }: {
+    prop: Prop; groups: (Group & { units: Unit[] })[]; onClose: () => void; onDone: () => void;
+}) {
+    const [codes, setCodes] = useState('');
+    const [mode, setMode] = useState<'own' | 'group'>(groups.length ? 'group' : 'own');
+    const [target, setTarget] = useState(groups[0]?.id || '');
+    const [price, setPrice] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const list = codes.split(/[,\n]+/).map(c => c.trim()).filter(Boolean);
+
+    const save = async () => {
+        setBusy(true); setError(null);
+        const body: Record<string, unknown> = { propertyId: prop.id, codes: list };
+        if (mode === 'group') body.roomTypeId = target; else body.pricePerNight = Number(price);
+        try {
+            const res = await fetch('/api/crm/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Could not add rooms');
+            onDone();
+        } catch (e: any) { setError(e?.message || 'Could not add rooms'); } finally { setBusy(false); }
+    };
+
+    return (
+        <Sheet title={`Add rooms to ${prop.name}`} subtitle={`${prop.units.length} rooms there now`} onClose={onClose}>
+            {error && <p className="text-[13px] text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+            <Field label="Room names / numbers" hint="Separate several with commas, e.g. 9A, 9B, 9C. Use the names the team already uses.">
+                <input className={inputCls} value={codes} onChange={e => setCodes(e.target.value)} placeholder="e.g. 9A, 9B, 9C" autoFocus />
+            </Field>
+            {groups.length > 0 && (
+                <Chips options={[{ value: 'group', label: 'Add to a group' }, { value: 'own', label: 'Own price' }]} value={mode} onChange={v => setMode(v as 'own' | 'group')} />
+            )}
+            {mode === 'group' ? (
+                <Field label="Group" hint="The new rooms take this group's price and photos, and are sold with it on the website.">
+                    <select className={inputCls} value={target} onChange={e => setTarget(e.target.value)}>
+                        {groups.map(g => <option key={g.id} value={g.id}>{g.name} · {naira(g.price)}/night · {g.units.length} rooms</option>)}
+                    </select>
+                </Field>
+            ) : (
+                <Field label="Price per night (₦)" hint="Each room starts in its own group; group them later if they are the same.">
+                    <input type="number" inputMode="numeric" min={0} className={inputCls} value={price} onChange={e => setPrice(e.target.value)} />
+                </Field>
+            )}
+            <BigButton onClick={save} busy={busy} disabled={!list.length || (mode === 'own' ? !(Number(price) > 0) : !target)} icon={<Plus size={18} />}>
+                Add {list.length || ''} room{list.length === 1 ? '' : 's'}
+            </BigButton>
+        </Sheet>
     );
 }
