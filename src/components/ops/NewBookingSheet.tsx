@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Share2, Copy, Check, Lock } from 'lucide-react';
 import {
     Sheet, BigButton, Field, Stepper, Chips, inputCls,
-    naira, shiftIso, fmtDay, unitLabel, unitPrice, groupAllUnits, openWhatsApp, LIVE_STATUSES, type OpsToday,
+    naira, shiftIso, fmtDay, unitLabel, unitPrice, groupAllUnits, openWhatsApp, serverNow, newRequestId, LIVE_STATUSES, type OpsToday,
 } from './shared';
 
 const SOURCES = [
@@ -50,6 +50,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     const [paidAmount, setPaidAmount] = useState('');
     const [transferRef, setTransferRef] = useState('');
     const [depositRef, setDepositRef] = useState('');
+    const payAttempt = useRef('');
     const [copied, setCopied] = useState(false);
     const [guestName, setGuestName] = useState('');
     const [phone, setPhone] = useState('');
@@ -59,7 +60,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     const [source, setSource] = useState(preset.mode === 'hold' ? 'whatsapp' : 'walk_in');
     const [price, setPrice] = useState('');      // '' = the standard price
     const [paidNow, setPaidNow] = useState('');
-    const [payMethod, setPayMethod] = useState('Cash');
+    const [payMethod, setPayMethod] = useState('');   // no default: staff say how it was paid
     const [notes, setNotes] = useState('');
     const [blockStatus, setBlockStatus] = useState<'cleaning' | 'maintenance'>(preset.blockStatus || 'cleaning');
     const [busy, setBusy] = useState(false);
@@ -104,9 +105,13 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     // one id per booking attempt: a retry after lost signal returns the same booking, never a second one.
     // A new id as soon as anything that matters changes, so a retry never returns an outdated booking.
     const attemptKey = [mode, effectiveUnitId, checkIn, nights, price, paidNow, payMethod].join('|');
-    const requestId = useMemo(() => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
+    const freshId = useMemo(() => newRequestId()
         // eslint-disable-next-line react-hooks/exhaustive-deps
         , [attemptKey]);
+    // a send whose answer never came back: until we know what happened to it, every tap re-sends
+    // that same id (even if the screen behind moved to another unit), so it can never book twice
+    const unknownAttempt = useRef<string | null>(null);
+    const requestId = unknownAttempt.current || freshId;
     const isTransferMethod = /transfer|moniepoint/i.test(payMethod);
 
     const submit = async () => {
@@ -127,6 +132,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             }
 
             if (guestName.trim().length < 2) throw new Error('Enter the guest name');
+            if (!unknownAttempt.current && mode === 'booking' && deposit > 0 && !payMethod) throw new Error('Pick how they paid');
             if (mode === 'booking' && deposit > 0 && isTransferMethod && !depositRef.trim()) throw new Error('Type the transfer reference from the bank alert');
             const send = () => fetch('/api/bookings', {
                 method: 'POST', headers,
@@ -146,12 +152,17 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             let res = await send();
             if (!res) { await new Promise(r => setTimeout(r, 2500)); res = await send(); }
             if (!res) {
-                onRefresh?.();
-                throw new Error('No connection. When you have signal, tap again: it will not book twice.');
+                unknownAttempt.current = requestId;
+                throw new Error('No connection. When you have signal, tap the button again: it checks what happened and will not book twice.');
             }
+            unknownAttempt.current = null;
             const json = await res.json();
             if (!res.ok) { onRefresh?.(); throw new Error(json.error || 'Could not create the booking'); }
             const id = json.bookingId as string;
+            if (json.duplicate && mode === 'booking') {
+                onCreated();   // it had gone through the first time
+                return;
+            }
 
             if (mode === 'hold') {
                 const lockedUnit = data.units.find(u => u.id === (json.roomId || unit.id)) || unit;
@@ -174,7 +185,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     if (hold) {
         // everything here comes from what was locked, never from the form behind it
         const until = new Date(hold.expiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-        const lapsed = new Date(hold.expiresAt).getTime() < Date.now();
+        const lapsed = new Date(hold.expiresAt).getTime() < serverNow();
         const b = hold.bank;
         const account = b?.accountNumber ? `${b.bankName} ${b.accountNumber} (${b.accountName})` : '';
         const stay = `${fmtDay(hold.checkIn)} to ${fmtDay(hold.checkOut)}, ${hold.nights} night${hold.nights === 1 ? '' : 's'}, ${naira(hold.total)}`;
@@ -183,6 +194,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             (account ? `Please transfer ${naira(hold.total)} to:\n${account}\n\n` : `Please transfer ${naira(hold.total)} to our account.\n\n`) +
             `Send the receipt here before ${until}. If we have not received it by then, the room is released to other guests.`;
         const amount = Number(paidAmount) || 0;
+        if (!payAttempt.current) payAttempt.current = newRequestId();
         // the money is in the account: record it with the bank's reference, which confirms the booking
         const confirmPaid = async (force = false) => {
             if (amount <= 0) { setError('Type the amount that came in'); return; }
@@ -191,7 +203,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             try {
                 const send = () => fetch(`/api/ops/bookings/${hold.bookingId}/payments`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ amount, method: 'Bank Transfer', reference: transferRef.trim(), note: 'Transfer for a locked room', requestId: `${hold.bookingId}-${amount}-${transferRef.trim()}`, force }),
+                    body: JSON.stringify({ amount, method: 'Bank Transfer', reference: transferRef.trim(), note: 'Transfer for a locked room', requestId: payAttempt.current, force }),
                 }).catch(() => null);
                 let res = await send();
                 if (!res) { await new Promise(r => setTimeout(r, 2500)); res = await send(); }
@@ -200,6 +212,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                 if (!res.ok) {
                     if (!force && ['duplicate', 'overpay'].includes(j.details?.warning)) {
                         setBusy(false);
+                        payAttempt.current = '';
                         if (confirm(j.error)) return confirmPaid(true);
                         return;
                     }
@@ -238,10 +251,10 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                 </BigButton>
                 <div className="grid grid-cols-2 gap-3">
                     <Field label="Amount received (₦)">
-                        <input type="number" inputMode="numeric" min={0} className={inputCls} value={paidAmount} onChange={e => setPaidAmount(e.target.value)} />
+                        <input type="number" inputMode="numeric" min={0} className={inputCls} value={paidAmount} onChange={e => { payAttempt.current = ''; setPaidAmount(e.target.value); }} />
                     </Field>
                     <Field label="Transfer reference">
-                        <input className={inputCls} value={transferRef} onChange={e => setTransferRef(e.target.value)} placeholder="from the bank alert" autoComplete="off" />
+                        <input className={inputCls} value={transferRef} onChange={e => { payAttempt.current = ''; setTransferRef(e.target.value); }} placeholder="from the bank alert" autoComplete="off" />
                     </Field>
                 </div>
                 <BigButton onClick={() => confirmPaid()} busy={busy} icon={<Check size={18} />}>Payment received: {naira(amount)}</BigButton>

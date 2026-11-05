@@ -114,6 +114,9 @@ export async function POST(request: NextRequest) {
     }
     // pay what is due now: the verified total after the cap, minus anything already paid this month
     const [s] = await commissionMonth(supabase, month, userId);
+    const { count: recent } = await supabase.from('commission_payouts').select('id', { count: 'exact', head: true })
+        .eq('user_id', userId).eq('month', month).gt('paid_at', new Date(Date.now() - 60_000).toISOString());
+    if (recent) return NextResponse.json({ error: 'Already marked paid a moment ago.' }, { status: 409 });
     const amount = s?.due ?? payableFor(s?.verified || 0).payable;
     if (amount <= 0) return NextResponse.json({ error: 'Nothing new to pay for this month' }, { status: 400 });
     const { error } = await supabase.from('commission_payouts')

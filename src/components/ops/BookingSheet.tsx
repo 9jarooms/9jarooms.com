@@ -4,12 +4,26 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { LogIn, LogOut, Banknote, CalendarDays, Pencil, ChevronDown, ChevronUp, Trash2, Ban, UserX, Share2, Unlock } from 'lucide-react';
 import {
     Sheet, StatusPill, BigButton, Field, Stepper, Chips, ContactButtons, inputCls,
-    naira, balanceOf, owes, fmtDay, shiftIso, unitLabel, waLink, holdCountdown, useLiveUpdates, type OpsRole,
+    naira, balanceOf, owes, fmtDay, shiftIso, unitLabel, waLink, holdCountdown, useLiveUpdates, serverNow, type OpsRole,
 } from './shared';
 
 const PAY_METHODS = ['Cash', 'Bank Transfer', 'POS', 'Moniepoint', 'Other'];
 
-interface Detail { booking: any; payments: any[]; paid: number; units: any[] }
+interface Detail { booking: any; payments: any[]; paid: number; units: any[]; history?: { at: string; who: string; action: string; detail: any }[] }
+
+const HISTORY_LABEL: Record<string, string> = {
+    payment_removed: 'removed a payment', refund: 'recorded a refund', total_changed: 'changed the price', agreed_price: 'set an agreed price',
+    cancelled: 'cancelled the booking', no_show: 'marked no-show', commission_reassigned: 'changed who took the booking',
+};
+function historyDetail(h: { action: string; detail: any }) {
+    const d = h.detail || {};
+    const n = (x: unknown) => `₦${Math.round(Number(x || 0)).toLocaleString('en-NG')}`;
+    if (h.action === 'payment_removed') return ` (${n(d.amount)} ${d.method || ''}${d.reference ? ` ref ${d.reference}` : ''})`;
+    if (h.action === 'refund') return ` (${n(Math.abs(Number(d.amount)))})`;
+    if (h.action === 'total_changed') return ` (${n(d.from)} → ${n(d.to)})`;
+    if (h.action === 'agreed_price') return ` (standard ${n(d.standard)}, agreed ${n(d.agreed)})`;
+    return '';
+}
 type Panel = 'none' | 'pay' | 'stay' | 'guest' | 'more';
 
 // Everything you can do to one booking, biggest buttons first:
@@ -21,7 +35,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [panel, setPanel] = useState<Panel>('none');
-    const [pay, setPay] = useState({ amount: '', method: 'Cash', reference: '' });
+    const [pay, setPay] = useState({ amount: '', method: '', reference: '' });   // no default method: staff say how it was paid
     const [stay, setStay] = useState({ unitId: '', checkIn: '', nights: 1, price: 'standard' as 'standard' | 'agreed' | 'keep', agreed: '' });
     const [guest, setGuest] = useState({ guestName: '', guestPhone: '', notes: '' });
 
@@ -44,6 +58,8 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     // someone else paid, checked in or changed this booking: show it here too
     useLiveUpdates(load);
     const payRequest = useRef('');
+    // the booking as it was when a panel was opened, to spot a colleague's change before saving over it
+    const filledFrom = useRef<Record<string, any>>({});
 
     const patch = async (payload: Record<string, unknown>): Promise<boolean> => {
         setBusy(true); setError(null);
@@ -69,7 +85,8 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
         const refund = pay.method === 'Refund';
         const amount = Number(pay.amount) * (refund ? -1 : 1);
         if (!Number(pay.amount) || Number(pay.amount) <= 0) { setError(refund ? 'Enter the amount given back' : 'Enter the amount received'); return; }
-        if (isTransferPay && !pay.reference.trim()) { setError('Type the transfer reference from the bank alert'); return; }
+        if (!pay.method) { setError('Pick how it was paid'); return; }
+        if (isTransferPay && !pay.reference.trim()) { setError('Type the reference from the bank alert or POS slip'); return; }
         if (!payRequest.current) payRequest.current = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
         setBusy(true); setError(null);
         try {
@@ -126,14 +143,22 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     const canCheckOut = b.status === 'checked_in';
     const closed = ['completed', 'cancelled', 'no_show', 'expired'].includes(b.status);
     // a transfer lock that ran out can still take the money: the server checks the room is still free
-    const lapsedLock = b.status === 'expired' || (b.status === 'pending' && !!b.expires_at && new Date(b.expires_at).getTime() < Date.now());
+    const lapsedLock = b.status === 'expired' || (b.status === 'pending' && !!b.expires_at && new Date(b.expires_at).getTime() < serverNow());
     const canRefund = role === 'admin' || role === 'customer_rep';
     const overpaid = Number(data.paid) - Number(b.total_amount);
-    const isTransferPay = /transfer|moniepoint/i.test(pay.method);
+    const isTransferPay = /transfer|moniepoint|pos/i.test(pay.method);
     const stayNights = Math.max(Number(stay.nights) || 0, 0);
     const stayCheckOut = stay.checkIn ? shiftIso(stay.checkIn, stayNights) : '';
     const autoTotal = Math.round(Number(b.price_per_night || 0) * stayNights);
-    const toggle = (p: Panel) => setPanel(panel === p ? 'none' : p);
+    const toggle = (p: Panel) => {
+        if (panel === p) { setPanel('none'); return; }
+        // open with the latest booking (a colleague may have changed it since this sheet opened)
+        if (p === 'stay') setStay({ unitId: b.room_id || '', checkIn: b.check_in || '', nights: b.nights || 1, price: 'keep', agreed: '' });
+        if (p === 'guest') setGuest({ guestName: b.guest_name || '', guestPhone: b.guest_phone || '', notes: b.notes || '' });
+        if (p === 'pay') { payRequest.current = ''; setPay({ amount: balance > 0 ? String(balance) : '', method: '', reference: '' }); }
+        filledFrom.current = { checkIn: b.check_in, checkOut: b.check_out, roomId: b.room_id, guestName: b.guest_name, guestPhone: b.guest_phone, notes: b.notes };
+        setPanel(p);
+    };
 
     const checkIn = () => {
         if (b.check_in > today) {
@@ -149,6 +174,13 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     };
     const saveStay = async () => {
         if (!stay.checkIn || stayNights < 1) { setError('Pick a check-in date and at least 1 night'); return; }
+        const f = filledFrom.current;
+        if (f.checkIn && (f.checkIn !== b.check_in || f.checkOut !== b.check_out || f.roomId !== b.room_id)) {
+            setStay({ unitId: b.room_id || '', checkIn: b.check_in || '', nights: b.nights || 1, price: 'keep', agreed: '' });
+            filledFrom.current = { ...f, checkIn: b.check_in, checkOut: b.check_out, roomId: b.room_id };
+            setError('Someone else just changed this stay. The form now shows the latest dates: check and save again.');
+            return;
+        }
         // only what changed, so this never undoes someone else's edit
         const payload: Record<string, unknown> = {};
         if (stay.unitId !== b.room_id) payload.roomId = stay.unitId;
@@ -163,7 +195,13 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
         if (await patch(payload)) setPanel('none');
     };
     const saveGuest = async () => {
-        const ok = await patch({ guestName: guest.guestName, guestPhone: guest.guestPhone || null, notes: guest.notes || null });
+        // only the fields this person edited
+        const f = filledFrom.current, payload: Record<string, unknown> = {};
+        if (guest.guestName !== (f.guestName || '')) payload.guestName = guest.guestName;
+        if (guest.guestPhone !== (f.guestPhone || '')) payload.guestPhone = guest.guestPhone || null;
+        if (guest.notes !== (f.notes || '')) payload.notes = guest.notes || null;
+        if (!Object.keys(payload).length) { setPanel('none'); return; }
+        const ok = await patch(payload);
         if (ok) setPanel('none');
     };
 
@@ -263,7 +301,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                             onChange={m => { payRequest.current = ''; setPay({ ...pay, method: m }); }} />
                     </Field>
                     {(isTransferPay || pay.method === 'Refund') && (
-                        <Field label={pay.method === 'Refund' ? 'Refund reference (optional)' : 'Transfer reference'} hint={isTransferPay ? 'From the bank alert. The same transfer can never be recorded twice.' : undefined}>
+                        <Field label={pay.method === 'Refund' ? 'Refund reference (optional)' : 'Reference'} hint={isTransferPay ? 'From the bank alert or POS slip (letters and numbers). The same payment can never be recorded twice.' : undefined}>
                             <input className={inputCls} value={pay.reference} onChange={e => { payRequest.current = ''; setPay({ ...pay, reference: e.target.value }); }} autoComplete="off" />
                         </Field>
                     )}
@@ -311,6 +349,17 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                         </div>
                     )}
                 </>
+            )}
+
+            {(role === 'admin' || role === 'customer_rep') && (data.history || []).length > 0 && (
+                <details className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[13px]">
+                    <summary className="font-semibold text-gray-700 cursor-pointer">History · who changed what ({data.history!.length})</summary>
+                    <ul className="mt-2 space-y-1.5 text-gray-600">
+                        {data.history!.map((h, i) => (
+                            <li key={i}><span className="text-gray-400">{new Date(h.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span> · <b>{h.who}</b> · {HISTORY_LABEL[h.action] || h.action.replace(/_/g, ' ')}{historyDetail(h)}</li>
+                        ))}
+                    </ul>
+                </details>
             )}
 
             <Row onClick={() => toggle('guest')} icon={<Pencil size={18} />} label="Guest details & notes" open={panel === 'guest'} />

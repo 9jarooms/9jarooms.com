@@ -138,6 +138,24 @@ export async function GET(request: NextRequest) {
         blocks: blocks || [],
         held: held || [],
         lapsed: (lapsedRaw || []).map(b => ({ ...b, paid: 0 })),
+        refundsDue: await refundsDue(supabase, propertyIds),
         serverNow: Date.now(),
     });
+}
+
+// Money to give back: any booking (cancelled ones included) where more was received than the stay costs
+async function refundsDue(supabase: any, propertyIds: string[]) {
+    const since = new Date(Date.now() - 120 * 86_400_000).toISOString();
+    const { data } = await supabase.from('booking_payments')
+        .select('booking_id, amount, booking:bookings(id, guest_name, guest_phone, total_amount, status, property_id, room_id, check_in, check_out, nights, booking_source, notes, room_type_id, guest_email, expires_at)')
+        .gte('created_at', since);
+    const sums = new Map<string, { b: any; paid: number }>();
+    for (const r of (data || []) as any[]) {
+        if (!r.booking || !propertyIds.includes(r.booking.property_id)) continue;
+        const e = sums.get(r.booking_id) || { b: r.booking, paid: 0 };
+        e.paid += Number(r.amount); sums.set(r.booking_id, e);
+    }
+    return [...sums.values()]
+        .map(({ b, paid }) => ({ ...b, paid, total_amount: ['cancelled', 'no_show', 'expired'].includes(b.status) ? 0 : Number(b.total_amount) }))
+        .filter(b => b.paid > Number(b.total_amount) + 1);
 }

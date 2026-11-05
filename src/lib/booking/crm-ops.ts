@@ -105,7 +105,7 @@ export async function listBookings(supabase: Db, p: ListBookingsParams): Promise
 // ------------------------------------------------------------------
 // Detail
 // ------------------------------------------------------------------
-export async function getBookingDetail(supabase: Db, id: string): Promise<OpsResult<{ booking: any; payments: any[]; paid: number; units: any[] }>> {
+export async function getBookingDetail(supabase: Db, id: string): Promise<OpsResult<{ booking: any; payments: any[]; paid: number; units: any[]; history: any[] }>> {
     const { data: booking, error } = await supabase
         .from('bookings')
         .select('*, room:rooms(id, name, unit_code, room_type_id), property:properties(id, name)')
@@ -133,7 +133,14 @@ export async function getBookingDetail(supabase: Db, id: string): Promise<OpsRes
         .eq('is_active', true)
         .order('unit_code');
 
-    return ok({ booking, payments: payments || [], paid, units: units || [] });
+    const { data: log } = await supabase.from('audit_log').select('at, actor, action, detail').eq('booking_id', id).order('at', { ascending: false }).limit(30);
+    const names = new Map<string, string>();
+    for (const actor of [...new Set((log || []).map(l => l.actor).filter(Boolean))] as string[]) {
+        const { data: u } = await supabase.auth.admin.getUserById(actor);
+        names.set(actor, u?.user?.user_metadata?.name || (u?.user?.email || '').split('@')[0] || 'someone');
+    }
+    const history = (log || []).map(l => ({ at: l.at, who: l.actor ? names.get(l.actor) || 'someone' : 'system', action: l.action, detail: l.detail }));
+    return ok({ booking, payments: payments || [], paid, units: units || [], history });
 }
 
 // ------------------------------------------------------------------

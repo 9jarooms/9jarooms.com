@@ -34,6 +34,7 @@ export interface OpsToday {
     roomTypes: OpsRoomType[]; units: OpsUnit[];
     bookings: OpsBooking[]; blocks: OpsBlock[]; held: OpsHeld[];
     lapsed?: OpsBooking[];      // transfer locks that ran out in the last hour (money may still come)
+    refundsDue?: OpsBooking[];  // more received than the stay costs (cancelled bookings count as ₦0)
     serverNow?: number;
 }
 export type UnitKind = 'free' | 'occupied' | 'arriving' | 'cleaning' | 'maintenance';
@@ -354,6 +355,8 @@ export function ContactButtons({ phone, name, message, compact }: {
 // phone clocks can be wrong: countdowns use the server time (set whenever Today loads)
 let clockSkew = 0;
 export function syncClock(serverNow?: number) { if (serverNow) clockSkew = serverNow - Date.now(); }
+export function serverNow() { return Date.now() + clockSkew; }
+export function newRequestId() { return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`; }
 export function holdCountdown(b: { status: string; expires_at?: string | null }, now = Date.now() + clockSkew) {
     if (b.status !== 'pending' || !b.expires_at) return null;
     const ms = new Date(b.expires_at).getTime() - now;

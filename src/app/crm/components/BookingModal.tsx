@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, MessageCircle, Trash2 } from 'lucide-react';
 
 export function naira(n: number) {
@@ -44,8 +44,10 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
     const [error, setError] = useState<string | null>(null);
     const [form, setForm] = useState<any>({});
     const [payAmount, setPayAmount] = useState('');
-    const [payMethod, setPayMethod] = useState(PAY_METHODS[0]);
+    const [payMethod, setPayMethod] = useState('');
     const [payRef, setPayRef] = useState('');
+    // one id per payment attempt (same id on a retry, a new one when anything is changed)
+    const payAttempt = useRef('');
     // Stay editor: move unit, extend / change dates, optional price recalculation
     const [stay, setStay] = useState<{ unitId: string; checkIn: string; nights: number; autoPrice: boolean }>({
         unitId: '', checkIn: '', nights: 1, autoPrice: true,
@@ -128,18 +130,20 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
     const addPayment = async (force = false): Promise<void> => {
         const typed = Number(payAmount);
         if (!typed || typed <= 0) return;
-        if (/transfer|moniepoint/i.test(payMethod) && !payRef.trim()) { setError('Type the transfer reference from the bank alert'); return; }
+        if (!payMethod) { setError('Pick how it was paid'); return; }
+        if (/transfer|moniepoint|pos/i.test(payMethod) && !payRef.trim()) { setError('Type the reference from the bank alert or POS slip'); return; }
+        if (!payAttempt.current) payAttempt.current = crypto.randomUUID();
         setBusy(true); setError(null);
         const res = await fetch(`/api/crm/bookings/${bookingId}/payments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ amount: payMethod === 'Refund' ? -typed : typed, method: payMethod, reference: payRef.trim() || null,
-                requestId: `${bookingId}-${typed}-${payMethod}-${payRef.trim()}-${force ? 'f' : ''}`, force }),
+                requestId: payAttempt.current, force }),
         });
         setBusy(false);
-        if (res.ok) { setPayAmount(''); setPayRef(''); await load(); onChanged(); return; }
+        if (res.ok) { payAttempt.current = ''; setPayAmount(''); setPayRef(''); await load(); onChanged(); return; }
         const j = await res.json();
-        if (!force && ['duplicate', 'overpay'].includes(j.details?.warning) && confirm(j.error)) return addPayment(true);
+        if (!force && ['duplicate', 'overpay'].includes(j.details?.warning)) { payAttempt.current = ''; if (confirm(j.error)) return addPayment(true); }
         setError(j.error);
     };
 
@@ -353,14 +357,15 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
                             ))}
                         </ul>
                         <div className="flex flex-wrap gap-2">
-                            <input type="number" min={0} placeholder="Amount (₦)" value={payAmount} onChange={e => setPayAmount(e.target.value)}
+                            <input type="number" min={0} placeholder="Amount (₦)" value={payAmount} onChange={e => { payAttempt.current = ''; setPayAmount(e.target.value); }}
                                 className="flex-1 min-w-[120px] border border-stone-300 rounded-md px-2.5 py-2 text-sm" />
-                            <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
+                            <select value={payMethod} onChange={e => { payAttempt.current = ''; setPayMethod(e.target.value); }}
                                 className="border border-stone-300 rounded-md px-2 py-1.5 text-sm bg-white">
+                                <option value="">How was it paid?</option>
                                 {PAY_METHODS.map(m => <option key={m}>{m}</option>)}
                             </select>
-                            {/transfer|moniepoint|refund/i.test(payMethod) && (
-                                <input placeholder={payMethod === 'Refund' ? 'Refund reference (optional)' : 'Transfer reference'} value={payRef} onChange={e => setPayRef(e.target.value)}
+                            {/transfer|moniepoint|pos|refund/i.test(payMethod) && (
+                                <input placeholder={payMethod === 'Refund' ? 'Refund reference (optional)' : 'Transfer reference'} value={payRef} onChange={e => { payAttempt.current = ''; setPayRef(e.target.value); }}
                                     className="flex-1 min-w-[140px] border border-stone-300 rounded-md px-2.5 py-2 text-sm" />
                             )}
                             <button disabled={busy || !payAmount} onClick={() => addPayment()}
