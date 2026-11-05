@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { clearOpsCache } from '@/components/ops/shared';
 import { Home, Search, Building2, UserCircle, LogOut, Smartphone, X, Layers, ClipboardList, GraduationCap, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
@@ -18,7 +19,7 @@ const navItems = [
 const moreItems = [
     { href: '/dashboard/training', label: 'Training', icon: GraduationCap },
     { href: '/dashboard/properties', label: 'Properties', icon: Building2 },
-    { href: '/dashboard/account', label: 'Account', icon: UserCircle },
+    { href: '/dashboard/account', label: 'Account & password', icon: UserCircle },
 ];
 
 const ROLE_NAME: Record<string, string> = { admin: 'Admin', customer_rep: 'Customer rep', caretaker: 'Caretaker' };
@@ -68,6 +69,7 @@ export default function DashboardShell({ user, role = 'caretaker', caretakerName
     };
 
     const handleLogout = async () => {
+        clearOpsCache();
         const supabase = createClient();
         await supabase.auth.signOut();
         router.push('/login');
@@ -92,6 +94,9 @@ export default function DashboardShell({ user, role = 'caretaker', caretakerName
                     ) : (
                         <span className="text-[12px] font-semibold text-gray-500 truncate max-w-[34vw]">{caretakerName}</span>
                     )}
+                    <Link href="/dashboard/account" aria-label="My account and password" className={`w-9 h-9 flex items-center justify-center rounded-full ${pathname.startsWith('/dashboard/account') ? 'text-green-600 bg-green-50' : 'text-gray-500 hover:bg-gray-100'}`}>
+                        <UserCircle size={19} />
+                    </Link>
                     <button type="button" onClick={handleLogout} aria-label="Sign out" className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
                         <LogOut size={18} />
                     </button>

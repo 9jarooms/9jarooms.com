@@ -13,8 +13,11 @@ export default function LoginPage() {
 
     // If the input contains @ it's treated as an email; otherwise it's a username
     // and we resolve it to the internal auth email ({username}@9jarooms.internal)
-    const resolveAuthEmail = (input: string) =>
-        input.includes('@') ? input : `${input.toLowerCase()}@9jarooms.internal`;
+    // trimmed: phone keyboards often add a space after the username
+    const resolveAuthEmail = (raw: string) => {
+        const input = raw.trim();
+        return input.includes('@') ? input : `${input.toLowerCase()}@9jarooms.internal`;
+    };
 
     const redirectBasedOnRole = async (accessToken: string) => {
         try {
@@ -110,7 +113,9 @@ export default function LoginPage() {
             });
 
             if (authError || !data.session) {
-                setError(authError?.message || 'Login failed');
+                setError(/invalid login/i.test(authError?.message || '')
+                    ? (loginId.includes('@') ? 'Wrong email or password.' : 'Wrong username or password. Forgot it? Ask an admin to set a new one.')
+                    : authError?.message || 'Login failed');
                 setLoading(false);
                 return;
             }

@@ -57,11 +57,13 @@ export async function updateSession(request: NextRequest) {
         }
 
         // Fetch the user's role from the database
-        const { data: roleData } = await supabase
+        // someone can hold two roles: use the strongest (single() failed for them and bounced them out)
+        const { data: roleRows } = await supabase
             .from('user_roles')
             .select('role')
-            .eq('user_id', user.id)
-            .single();
+            .eq('user_id', user.id);
+        const RANK = ['admin', 'customer_rep', 'caretaker', 'call_operator', 'owner'];
+        const roleData = (roleRows || []).sort((a: { role: string }, b: { role: string }) => RANK.indexOf(a.role) - RANK.indexOf(b.role))[0];
 
         const userRole = roleData?.role; // undefined/null means they are a normal customer
 

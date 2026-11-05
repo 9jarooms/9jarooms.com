@@ -80,6 +80,7 @@ export default function ForgotPasswordPage() {
 
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 ml-1 mb-2 block">Email Address</label>
+                                    <p className="text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">Staff who sign in with a username: there is no email to reset. Ask an admin to set a new password in Settings.</p>
                                     <input
                                         type="email"
                                         value={email}

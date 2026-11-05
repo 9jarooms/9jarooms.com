@@ -3,8 +3,8 @@ import { requireCrm } from '@/lib/auth/require-crm';
 import { z } from 'zod';
 import { INTERNAL_DOMAIN, usernameOf } from '@/lib/staff-names';
 
-// Team access: admins, customer reps and caretakers. Anyone in the console can add reps and caretakers;
-// only an admin can add or remove an admin.
+// Team access: admins, customer reps and caretakers. Only an admin creates or removes logins (every
+// login earns commission, so nobody else can make one).
 const ROLES = ['admin', 'customer_rep', 'caretaker'] as const;
 export async function GET() {
     const auth = await requireCrm();
@@ -46,9 +46,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid input' }, { status: 400 });
     const { username, password, name, role } = parsed.data;
     const email = `${username}@${INTERNAL_DOMAIN}`;
-    if (role === 'admin' && auth.role !== 'admin') {
-        return NextResponse.json({ error: 'Only an admin can create another admin' }, { status: 403 });
-    }
+    if (auth.role !== 'admin') return NextResponse.json({ error: 'Only an admin can create logins' }, { status: 403 });
 
     const { data: created, error: createError } = await supabase.auth.admin.createUser({
         email,
@@ -95,9 +93,7 @@ export async function DELETE(request: NextRequest) {
     const userId = searchParams.get('userId');
     const role = (searchParams.get('role') || 'customer_rep') as typeof ROLES[number];
     if (!ROLES.includes(role)) return NextResponse.json({ error: 'Unknown role' }, { status: 400 });
-    if (role === 'admin' && auth.role !== 'admin') {
-        return NextResponse.json({ error: 'Only an admin can remove an admin' }, { status: 403 });
-    }
+    if (auth.role !== 'admin') return NextResponse.json({ error: 'Only an admin can remove access' }, { status: 403 });
     if (!userId) return NextResponse.json({ error: 'userId is required' }, { status: 400 });
     if (userId === auth.user!.id) {
         return NextResponse.json({ error: 'You cannot remove your own access' }, { status: 400 });

@@ -25,6 +25,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (body.unitCode !== undefined) update.unit_code = body.unitCode || null;
     if (body.name !== undefined) update.name = body.name;
     if (body.pricePerNight !== undefined) update.price_per_night = body.pricePerNight;
+    // switching a room off goes through Remove (it checks for current and upcoming bookings)
+    if (body.isActive === false) return NextResponse.json({ error: 'Use Remove on the Rooms page to take a room out of use' }, { status: 400 });
     if (body.isActive !== undefined) update.is_active = body.isActive;
 
     if (Object.keys(update).length === 0) return NextResponse.json({ success: true, unchanged: true });

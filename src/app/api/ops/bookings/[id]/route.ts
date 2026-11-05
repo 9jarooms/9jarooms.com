@@ -52,5 +52,5 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }
     }
 
-    return opsResponse(await updateBooking(auth.adminClient, id, parsed.data, auth.user.id));
+    return opsResponse(await updateBooking(auth.adminClient, id, parsed.data, auth.user.id, auth.role));
 }

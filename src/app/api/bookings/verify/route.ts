@@ -8,6 +8,20 @@ import { inngest } from '@/lib/inngest/client';
 // Called by /booking/confirm when Paystack redirects the guest back.
 // Verifies with Paystack and confirms the booking if the webhook has not
 // already done so (whichever arrives first wins; the other is a no-op).
+// The confirm page is reachable by anyone holding a reference, so it gets only what it shows:
+// dates, the guest's own email and the property details for arrival. No phone, ID or internal fields.
+function publicView(b: any) {
+    if (!b) return b;
+    const p = b.property || {};
+    return {
+        id: b.id, status: b.status, check_in: b.check_in, check_out: b.check_out, nights: b.nights, total_amount: b.total_amount,
+        guest_name: b.guest_name, guest_email: b.guest_email, paystack_reference: b.paystack_reference,
+        room: b.room ? { name: b.room.name, unit_code: b.room.unit_code } : null,
+        property: { name: p.name, address: p.address, area: p.area, city: p.city, check_in_time: p.check_in_time, check_out_time: p.check_out_time,
+            check_in_instructions: ['paid', 'checked_in', 'completed'].includes(b.status) ? p.check_in_instructions : null },
+    };
+}
+
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const reference = searchParams.get('reference');
@@ -30,7 +44,7 @@ export async function GET(request: NextRequest) {
         }
 
         if (['paid', 'checked_in', 'completed'].includes(booking.status)) {
-            return NextResponse.json({ status: 'success', booking });
+            return NextResponse.json({ status: 'success', booking: publicView(booking) });
         }
 
         const verification = await verifyPayment(reference);
@@ -47,7 +61,7 @@ export async function GET(request: NextRequest) {
         if (refundNeeded) {
             console.error(`[Verify] ${reference} paid after the hold expired and the unit is taken — refund needed`);
             await notifyCaretakersRefundNeeded(supabase, confirmed.id);
-            return NextResponse.json({ status: 'refund_needed', booking: confirmed });
+            return NextResponse.json({ status: 'refund_needed', booking: publicView(confirmed) });
         }
 
         if (!alreadyPaid) {
@@ -73,7 +87,7 @@ export async function GET(request: NextRequest) {
             .eq('paystack_reference', reference)
             .single();
 
-        return NextResponse.json({ status: 'success', booking: updatedBooking });
+        return NextResponse.json({ status: 'success', booking: publicView(updatedBooking) });
     } catch (error: any) {
         console.error('API /bookings/verify Error:', error);
         return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });

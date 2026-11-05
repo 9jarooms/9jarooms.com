@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 import type { createAdminClient } from '@/lib/supabase/server';
-import { claimDates, roomsOfBooking, stayDates } from '@/lib/booking/hold';
+import { reclaim, roomsOfBooking, stayDates } from '@/lib/booking/hold';
 
 // Everything that must happen when Paystack says a booking is paid.
 // Called directly from the Paystack webhook and from /api/bookings/verify
@@ -41,88 +41,67 @@ export async function confirmPaidBooking(supabase: Db, input: {
     amountKobo?: number | null;
     raw?: unknown;
 }): Promise<PaidBookingResult> {
-    let query = supabase
-        .from('bookings')
-        .select('*, room:rooms(id, name, unit_code, room_type_id), room_type:room_types(name), property:properties(*, owner:owners(name, email))');
-    query = input.bookingId ? query.eq('id', input.bookingId) : query.eq('paystack_reference', input.reference);
-    const { data: booking, error } = await query.single();
-    if (error || !booking) {
-        throw new Error(`Booking not found for ${input.bookingId || input.reference}`);
+    const select = '*, room:rooms(id, name, unit_code, room_type_id), room_type:room_types(name), property:properties(*, owner:owners(name, email))';
+    // the payment reference is the key; a booking id from metadata is only trusted when it matches it
+    let { data: booking } = await supabase.from('bookings').select(select).eq('paystack_reference', input.reference).maybeSingle();
+    if (!booking && input.bookingId) {
+        const { data: byId } = await supabase.from('bookings').select(select).eq('id', input.bookingId).maybeSingle();
+        if (byId && (!byId.paystack_reference || byId.paystack_reference === input.reference)) booking = byId;
     }
+    if (!booking) throw new Error(`Booking not found for ${input.reference}`);
 
-    if (['paid', 'checked_in', 'completed'].includes(booking.status)) {
+    // each Paystack payment is processed once: a replay (webhook retry, the guest reopening the
+    // confirm page later, even after a cancel and refund) changes nothing
+    const { data: existingTx } = await supabase.from('transactions').select('id')
+        .eq('paystack_reference', input.reference).eq('paystack_event', 'charge.success').maybeSingle();
+    if (existingTx || ['paid', 'checked_in', 'completed'].includes(booking.status)) {
         return { booking, alreadyPaid: true };
     }
 
-    // Paystack links outlive the hold. If this booking already expired (or
-    // was cancelled) its nights were released, so claim them again before
-    // calling it paid. Lost them to someone else: log the money, cancel,
-    // and flag a refund rather than double-book the unit.
-    let refundNeeded = false;
-    if (['expired', 'cancelled', 'no_show'].includes(booking.status)) {
-        const roomIds = await roomsOfBooking(supabase, booking);
-        const conflicts = await claimDates(supabase, roomIds, stayDates(booking.check_in, booking.check_out), 'booked', booking.id);
-        if (conflicts.length > 0) {
-            await supabase.from('availability').delete().eq('booking_id', booking.id);
-            refundNeeded = true;
-        }
-    }
+    const amount = input.amountKobo != null ? input.amountKobo / 100 : Number(booking.total_amount);
 
-    // transaction log (once per reference)
-    const { data: existingTx } = await supabase
-        .from('transactions')
-        .select('id')
-        .eq('paystack_reference', input.reference)
-        .eq('paystack_event', 'charge.success')
-        .maybeSingle();
-    if (!existingTx) {
-        await supabase.from('transactions').insert({
-            paystack_reference: input.reference,
-            paystack_event: 'charge.success',
-            amount: input.amountKobo != null ? input.amountKobo / 100 : Number(booking.total_amount),
-            currency: 'NGN',
-            status: 'success',
-            booking_id: booking.id,
-            raw_payload: input.raw ?? null,
-        });
-    }
+    // Whatever the status, the nights must be ours before calling it paid: a hold can run out while
+    // the guest is on Paystack and the room can be taken. Lost them: log the money, flag a refund.
+    const roomIds = await roomsOfBooking(supabase, booking);
+    const conflicts = await reclaim(supabase, booking.id, roomIds, stayDates(booking.check_in, booking.check_out), 'booked');
+    const refundNeeded = conflicts.length > 0;
+
+    // the money, in the ledger once (unique per Paystack reference)
+    const { error: ledgerErr } = await supabase.from('booking_payments').insert({
+        booking_id: booking.id, amount, method: 'Paystack', note: `Paid online · ref ${input.reference}`, paystack_reference: input.reference,
+    });
+    if (ledgerErr && !/duplicate|unique/i.test(ledgerErr.message)) throw new Error(`Ledger write failed: ${ledgerErr.message}`);
+    const { data: rows } = await supabase.from('booking_payments').select('amount').eq('booking_id', booking.id);
+    const paidSoFar = (rows || []).reduce((t, r) => t + Number(r.amount), 0);
+    const total = Number(booking.total_amount);
+
+    const notes: string[] = [];
+    if (booking.status === 'cancelled') notes.push(`PAID ONLINE AFTER THE BOOKING WAS CANCELLED (${input.reference}): check with the guest.`);
+    if (paidSoFar > total + 1) notes.push(`OVERPAID by ₦${Math.round(paidSoFar - total).toLocaleString('en-NG')} (${input.reference}): refund the difference.`);
+    if (paidSoFar + 1 < total) notes.push(`PART-PAID online: ₦${Math.round(amount).toLocaleString('en-NG')} of ₦${Math.round(total).toLocaleString('en-NG')} (${input.reference}).`);
 
     if (refundNeeded) {
-        const note = `PAID AFTER HOLD EXPIRED (${input.reference}): unit no longer free, refund or move the guest.`;
-        await supabase
-            .from('bookings')
-            .update({ status: 'cancelled', expires_at: null, notes: booking.notes ? `${booking.notes}\n${note}` : note })
+        notes.unshift(`PAID AFTER HOLD EXPIRED (${input.reference}): unit no longer free, refund or move the guest.`);
+        await supabase.from('bookings')
+            .update({ status: 'cancelled', expires_at: null, notes: [booking.notes, ...notes].filter(Boolean).join('\n') })
             .eq('id', booking.id);
-        return { booking: { ...booking, status: 'cancelled' }, alreadyPaid: false, refundNeeded: true };
+    } else {
+        const status = paidSoFar + 1 >= total ? 'paid' : 'confirmed';
+        const { error: upErr } = await supabase.from('bookings')
+            .update({ status, expires_at: null, ...(notes.length ? { notes: [booking.notes, ...notes].filter(Boolean).join('\n') } : {}) })
+            .eq('id', booking.id);
+        if (upErr) throw new Error(`Failed to mark booking paid: ${upErr.message}`);
+        booking.status = status;
     }
 
-    const { error: upErr } = await supabase
-        .from('bookings')
-        .update({ status: 'paid', expires_at: null })
-        .eq('id', booking.id);
-    if (upErr) throw new Error(`Failed to mark booking paid: ${upErr.message}`);
+    // logged last: if anything above failed, a retry processes the payment again
+    await supabase.from('transactions').insert({
+        paystack_reference: input.reference, paystack_event: 'charge.success', amount, currency: 'NGN',
+        status: 'success', booking_id: booking.id, raw_payload: input.raw ?? null,
+    });
 
-    await supabase
-        .from('availability')
-        .update({ status: 'booked' })
-        .eq('booking_id', booking.id)
-        .eq('status', 'held');
-
-    // ledger row so the CRM / Today screen show it as paid in full
-    const { count } = await supabase
-        .from('booking_payments')
-        .select('id', { count: 'exact', head: true })
-        .eq('booking_id', booking.id);
-    if (!count) {
-        await supabase.from('booking_payments').insert({
-            booking_id: booking.id,
-            amount: input.amountKobo != null ? input.amountKobo / 100 : Number(booking.total_amount),
-            method: 'Paystack',
-            note: `Paid online · ref ${input.reference}`,
-        });
-    }
-
-    return { booking: { ...booking, status: 'paid' }, alreadyPaid: false };
+    if (refundNeeded) return { booking: { ...booking, status: 'cancelled' }, alreadyPaid: false, refundNeeded: true };
+    return { booking, alreadyPaid: false };
 }
 
 function resendClient() {

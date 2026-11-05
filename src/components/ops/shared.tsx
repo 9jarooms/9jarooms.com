@@ -461,13 +461,24 @@ let pulseChannel: { unsubscribe: () => unknown } | null = null;
 function startPulse() {
     if (pulseChannel || typeof window === 'undefined') return;
     const supabase = createClient();
-    pulseChannel = supabase.channel('ops-pulse')
+    const ch = supabase.channel('ops-pulse')
         .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'ops_pulse' }, () => {
             memCache.clear();                     // anything cached may now be out of date
             pulseListeners.forEach(fn => fn());
-        })
-        .subscribe();
+        });
+    pulseChannel = ch;
+    ch.subscribe((status: string) => {
+        // the socket dropped (bad signal, phone asleep): start a new one shortly and catch up on what was missed
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            if (pulseChannel !== ch) return;
+            pulseChannel = null;
+            supabase.removeChannel(ch);
+            setTimeout(() => { if (pulseListeners.size) { startPulse(); pulseListeners.forEach(fn => fn()); } }, 5000);
+        }
+    });
 }
+// Reload when anyone changes a booking, payment or night. Also, as a safety net if live updates are
+// down: every minute while the screen is visible, and whenever the phone comes back to the app.
 export function useLiveUpdates(onChange: () => void, enabled = true) {
     const ref = useRef(onChange);
     useEffect(() => { ref.current = onChange; }, [onChange]);
@@ -478,6 +489,18 @@ export function useLiveUpdates(onChange: () => void, enabled = true) {
         const fire = () => { if (timer) clearTimeout(timer); timer = setTimeout(() => ref.current(), 350); };
         pulseListeners.add(fire);
         startPulse();
-        return () => { pulseListeners.delete(fire); if (timer) clearTimeout(timer); };
+        const visible = () => { if (document.visibilityState === 'visible') fire(); };
+        const tick = setInterval(visible, 60000);
+        document.addEventListener('visibilitychange', visible);
+        return () => {
+            pulseListeners.delete(fire); if (timer) clearTimeout(timer);
+            clearInterval(tick); document.removeEventListener('visibilitychange', visible);
+        };
     }, [enabled]);
+}
+
+// Signing out on a shared phone: the next person must not see the last person's guests
+export function clearOpsCache() {
+    memCache.clear();
+    try { Object.keys(sessionStorage).filter(k => k.startsWith('swr:')).forEach(k => sessionStorage.removeItem(k)); } catch { /* ignore */ }
 }

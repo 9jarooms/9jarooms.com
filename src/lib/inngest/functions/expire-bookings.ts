@@ -27,32 +27,26 @@ export const expirePendingBookings = (inngest as any).createFunction(
             return { expired: 0 };
         }
 
-        // Step 2: Mark bookings as expired
-        await step.run('mark-expired', async () => {
+        // Step 2: expire them, but only those still unpaid and overdue now (a payment may have
+        // landed since step 1), and release the held nights of exactly those.
+        const released = await step.run('mark-expired-and-release', async () => {
             const ids = expiredBookings.map((b: any) => b.id);
-
-            const { error } = await supabase
+            const { data, error } = await supabase
                 .from('bookings')
                 .update({ status: 'expired' })
-                .in('id', ids);
-
+                .in('id', ids)
+                .eq('status', 'pending')
+                .lt('expires_at', new Date().toISOString())
+                .select('id');
             if (error) throw new Error(`Failed to expire bookings: ${error.message}`);
+            const done = (data || []).map((b: any) => b.id);
+            if (done.length) {
+                const { error: relErr } = await supabase.from('availability').delete().in('booking_id', done).eq('status', 'held');
+                if (relErr) throw new Error(`Failed to release dates: ${relErr.message}`);
+            }
+            return done.length;
         });
 
-        // Step 3: Release held dates
-        await step.run('release-dates', async () => {
-            const ids = expiredBookings.map((b: any) => b.id);
-
-            // Delete held availability entries (they go back to available)
-            const { error } = await supabase
-                .from('availability')
-                .delete()
-                .in('booking_id', ids)
-                .eq('status', 'held');
-
-            if (error) throw new Error(`Failed to release dates: ${error.message}`);
-        });
-
-        return { expired: expiredBookings.length };
+        return { expired: released };
     }
 );

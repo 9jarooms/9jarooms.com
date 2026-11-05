@@ -19,5 +19,5 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return NextResponse.json({ error: 'Invalid input', details: parsed.error.format() }, { status: 400 });
     }
 
-    return opsResponse(await updateBooking(auth.adminClient!, id, parsed.data, auth.user!.id));
+    return opsResponse(await updateBooking(auth.adminClient!, id, parsed.data, auth.user!.id, auth.role));
 }

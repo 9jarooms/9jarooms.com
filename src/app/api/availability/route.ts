@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
         let query = supabase
             .from('availability')
-            .select('*')
+            .select('room_id, date, status')   // never booking ids: they lead to guest details
             .eq('room_id', roomId)
             .order('date', { ascending: true });
 

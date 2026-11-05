@@ -76,6 +76,8 @@ export default function FindRoomPanel({ data, onHold }: {
     };
 
     const free = (groups || []).filter(g => g.units.length > 0);
+    // the website link only works for rooms that are on the website
+    const shareable = free.filter(g => !g.hidden);
     const full = (groups || []).filter(g => g.units.length === 0);
 
     return (
@@ -96,14 +98,14 @@ export default function FindRoomPanel({ data, onHold }: {
                 </p>
             </div>
 
-            {free.length > 1 && (
+            {shareable.length > 1 && (
                 <div className="rounded-2xl bg-gradient-to-br from-green-600 to-green-700 p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-semibold uppercase tracking-widest text-green-200">Send to the guest</p>
-                        <p className="font-semibold text-lg leading-snug mt-1">{free.length} options free for {stayLabel}</p>
+                        <p className="font-semibold text-lg leading-snug mt-1">{shareable.length} options on the website for {stayLabel}</p>
                         <p className="text-white/70 text-sm mt-1">One message with every option and its booking link. Nothing is held until they pay.</p>
                     </div>
-                    <button type="button" onClick={() => share(messageForAll(free))}
+                    <button type="button" onClick={() => share(messageForAll(shareable))}
                         className="shrink-0 flex items-center justify-center gap-2 px-4 py-3 bg-white text-green-700 hover:bg-green-50 rounded-xl text-sm font-semibold transition-all shadow-sm">
                         <Share2 size={16} /> Share all on WhatsApp
                     </button>
@@ -145,14 +147,14 @@ export default function FindRoomPanel({ data, onHold }: {
                     <p className="mt-3 text-xs text-gray-400 truncate">Free units: {g.units.map(u => u.label).join(', ')}</p>
 
                     <div className="mt-4 grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => share(messageFor(g))}
-                            className="h-11 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-sm btn-press">
+                        <button type="button" disabled={g.hidden} title={g.hidden ? 'Not on the website: lock it for the guest instead' : undefined} onClick={() => share(messageFor(g))}
+                            className="h-11 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-sm btn-press disabled:opacity-40 disabled:cursor-not-allowed">
                             <Share2 size={16} /> Share option
                         </button>
                         <button type="button"
                             onClick={() => onHold({ unitId: g.units[0].id, date: checkIn, nights, mode: 'hold' })}
                             className="h-11 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-sm btn-press">
-                            <Lock size={16} /> Hold a unit
+                            <Lock size={16} /> Lock 15 min
                         </button>
                     </div>
                     <button type="button" onClick={() => copy(g.link, g.key)}

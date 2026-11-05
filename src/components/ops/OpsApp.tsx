@@ -198,6 +198,11 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
 
     return (
         <div className="max-w-2xl mx-auto">
+            {error && data && (
+                <p className="mb-3 text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                    No connection: this is the last saved view and may be out of date. It updates by itself when the signal is back.
+                </p>
+            )}
             {/* header */}
             <div className="mb-4">
                 <div className="flex items-center gap-2">

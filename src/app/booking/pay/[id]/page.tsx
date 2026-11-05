@@ -23,6 +23,8 @@ export default async function BookingPayPage({ params }: Props) {
     if (booking.status === 'paid') {
         redirect(`/booking/confirm?reference=${booking.paystack_reference}`);
     }
+    // only an unpaid lock that is still running can be paid here (no paying for a room that was let go)
+    const active = booking.status === 'pending' && (!booking.expires_at || new Date(booking.expires_at).getTime() > Date.now());
 
     const formatPrice = (price: number) =>
         new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(price);
@@ -73,7 +75,14 @@ export default async function BookingPayPage({ params }: Props) {
                                 <p>Please complete payment within 15 minutes to secure your reservation. This link expires soon.</p>
                             </div>
 
-                            {hasPaymentUrl ? (
+                            {!active ? (
+                                <div className="text-center text-gray-700 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                    <p className="font-medium mb-1">This payment link is no longer active</p>
+                                    <p className="text-sm text-gray-500">{booking.status === 'confirmed' || booking.status === 'checked_in' || booking.status === 'completed'
+                                        ? 'This booking is already confirmed. Nothing more to pay here.'
+                                        : 'The 15 minutes to pay have passed and the room was released. Please contact 9jaRooms on WhatsApp to book again.'}</p>
+                                </div>
+                            ) : hasPaymentUrl ? (
                                 <a
                                     href={booking.paystack_authorization_url}
                                     className="block w-full bg-green-500 hover:bg-green-600 text-white text-center font-bold py-4 rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"

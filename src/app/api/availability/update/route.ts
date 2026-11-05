@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRoomAccess } from '@/lib/auth/require-room-access';
+import { setBlock } from '@/lib/booking/crm-ops';
 
 // Update availability status for a specific room + date
 export async function POST(request: NextRequest) {
@@ -23,33 +24,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid status. Cannot manually set booked/held.' }, { status: 400 });
         }
 
-        // Check if record exists
-        const { data: existing } = await supabase
-            .from('availability')
-            .select('id')
-            .eq('room_id', roomId)
-            .eq('date', date)
-            .single();
-
-        if (existing) {
-            const { error } = await supabase
-                .from('availability')
-                .update({ status })
-                .eq('room_id', roomId)
-                .eq('date', date);
-
-            if (error) {
-                return NextResponse.json({ error: error.message }, { status: 500 });
-            }
-        } else {
-            const { error } = await supabase
-                .from('availability')
-                .insert({ room_id: roomId, date, status });
-
-            if (error) {
-                return NextResponse.json({ error: error.message }, { status: 500 });
-            }
-        }
+        // One night at a time through the same rule as every other block: a night that belongs to a
+        // booking is never overwritten (that used to free booked nights and allow double bookings).
+        const next = new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10) + 1)).toISOString().slice(0, 10);
+        const r = await setBlock(supabase, { roomId, from: date, to: next, status: status as 'available' | 'cleaning' | 'maintenance' });
+        if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
 
         return NextResponse.json({ success: true });
     } catch (error) {

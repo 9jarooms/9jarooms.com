@@ -11,15 +11,14 @@ export async function requireCrm() {
     }
 
     const adminClient = createAdminClient();
-    const { data: roleData, error: roleError } = await adminClient
+    const { data: roleRows, error: roleError } = await adminClient
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
-        .in('role', ['admin', 'customer_rep', 'caretaker'])
-        .order('role')
-        .limit(1)
-        .maybeSingle();
+        .in('role', ['admin', 'customer_rep', 'caretaker']);
 
+    const rank = ['admin', 'customer_rep', 'caretaker'];
+    const roleData = (roleRows || []).sort((a, b) => rank.indexOf(a.role) - rank.indexOf(b.role))[0];
     if (roleError || !roleData) {
         return { error: 'Forbidden: CRM access required', status: 403 };
     }

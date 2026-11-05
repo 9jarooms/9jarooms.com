@@ -4,7 +4,9 @@ import { createAdminClient, createSessionClient } from '@/lib/supabase/server';
 export async function GET(request: NextRequest) {
     // 1. Verify the user is authenticated using the session client
     const sessionSupabase = await createSessionClient();
-    const { data: { session }, error: authError } = await sessionSupabase.auth.getSession();
+    // getUser checks the token with Supabase (getSession only trusts the cookie)
+    const { data: { user: session_user }, error: authError } = await sessionSupabase.auth.getUser();
+    const session = session_user ? { user: session_user } : null;
 
     if (authError || !session) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

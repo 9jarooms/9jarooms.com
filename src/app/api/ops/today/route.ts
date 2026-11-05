@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { lagosToday } from '@/lib/booking/hold';
 import { requireOps } from '@/lib/auth/require-ops';
 import { paidByBooking } from '@/lib/booking/crm-ops';
 import { operatedInventory } from '@/lib/booking/occupancy';
@@ -26,11 +27,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const requestedId = searchParams.get('propertyId');
-    const todayParam = searchParams.get('today');
-    // The phone's local date wins: the server runs in UTC, Nigeria is UTC+1.
-    const today = todayParam && DATE_RE.test(todayParam)
-        ? todayParam
-        : new Date().toISOString().slice(0, 10);
+    // Lagos date from the server clock: a phone with the wrong date or time zone cannot shift the day
+    const today = lagosToday();
     const to = shiftIso(today, WINDOW_DAYS);
 
     const empty = (properties: any[], propertyId: string | null) => NextResponse.json({
@@ -77,6 +75,13 @@ export async function GET(request: NextRequest) {
         .in('property_id', propertyIds)
         .eq('status', 'checked_in')
         .lte('check_out', today);
+    // booked but never checked in, dates just passed: keep them on screen to mark no-show or check in
+    const missedP = supabase.from('bookings')
+        .select(BOOKING_COLS)
+        .in('property_id', propertyIds)
+        .in('status', ['confirmed', 'paid'])
+        .lte('check_out', today)
+        .gte('check_out', shiftIso(today, -3));
     const blocksP = unitIds.length
         ? supabase.from('availability')
             .select('room_id, date, status')
@@ -89,7 +94,7 @@ export async function GET(request: NextRequest) {
     // whole-apartment booking that only lists its first room in room_id.
     const heldP = unitIds.length
         ? supabase.from('availability')
-            .select('room_id, date, booking_id')
+            .select('room_id, date, booking_id, booking:bookings(status, expires_at)')
             .in('room_id', unitIds)
             .gte('date', today)
             .lt('date', to)
@@ -97,12 +102,16 @@ export async function GET(request: NextRequest) {
             .not('booking_id', 'is', null)
         : Promise.resolve({ data: [] as any[] });
 
-    const [{ data: windowBookings }, { data: overdue }, { data: blocks }, { data: held }] =
-        await Promise.all([windowBookingsP, overdueP, blocksP, heldP]);
+    const [{ data: windowBookings }, { data: overdue }, { data: blocks }, { data: heldRaw }, { data: missed }] =
+        await Promise.all([windowBookingsP, overdueP, blocksP, heldP, missedP]);
 
     const now = Date.now();
+    // an unpaid lock past its 15 minutes no longer holds the room (the expiry job may not have run yet)
+    const held = ((heldRaw || []) as any[])
+        .filter(c => !(c.booking?.status === 'pending' && c.booking.expires_at && new Date(c.booking.expires_at).getTime() < now))
+        .map(({ booking: _b, ...c }) => c);
     const byId = new Map<string, any>();
-    for (const b of [...(windowBookings || []), ...(overdue || [])]) {
+    for (const b of [...(windowBookings || []), ...(overdue || []), ...(missed || [])]) {
         // hide expired unpaid holds
         if (b.status === 'pending' && b.expires_at && new Date(b.expires_at).getTime() < now) continue;
         byId.set(b.id, b);

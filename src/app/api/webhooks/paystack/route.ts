@@ -64,9 +64,10 @@ export async function POST(request: NextRequest) {
             console.log(`[Paystack] ${reference} already confirmed — nothing to do`);
         }
     } catch (error: any) {
-        // Log loudly but acknowledge, so Paystack does not retry forever;
-        // /api/bookings/verify will still confirm when the guest lands back.
+        // Tell Paystack it failed so it tries again later (it retries for up to 72 hours). Processing is
+        // safe to repeat: a payment already handled is recognised by its reference and skipped.
         console.error('Paystack webhook processing error:', error?.message || error);
+        return NextResponse.json({ error: 'processing failed, retry' }, { status: 500 });
     }
 
     return NextResponse.json({ received: true });

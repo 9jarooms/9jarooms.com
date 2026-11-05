@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { createAdminClient } from '@/lib/supabase/server';
-import { claimDates, releaseClaim, stayDates } from '@/lib/booking/hold';
+import { reclaim, roomsOfBooking, stayDates, lagosToday } from '@/lib/booking/hold';
 
 // Booking operations shared by the CRM (/api/crm/*) and the mobile
 // operations surface (/api/ops/*). Routes handle auth + scoping and
@@ -33,18 +33,23 @@ export function dateRange(checkIn: string, checkOut: string): string[] {
     return stayDates(checkIn, checkOut);
 }
 
-// Sum of recorded payments per booking. Bookings paid online (status
-// 'paid') carry no ledger rows, so they count as fully paid.
+// Money received per booking = the payments ledger. Only an old online booking that never got a
+// ledger row counts as fully paid by its status.
 export async function paidByBooking(supabase: Db, bookings: { id: string; status: string; total_amount: number | string }[]) {
     const ids = bookings.map(b => b.id);
     const { data: payments } = ids.length
         ? await supabase.from('booking_payments').select('booking_id, amount').in('booking_id', ids)
         : { data: [] as { booking_id: string; amount: number }[] };
     const sums: Record<string, number> = {};
-    for (const p of payments || []) sums[p.booking_id] = (sums[p.booking_id] || 0) + Number(p.amount);
+    const has = new Set<string>();
+    for (const p of payments || []) { sums[p.booking_id] = (sums[p.booking_id] || 0) + Number(p.amount); has.add(p.booking_id); }
     const paid: Record<string, number> = {};
-    for (const b of bookings) paid[b.id] = b.status === 'paid' ? Number(b.total_amount) : (sums[b.id] || 0);
+    for (const b of bookings) paid[b.id] = has.has(b.id) ? sums[b.id] : b.status === 'paid' ? Number(b.total_amount) : 0;
     return paid;
+}
+
+export async function audit(supabase: Db, actor: string | null | undefined, bookingId: string | null, action: string, detail?: unknown) {
+    await supabase.from('audit_log').insert({ actor: actor || null, booking_id: bookingId, action, detail: detail ?? null });
 }
 
 // ------------------------------------------------------------------
@@ -115,9 +120,9 @@ export async function getBookingDetail(supabase: Db, id: string): Promise<OpsRes
         .eq('booking_id', id)
         .order('created_at');
 
-    const paid = booking.status === 'paid'
-        ? Number(booking.total_amount)
-        : (payments || []).reduce((s, p) => s + Number(p.amount), 0);
+    const paid = (payments || []).length
+        ? (payments || []).reduce((s, p) => s + Number(p.amount), 0)
+        : booking.status === 'paid' ? Number(booking.total_amount) : 0;
 
     // Sibling units of the same property, so the booking can be moved to
     // another unit. Ordered by unit_code (1A, 1B, … 8C for Kaura).
@@ -150,12 +155,22 @@ export const bookingUpdateSchema = z.object({
     roomId: z.string().uuid().optional(),
     checkIn: z.string().optional(),
     checkOut: z.string().optional(),
+    // the status the person saw: if someone else changed the booking since, refuse instead of overwriting
+    expectedStatus: z.string().optional(),
 });
 export type BookingUpdate = z.infer<typeof bookingUpdateSchema>;
 
-export async function updateBooking(supabase: Db, id: string, body: BookingUpdate, actorId?: string): Promise<OpsResult<{ success: true; booking?: any; unchanged?: boolean }>> {
+const LIVE_STATUSES = ['pending', 'confirmed', 'paid', 'checked_in'];
+const DEAD = ['cancelled', 'no_show', 'expired', 'completed'];
+
+export async function updateBooking(supabase: Db, id: string, body: BookingUpdate, actorId?: string, role?: string): Promise<OpsResult<{ success: true; booking?: any; unchanged?: boolean }>> {
     const { data: booking } = await supabase.from('bookings').select('*').eq('id', id).single();
     if (!booking) return fail('Booking not found', 404);
+    if (body.expectedStatus && body.expectedStatus !== booking.status) {
+        return fail(`This booking was changed by someone else (it is now ${booking.status.replace('_', ' ')}). Close it and open it again.`, 409);
+    }
+    // "paid" means Paystack confirmed it; by hand only an admin may say so
+    if (body.status === 'paid' && role !== 'admin') return fail('Only online payments mark a booking Paid. Record the payment instead.', 403);
 
     const update: Record<string, unknown> = {};
     if (body.guestName !== undefined) update.guest_name = body.guestName;
@@ -167,92 +182,88 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
     if (body.children !== undefined) update.children = body.children;
     if (body.notes !== undefined) update.notes = body.notes;
     if (body.bookingSource !== undefined) update.booking_source = body.bookingSource;
-    if (body.totalAmount !== undefined) update.total_amount = body.totalAmount;
+    if (body.totalAmount !== undefined && body.totalAmount !== Number(booking.total_amount)) update.total_amount = body.totalAmount;
 
-    // --- Stay move / resize: release old dates, atomically claim new ones ---
-    const moving = body.roomId || body.checkIn || body.checkOut;
+    const rooms = await roomsOfBooking(supabase, booking);
+    const today = lagosToday();
+    let checkIn: string = booking.check_in, checkOut: string = booking.check_out, roomId: string = booking.room_id;
+
+    // --- Stay move / resize (also: checking in before the check-in date starts the stay today) ---
+    const earlyCheckIn = body.status === 'checked_in' && booking.status !== 'checked_in' && booking.check_in > today && !body.checkIn;
+    const moving = !!(body.roomId && body.roomId !== booking.room_id) || (body.checkIn && body.checkIn !== booking.check_in)
+        || (body.checkOut && body.checkOut !== booking.check_out) || earlyCheckIn;
     if (moving) {
-        const newRoomId = body.roomId || booking.room_id;
-        const newCheckIn = body.checkIn || booking.check_in;
-        const newCheckOut = body.checkOut || booking.check_out;
-        const newDates = dateRange(newCheckIn, newCheckOut);
-        if (newDates.length === 0) {
-            return fail('Check-out must be after check-in', 400);
+        if (DEAD.includes(booking.status)) return fail('This booking is finished. Make a new booking instead.', 409);
+        if (body.roomId && body.roomId !== booking.room_id && rooms.length > 1) {
+            return fail('This is a whole-flat booking: you can change its dates, but not move it to one room. Cancel and book again to change rooms.', 409);
         }
-
-        // Release what this booking held, claim the new range atomically,
-        // and put the old range back if another booking got there first.
-        const oldDates = dateRange(booking.check_in, booking.check_out);
-        const status = booking.status === 'pending' ? 'held' : 'booked';
-        await releaseClaim(supabase, id);
-        const conflicts = await claimDates(supabase, [newRoomId], newDates, status, id);
-        if (conflicts.length > 0) {
-            await releaseClaim(supabase, id);
-            await claimDates(supabase, [booking.room_id], oldDates, status, id);
-            return fail(`Unit is not free on ${conflicts[0].date}`, 409);
+        roomId = body.roomId || booking.room_id;
+        checkIn = earlyCheckIn ? today : body.checkIn || booking.check_in;
+        checkOut = body.checkOut || booking.check_out;
+        const dates = dateRange(checkIn, checkOut);
+        if (dates.length === 0) return fail('Check-out must be after check-in', 400);
+        if (roomId !== booking.room_id) {
+            const { data: room } = await supabase.from('rooms').select('property_id, is_active, room_type_id').eq('id', roomId).single();
+            if (!room || room.property_id !== booking.property_id || room.is_active === false) return fail('That unit is not in this property', 400);
+            update.room_type_id = room.room_type_id ?? null;
         }
-
-        update.room_id = newRoomId;
-        update.check_in = newCheckIn;
-        update.check_out = newCheckOut;
-        update.nights = newDates.length;
-        // the nightly rate follows an agreed total (discounts), so the daily log shows what they really pay
-        if (body.totalAmount !== undefined && newDates.length) update.price_per_night = Math.round(body.totalAmount / newDates.length);
-
-        // keep room_type_id in sync when the unit changes
-        if (newRoomId !== booking.room_id) {
-            const { data: room } = await supabase.from('rooms').select('room_type_id').eq('id', newRoomId).single();
-            update.room_type_id = room?.room_type_id ?? null;
+        const conflicts = await reclaim(supabase, id, rooms.length > 1 ? rooms : [roomId], dates, booking.status === 'pending' ? 'held' : 'booked');
+        if (conflicts.length > 0) return fail(`Not free on ${conflicts[0].date}: another booking has that night.`, 409);
+        if (roomId !== booking.room_id) await supabase.from('booking_rooms').update({ room_id: roomId }).eq('booking_id', id).eq('room_id', booking.room_id);
+        update.room_id = roomId; update.check_in = checkIn; update.check_out = checkOut; update.nights = dates.length;
+        if (earlyCheckIn && update.total_amount === undefined) {
+            // arriving early adds the extra nights at the guest's own nightly rate
+            const extra = dateRange(today, booking.check_in).length;
+            update.total_amount = Number(booking.total_amount) + extra * Number(booking.price_per_night || 0);
         }
-        await supabase.from('booking_rooms').update({ room_id: newRoomId }).eq('booking_id', id);
     }
 
     // --- Status transitions ---
     if (body.status && body.status !== booking.status) {
         update.status = body.status;
         if (body.status === 'checked_in') update.checked_in_at = new Date().toISOString();
-        if (body.status === 'completed') update.checked_out_at = new Date().toISOString();
+        if (body.status === 'completed') {
+            update.checked_out_at = new Date().toISOString();
+            // leaving early: the nights from tonight on go back on sale
+            await supabase.from('availability').delete().eq('booking_id', id).gte('date', today);
+        }
         if (body.status === 'cancelled' || body.status === 'no_show') {
-            // release the dates so the unit is sellable again
             await supabase.from('availability').delete().eq('booking_id', id);
+            await audit(supabase, actorId, id, body.status, { from: booking.status });
         }
-        if (['confirmed', 'paid', 'checked_in'].includes(body.status) &&
-            ['cancelled', 'no_show', 'pending'].includes(booking.status)) {
-            // (re)claim dates as solid bookings
-            const dates = dateRange(
-                (update.check_in as string) || booking.check_in,
-                (update.check_out as string) || booking.check_out
-            );
-            const roomForClaim = (update.room_id as string) || booking.room_id;
-            // a pending hold already owns its cells as 'held'; re-claim as booked
-            await supabase.from('availability').update({ status: 'booked' }).eq('booking_id', id).eq('status', 'held');
-            const conflicts = await claimDates(supabase, [roomForClaim], dates, 'booked', id);
-            if (conflicts.length > 0) {
-                return fail(`Cannot restore: unit already taken on ${conflicts[0].date}`, 409);
-            }
+        if (['confirmed', 'paid', 'checked_in'].includes(body.status) && !LIVE_STATUSES.slice(1).includes(booking.status)) {
+            // coming back from a hold, an expired hold, a cancel or a no-show: the nights must be ours again
+            const conflicts = await reclaim(supabase, id, rooms.length > 1 ? rooms : [roomId], dateRange(checkIn, checkOut), 'booked');
+            if (conflicts.length > 0) return fail(`The room is no longer free on ${conflicts[0].date}: another booking took it. Offer another room or refund.`, 409);
             update.expires_at = null;
-        }
-
-        // Online (Paystack) payments never write a ledger row — "paid" is
-        // implied by the status. Leaving that status (check-in, check-out…)
-        // would make the guest look like they owe everything, so record the
-        // online payment in the ledger once before the status moves on.
-        if (booking.status === 'paid') {
-            const { count } = await supabase
-                .from('booking_payments')
-                .select('id', { count: 'exact', head: true })
-                .eq('booking_id', id);
-            if (!count) {
-                await supabase.from('booking_payments').insert({
-                    booking_id: id,
-                    amount: Number(booking.total_amount),
-                    method: 'Paystack',
-                    note: 'Paid online',
-                    recorded_by: actorId || null,
-                });
-            }
+        } else if (['confirmed', 'paid', 'checked_in'].includes(body.status)) {
+            await supabase.from('availability').update({ status: 'booked' }).eq('booking_id', id).eq('status', 'held');
         }
     }
+
+    // Old online bookings carry no ledger row; once the total or the status moves, write it so the
+    // balance is worked out from real money (extra nights then show as owed).
+    if (booking.status === 'paid' && (update.status || update.total_amount !== undefined)) {
+        const { count } = await supabase.from('booking_payments').select('id', { count: 'exact', head: true }).eq('booking_id', id);
+        if (!count) {
+            await supabase.from('booking_payments').insert({
+                booking_id: id, amount: Number(booking.total_amount), method: 'Paystack', note: 'Paid online', recorded_by: actorId || null,
+                paystack_reference: booking.paystack_reference || null,
+            });
+        }
+        if (update.total_amount !== undefined && !update.status) update.status = 'confirmed';
+    }
+
+    // the nightly rate always follows the total, so the daily log shows what the guest really pays
+    if (update.total_amount !== undefined || update.nights !== undefined) {
+        const nights = Number(update.nights ?? booking.nights) || 1;
+        update.price_per_night = Math.round(Number(update.total_amount ?? booking.total_amount) / nights);
+    }
+    // anything that changes the money resets management's commission check
+    if (booking.created_by && booking.commission_status && (update.total_amount !== undefined || ['cancelled', 'no_show'].includes(String(update.status)))) {
+        update.commission_status = null; update.commission_checked_by = null; update.commission_checked_at = null; update.commission_amount = null;
+    }
+    if (update.total_amount !== undefined) await audit(supabase, actorId, id, 'total_changed', { from: Number(booking.total_amount), to: update.total_amount });
 
     if (Object.keys(update).length === 0) {
         return ok({ success: true, unchanged: true });
@@ -273,19 +284,55 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
 // Payments ledger
 // ------------------------------------------------------------------
 export const paymentSchema = z.object({
-    amount: z.number().positive(),
+    amount: z.number().refine(n => n !== 0, 'Amount cannot be 0'),
     method: z.string().max(40).optional().nullable(),
     note: z.string().max(300).optional().nullable(),
+    // same id on a retry = the same payment (lost signal, double tap)
+    requestId: z.string().max(80).optional(),
+    // the person saw the warning (more than the balance / looks like a repeat) and wants it anyway
+    force: z.boolean().optional(),
 });
 export type PaymentInput = z.infer<typeof paymentSchema>;
 
-export async function recordPayment(supabase: Db, id: string, input: PaymentInput, recordedBy: string): Promise<OpsResult<{ success: true; payment: any; paid: number }>> {
+export async function recordPayment(supabase: Db, id: string, input: PaymentInput, recordedBy: string, role?: string): Promise<OpsResult<{ success: true; payment: any; paid: number; warning?: string }>> {
     const { data: booking } = await supabase
         .from('bookings')
-        .select('id, status, total_amount')
+        .select('id, status, total_amount, room_id, check_in, check_out')
         .eq('id', id)
         .single();
     if (!booking) return fail('Booking not found', 404);
+
+    if (input.amount < 0 && (input.method !== 'Refund' || !['admin', 'customer_rep'].includes(role || ''))) {
+        return fail('Only an admin or customer rep can record a refund', 403);
+    }
+    if (['cancelled', 'no_show'].includes(booking.status) && input.amount > 0) {
+        return fail('This booking is cancelled. Restore it (or make a new booking) before taking money for it.', 409);
+    }
+
+    if (input.requestId) {
+        const { data: same } = await supabase.from('booking_payments').select('*').eq('client_request_id', input.requestId).maybeSingle();
+        if (same) return ok({ success: true, payment: same, paid: await ledgerSum(supabase, id) });
+    }
+
+    const { data: rows } = await supabase.from('booking_payments').select('amount, created_at').eq('booking_id', id);
+    const already = (rows || []).reduce((t, r) => t + Number(r.amount), 0);
+    if (!input.force && input.amount > 0) {
+        const recentSame = (rows || []).some(r => Number(r.amount) === input.amount && Date.now() - new Date(r.created_at).getTime() < 10 * 60 * 1000);
+        if (recentSame) return fail(`A payment of ₦${input.amount.toLocaleString('en-NG')} was already recorded on this booking in the last 10 minutes. Is this a second, separate payment?`, 409, { warning: 'duplicate' });
+        if (already + input.amount > Number(booking.total_amount) + 1) {
+            return fail(`This makes ₦${(already + input.amount).toLocaleString('en-NG')} paid on a ₦${Number(booking.total_amount).toLocaleString('en-NG')} stay. Record it anyway?`, 409, { warning: 'overpay' });
+        }
+    }
+
+    // Money for a hold: the nights must still be ours. If the 15 minutes ran out and someone else took
+    // the room, say so before any money is written against it.
+    if (['pending', 'expired'].includes(booking.status) && input.amount > 0) {
+        const rooms = await roomsOfBooking(supabase, booking);
+        const conflicts = await reclaim(supabase, id, rooms, dateRange(booking.check_in, booking.check_out), 'booked');
+        if (conflicts.length > 0) {
+            return fail(`The 15-minute lock ran out and another guest has booked this room for ${conflicts[0].date}. Do not confirm this guest for this room: offer another room, or refund them.`, 409, { warning: 'lost_room' });
+        }
+    }
 
     const { data: payment, error } = await supabase
         .from('booking_payments')
@@ -295,36 +342,47 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
             method: input.method || null,
             note: input.note || null,
             recorded_by: recordedBy,
+            client_request_id: input.requestId || null,
         })
         .select()
         .single();
 
-    if (error) return fail(error.message, 500);
-
-    // A pending booking with money against it becomes confirmed
-    if (booking.status === 'pending') {
-        await supabase.from('bookings')
-            .update({ status: 'confirmed', expires_at: null })
-            .eq('id', id);
-        await supabase.from('availability').update({ status: 'booked' }).eq('booking_id', id).eq('status', 'held');
+    if (error) {
+        if (input.requestId && /duplicate|unique/i.test(error.message)) {
+            const { data: same } = await supabase.from('booking_payments').select('*').eq('client_request_id', input.requestId).maybeSingle();
+            return ok({ success: true, payment: same, paid: await ledgerSum(supabase, id) });
+        }
+        return fail(error.message, 500);
     }
 
-    const { data: payments } = await supabase
-        .from('booking_payments')
-        .select('amount')
-        .eq('booking_id', id);
-    const paid = (payments || []).reduce((s, p) => s + Number(p.amount), 0);
+    if (['pending', 'expired'].includes(booking.status) && input.amount > 0) {
+        await supabase.from('bookings').update({ status: 'confirmed', expires_at: null }).eq('id', id);
+    }
+    if (input.amount < 0) await audit(supabase, recordedBy, id, 'refund', { amount: input.amount, note: input.note });
 
-    return ok({ success: true, payment, paid });
+    return ok({ success: true, payment, paid: await ledgerSum(supabase, id) });
 }
 
-export async function deletePayment(supabase: Db, bookingId: string, paymentId: string): Promise<OpsResult<{ success: true }>> {
+async function ledgerSum(supabase: Db, id: string) {
+    const { data } = await supabase.from('booking_payments').select('amount').eq('booking_id', id);
+    return (data || []).reduce((s, p) => s + Number(p.amount), 0);
+}
+
+export async function deletePayment(supabase: Db, bookingId: string, paymentId: string, actorId?: string): Promise<OpsResult<{ success: true }>> {
+    const { data: row } = await supabase.from('booking_payments').select('*').eq('id', paymentId).eq('booking_id', bookingId).maybeSingle();
+    if (!row) return fail('Payment not found', 404);
     const { error } = await supabase
         .from('booking_payments')
         .delete()
         .eq('id', paymentId)
         .eq('booking_id', bookingId);
     if (error) return fail(error.message, 500);
+    // the money line is gone but never untraceable
+    await audit(supabase, actorId, bookingId, 'payment_removed', row);
+    const { data: b } = await supabase.from('bookings').select('created_by, commission_status').eq('id', bookingId).single();
+    if (b?.created_by && b.commission_status) {
+        await supabase.from('bookings').update({ commission_status: null, commission_checked_by: null, commission_checked_at: null, commission_amount: null }).eq('id', bookingId);
+    }
     return ok({ success: true });
 }
 
@@ -377,9 +435,11 @@ export async function setBlock(supabase: Db, input: BlockInput): Promise<OpsResu
             .is('booking_id', null);
         if (error) return fail(error.message, 500);
     } else {
+        // replace manual blocks, then insert-only: a booking that lands in between keeps its night
+        await supabase.from('availability').delete().eq('room_id', roomId).in('date', dates).is('booking_id', null);
         const { error } = await supabase.from('availability').upsert(
             dates.map(date => ({ room_id: roomId, date, status, booking_id: null })),
-            { onConflict: 'room_id,date' }
+            { onConflict: 'room_id,date', ignoreDuplicates: true }
         );
         if (error) return fail(error.message, 500);
     }

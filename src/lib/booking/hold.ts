@@ -62,12 +62,13 @@ export async function claimDates(
         booking?: { status: string; expires_at: string | null } | null;
     }>).filter(cell => {
         if (cell.booking_id === bookingId) return false;
-        if (cell.status === 'available') return true;
-        if (cell.status !== 'held') return false;
-        // a held cell is stale when its booking is gone, dead, or past its expiry
+        // a plain "available" row with no booking is leftover data
+        if (!cell.booking_id) return cell.status === 'available';
+        // a booking's night is only stale when the booking is gone or dead, or it is an unpaid hold
+        // past its expiry. A booked night of a live booking is never touched, whatever its status says.
         if (!cell.booking) return true;
         if (['expired', 'cancelled', 'no_show'].includes(cell.booking.status)) return true;
-        return !!cell.booking.expires_at && new Date(cell.booking.expires_at).getTime() < now;
+        return cell.booking.status === 'pending' && !!cell.booking.expires_at && new Date(cell.booking.expires_at).getTime() < now;
     });
     if (stale.length > 0) {
         await supabase.from('availability').delete().in('id', stale.map(c => c.id));
@@ -101,4 +102,39 @@ export async function roomsOfBooking(supabase: Db, booking: { id: string; room_i
     const { data } = await supabase.from('booking_rooms').select('room_id').eq('booking_id', booking.id);
     const ids = (data || []).map(r => r.room_id as string);
     return ids.length > 0 ? ids : [booking.room_id];
+}
+
+// Move a booking onto a set of rooms × nights without ever letting go of what it already holds.
+// New nights are claimed first; only when every one is ours are the nights it no longer needs given
+// back. On a clash, the nights claimed in this call are dropped again and the booking is exactly as
+// it was. Used for stay moves/extensions, confirming a hold, late payments and restoring bookings.
+export async function reclaim(
+    supabase: Db,
+    bookingId: string,
+    roomIds: string[],
+    dates: string[],
+    status: 'held' | 'booked',
+): Promise<ConflictCell[]> {
+    const { data: before } = await supabase.from('availability').select('id').eq('booking_id', bookingId);
+    const had = new Set((before || []).map(c => c.id as string));
+
+    const conflicts = await claimDates(supabase, roomIds, dates, status, bookingId);
+    const { data: now } = await supabase.from('availability').select('id, room_id, date').eq('booking_id', bookingId);
+    const mine = (now || []) as { id: string; room_id: string; date: string }[];
+
+    if (conflicts.length > 0) {
+        const added = mine.filter(c => !had.has(c.id)).map(c => c.id);
+        if (added.length) await supabase.from('availability').delete().in('id', added);
+        return conflicts;
+    }
+    const want = new Set(roomIds.flatMap(r => dates.map(d => `${r}|${d}`)));
+    const extra = mine.filter(c => !want.has(`${c.room_id}|${c.date}`)).map(c => c.id);
+    if (extra.length) await supabase.from('availability').delete().in('id', extra);
+    await supabase.from('availability').update({ status }).eq('booking_id', bookingId).neq('status', status);
+    return [];
+}
+
+// Today's date in Lagos (UTC+1, no daylight saving), never the phone's clock
+export function lagosToday() {
+    return new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 10);
 }

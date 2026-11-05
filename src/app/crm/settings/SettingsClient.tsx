@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { UserPlus, Trash2, KeyRound } from 'lucide-react';
+import { UserPlus, Trash2, KeyRound, Landmark } from 'lucide-react';
 
 const ROLE_LABEL: Record<string, string> = { admin: 'Admin', customer_rep: 'Customer rep', caretaker: 'Caretaker' };
 
@@ -19,6 +19,19 @@ export default function SettingsClient() {
     }, []);
 
     useEffect(() => { load(); }, [load]);
+
+    // bank account for transfer payments (quoted when a room is locked for a transfer)
+    const [bank, setBank] = useState({ bankName: '', accountNumber: '', accountName: '' });
+    const [bankMsg, setBankMsg] = useState<string | null>(null);
+    useEffect(() => {
+        fetch('/api/crm/bank').then(r => r.json()).then(j => { if (j.bank) setBank(j.bank); }).catch(() => {});
+    }, []);
+    const saveBank = async () => {
+        setBankMsg(null);
+        const res = await fetch('/api/crm/bank', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bank) });
+        const j = await res.json();
+        setBankMsg(res.ok ? 'Saved. Staff now quote this account when they lock a room for a transfer.' : j.error || 'Could not save');
+    };
 
     const createRep = async () => {
         setBusy(true); setError(null); setOk(null);
@@ -112,6 +125,24 @@ export default function SettingsClient() {
                             {busy ? 'Creating…' : `Create ${ROLE_LABEL[form.role].toLowerCase()} account`}
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] mb-5">
+                <h2 className="px-5 py-3.5 text-sm font-bold text-stone-700 border-b border-stone-200 flex items-center gap-1.5"><Landmark size={15} /> Bank account for transfers</h2>
+                <div className="px-5 py-4">
+                    <p className="text-[11px] text-stone-400 mb-3">When staff lock a room for a guest paying by transfer, the WhatsApp message gives this account.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input placeholder="Bank e.g. GTBank" disabled={myRole !== 'admin'} className="border border-stone-300 rounded-md px-2.5 py-2 text-sm" value={bank.bankName} onChange={e => setBank({ ...bank, bankName: e.target.value })} />
+                        <input placeholder="Account number" inputMode="numeric" disabled={myRole !== 'admin'} className="border border-stone-300 rounded-md px-2.5 py-2 text-sm" value={bank.accountNumber} onChange={e => setBank({ ...bank, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
+                        <input placeholder="Account name" disabled={myRole !== 'admin'} className="border border-stone-300 rounded-md px-2.5 py-2 text-sm" value={bank.accountName} onChange={e => setBank({ ...bank, accountName: e.target.value })} />
+                    </div>
+                    {bankMsg && <p className="text-xs text-stone-600 mt-2">{bankMsg}</p>}
+                    {myRole === 'admin' && (
+                        <div className="flex justify-end mt-3">
+                            <button onClick={saveBank} className="px-4 py-2 rounded-md bg-[#008737] text-white text-sm font-semibold">Save bank account</button>
+                        </div>
+                    )}
                 </div>
             </div>
 

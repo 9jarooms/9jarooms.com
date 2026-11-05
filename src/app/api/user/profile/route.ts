@@ -34,6 +34,17 @@ export async function GET() {
 
     if (owner) return NextResponse.json({ ...owner, role: 'owner' });
 
+    // customer reps and admins: no profile table, the details live on their login
+    const { data: staffRole } = await supabase.from('user_roles').select('role').eq('user_id', user.id).in('role', ['admin', 'customer_rep']).limit(1).maybeSingle();
+    if (staffRole) {
+        const internal = (user.email || '').endsWith('@9jarooms.internal');
+        const username = internal ? user.email!.split('@')[0] : null;
+        return NextResponse.json({
+            name: user.user_metadata?.name || username || user.email, username,
+            email: internal ? user.user_metadata?.real_email || null : user.email, phone: user.user_metadata?.phone || null, role: staffRole.role,
+        });
+    }
+
     return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 }
 
@@ -88,6 +99,14 @@ export async function PATCH(request: NextRequest) {
                 user_metadata: { ...user.user_metadata, real_email: updates.email },
             });
         }
+        return NextResponse.json({ success: true });
+    }
+
+    const { data: staffRole } = await supabase.from('user_roles').select('role').eq('user_id', user.id).in('role', ['admin', 'customer_rep']).limit(1).maybeSingle();
+    if (staffRole) {
+        await supabase.auth.admin.updateUserById(user.id, {
+            user_metadata: { ...user.user_metadata, ...(updates.email !== undefined ? { real_email: updates.email } : {}), ...(updates.phone !== undefined ? { phone: updates.phone } : {}) },
+        });
         return NextResponse.json({ success: true });
     }
 

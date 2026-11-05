@@ -24,9 +24,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if ('error' in scope) return NextResponse.json({ error: scope.error }, { status: scope.status });
 
     const parsed = paymentSchema.safeParse(await request.json());
-    if (!parsed.success) return NextResponse.json({ error: 'Invalid payment' }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid payment' }, { status: 400 });
 
-    return opsResponse(await recordPayment(auth.adminClient, id, parsed.data, auth.user.id));
+    return opsResponse(await recordPayment(auth.adminClient, id, parsed.data, auth.user.id, auth.role));
 }
 
 // Removing a payment is rep/admin work — caretakers can only add.
@@ -44,5 +44,5 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const paymentId = new URL(request.url).searchParams.get('paymentId');
     if (!paymentId) return NextResponse.json({ error: 'paymentId is required' }, { status: 400 });
 
-    return opsResponse(await deletePayment(auth.adminClient, id, paymentId));
+    return opsResponse(await deletePayment(auth.adminClient, id, paymentId, auth.user.id));
 }

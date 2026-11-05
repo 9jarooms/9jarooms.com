@@ -11,8 +11,8 @@ export interface CommissionLine {
 }
 export interface CommissionSummary {
     userId: string; month: string; lines: CommissionLine[]; bookings: number;
-    calculated: number; verified: number; pending: number; payable: number; special: boolean;
-    paidOut: { amount: number; paidAt: string } | null;
+    calculated: number; verified: number; pending: number; payable: number; special: boolean; nearSpecial: boolean;
+    paidOut: { amount: number; paidAt: string } | null; due: number;
 }
 
 export const START_MONTH = '2026-11';
@@ -79,7 +79,8 @@ export default function Earnings() {
                     <>
                         <div className="mt-4 h-2 rounded-full bg-white/20 overflow-hidden"><div className="h-full bg-white rounded-full" style={{ width: `${capPct}%` }} /></div>
                         <p className="mt-1.5 text-[12px] text-white/75">
-                            {me.special ? 'You reached ₦500,000: you qualify for the special ₦300,000 payout.'
+                            {me.special ? 'Verified commission reached ₦500,000: you qualify for the special ₦300,000 payout.'
+                                : me.nearSpecial ? 'You reached ₦500,000. The special ₦300,000 applies once management has verified ₦500,000 of it.'
                                 : me.calculated >= 200_000 ? 'Monthly cap of ₦200,000 reached. Reach ₦500,000 for the special ₦300,000 payout.'
                                     : `${naira(200_000 - me.calculated)} to the ₦200,000 monthly cap`}
                         </p>
@@ -91,12 +92,12 @@ export default function Earnings() {
                 <div className="grid grid-cols-3 gap-2">
                     <Stat label="Verified" value={naira(me.verified)} tone="text-green-700" />
                     <Stat label="Waiting for payment" value={naira(me.pending)} tone="text-amber-700" />
-                    <Stat label={me.paidOut ? 'Paid out' : `Payout ${lastDayOf(month)}`} value={naira(me.paidOut ? me.paidOut.amount : me.payable)} tone="text-gray-900" />
+                    <Stat label={me.paidOut ? (me.due > 0 ? `Paid · ${naira(me.due)} more due` : 'Paid out') : `Payout ${lastDayOf(month)}`} value={naira(me.paidOut ? me.paidOut.amount : me.payable)} tone="text-gray-900" />
                 </div>
             )}
 
-            {me?.special && (
-                <p className="flex items-center gap-2 text-[13px] bg-amber-50 text-amber-800 rounded-xl px-3 py-2"><Award size={16} /> Special payout month: ₦300,000 once management verifies.</p>
+            {(me?.special || me?.nearSpecial) && (
+                <p className="flex items-center gap-2 text-[13px] bg-amber-50 text-amber-800 rounded-xl px-3 py-2"><Award size={16} /> {me.special ? 'Special payout month: ₦300,000.' : 'Special ₦300,000 payout once ₦500,000 is verified.'}</p>
             )}
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100">

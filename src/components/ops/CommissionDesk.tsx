@@ -41,11 +41,11 @@ export default function CommissionDesk() {
     const check = (ids: string[], status: 'verified' | 'rejected' | null) => ids.length && call('PATCH', { bookingIds: ids, status });
     const reassign = (bookingId: string, userId: string | null) => call('PUT', { bookingId, userId });
     const pay = (s: StaffRow, undo = false) => {
-        if (!undo && !confirm(`Mark ${naira(s.payable)} commission for ${monthName(month)} as paid to ${s.name}?`)) return;
+        if (!undo && !confirm(`Mark ${naira(s.due)} commission for ${monthName(month)} as paid to ${s.name}?`)) return;
         call('POST', { userId: s.userId, month, undo });
     };
 
-    const totals = (staff || []).reduce((t, s) => ({ calc: t.calc + s.calculated, payable: t.payable + s.payable, toCheck: t.toCheck + s.lines.filter(l => l.state === 'to_verify').length }), { calc: 0, payable: 0, toCheck: 0 });
+    const totals = (staff || []).reduce((t, s) => ({ calc: t.calc + s.calculated, payable: t.payable + s.due, toCheck: t.toCheck + s.lines.filter(l => l.state === 'to_verify').length }), { calc: 0, payable: 0, toCheck: 0 });
 
     return (
         <div className="max-w-4xl space-y-4">
@@ -59,7 +59,7 @@ export default function CommissionDesk() {
 
             <div className="grid grid-cols-3 gap-2">
                 <Box label="Earned (all staff)" value={naira(totals.calc)} />
-                <Box label="Payable (verified)" value={naira(totals.payable)} />
+                <Box label="Still to pay (verified)" value={naira(totals.payable)} />
                 <Box label="Bookings to check" value={String(totals.toCheck)} />
             </div>
 
@@ -94,14 +94,16 @@ export default function CommissionDesk() {
                                 <div className="px-5 py-3 flex flex-wrap gap-2 bg-stone-50/60">
                                     <button disabled={busy || !toVerify.length} onClick={() => check(toVerify, 'verified')}
                                         className="px-3 py-1.5 rounded-md bg-[#008737] text-white text-[13px] font-semibold disabled:opacity-40 flex items-center gap-1.5"><Check size={14} /> Verify all {toVerify.length || ''}</button>
-                                    {s.paidOut ? (
+                                    <button disabled={busy || s.due <= 0} onClick={() => pay(s)} className="px-3 py-1.5 rounded-md bg-stone-900 text-white text-[13px] font-semibold disabled:opacity-40 flex items-center gap-1.5">
+                                        <Banknote size={14} /> {s.paidOut ? `Pay top-up ${naira(s.due)}` : `Mark ${naira(s.due)} paid`}
+                                    </button>
+                                    {s.paidOut && (
                                         <button disabled={busy} onClick={() => pay(s, true)} className="px-3 py-1.5 rounded-md border border-stone-300 text-[13px] font-semibold text-stone-600 flex items-center gap-1.5">
-                                            <RotateCcw size={14} /> Undo paid ({fmtDay(s.paidOut.paidAt.slice(0, 10))})
+                                            <RotateCcw size={14} /> Undo last payment ({fmtDay(s.paidOut.paidAt.slice(0, 10))})
                                         </button>
-                                    ) : (
-                                        <button disabled={busy || s.payable <= 0} onClick={() => pay(s)} className="px-3 py-1.5 rounded-md bg-stone-900 text-white text-[13px] font-semibold disabled:opacity-40 flex items-center gap-1.5">
-                                            <Banknote size={14} /> Mark {naira(s.payable)} paid
-                                        </button>
+                                    )}
+                                    {s.paidOut && s.paidOut.amount > s.payable && (
+                                        <span className="text-[12px] font-semibold text-red-600 self-center">Paid {naira(s.paidOut.amount - s.payable)} more than now earned (a booking was cancelled or changed). Take it off next month.</span>
                                     )}
                                 </div>
                                 {s.lines.length === 0 && <p className="px-5 py-5 text-sm text-stone-500">No bookings taken this month.</p>}

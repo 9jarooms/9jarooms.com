@@ -32,8 +32,10 @@ export interface CommissionSummary {
     verified: number;       // of which management has verified
     pending: number;        // 1.5% of lines still waiting for full payment
     payable: number;        // what the verified lines pay this month after the cap / special rule
-    special: boolean;       // reached the ₦500k special payout
-    paidOut: { amount: number; paidAt: string } | null;
+    special: boolean;       // verified commission reached ₦500k: the special payout applies
+    nearSpecial: boolean;   // calculated (not all verified yet) has reached ₦500k
+    paidOut: { amount: number; paidAt: string } | null;   // everything paid for this month so far
+    due: number;            // payable minus what was already paid (a top-up after late verifications)
 }
 
 export const currentMonth = () => new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 7);   // Lagos
@@ -58,7 +60,7 @@ const round = (n: number) => Math.round(n);
 export async function commissionMonth(supabase: Db, month: string, userId?: string): Promise<CommissionSummary[]> {
     const { from, to } = monthRange(month);
     let q = supabase.from('bookings')
-        .select('id, created_by, guest_name, check_in, check_out, nights, total_amount, status, created_at, commission_status, room:rooms(unit_code, name), property:properties(name)')
+        .select('id, created_by, guest_name, check_in, check_out, nights, total_amount, status, created_at, commission_status, commission_amount, room:rooms(unit_code, name), property:properties(name)')
         .not('created_by', 'is', null).gte('created_at', from).lt('created_at', to).in('status', OPEN)
         .order('created_at', { ascending: false });
     if (userId) q = q.eq('created_by', userId);
@@ -79,7 +81,8 @@ export async function commissionMonth(supabase: Db, month: string, userId?: stri
         const line: CommissionLine = {
             bookingId: b.id, guest: b.guest_name, unit: b.room?.unit_code || b.room?.name || '—', property: b.property?.name || '',
             checkIn: b.check_in, checkOut: b.check_out, nights: b.nights, takenAt: b.created_at,
-            total, paid: p, commission: round(total * COMMISSION_RATE), state,
+            // a verified line pays the amount management checked
+            total, paid: p, commission: b.commission_status === 'verified' && b.commission_amount != null ? Number(b.commission_amount) : round(total * COMMISSION_RATE), state,
         };
         byUser.set(b.created_by, [...(byUser.get(b.created_by) || []), line]);
     }
@@ -90,11 +93,14 @@ export async function commissionMonth(supabase: Db, month: string, userId?: stri
         const calculated = sum(['to_verify', 'verified']);
         const verified = sum(['verified']);
         const { payable, special } = payableFor(verified);
-        const po = (payouts || []).find(x => x.user_id === uid);
+        const mine = (payouts || []).filter(x => x.user_id === uid);
+        const paidAmount = mine.reduce((t, x) => t + Number(x.amount), 0);
+        const lastPaid = mine.map(x => x.paid_at).sort().pop();
         return {
             userId: uid, month, lines, bookings: lines.filter(l => l.state !== 'rejected').length,
-            calculated, verified, pending: sum(['awaiting_payment']), payable, special: special || calculated >= SPECIAL_THRESHOLD,
-            paidOut: po ? { amount: Number(po.amount), paidAt: po.paid_at } : null,
+            calculated, verified, pending: sum(['awaiting_payment']), payable, special, nearSpecial: calculated >= SPECIAL_THRESHOLD,
+            paidOut: mine.length ? { amount: paidAmount, paidAt: lastPaid! } : null,
+            due: Math.max(payable - paidAmount, 0),
         };
     });
 }

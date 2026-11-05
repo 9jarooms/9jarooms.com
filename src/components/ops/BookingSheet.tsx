@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { LogIn, LogOut, Banknote, CalendarDays, Pencil, ChevronDown, ChevronUp, Trash2, Ban, UserX, Share2, Unlock } from 'lucide-react';
 import {
     Sheet, StatusPill, BigButton, Field, Stepper, Chips, ContactButtons, inputCls,
-    naira, balanceOf, owes, fmtDay, shiftIso, unitLabel, waLink, holdCountdown, type OpsRole,
+    naira, balanceOf, owes, fmtDay, shiftIso, unitLabel, waLink, holdCountdown, useLiveUpdates, type OpsRole,
 } from './shared';
 
 const PAY_METHODS = ['Cash', 'Bank Transfer', 'POS', 'Moniepoint', 'Other'];
@@ -31,19 +31,23 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
         if (!res.ok) { setError(json.error || 'Could not load booking'); return; }
         setData(json);
         const b = json.booking;
-        setStay({ unitId: b.room_id || '', checkIn: b.check_in || '', nights: b.nights || 1, price: 'standard', agreed: '' });
+        setStay({ unitId: b.room_id || '', checkIn: b.check_in || '', nights: b.nights || 1, price: 'keep', agreed: '' });
         setGuest({ guestName: b.guest_name || '', guestPhone: b.guest_phone || '', notes: b.notes || '' });
         const balance = Math.max(Number(b.total_amount) - Number(json.paid || 0), 0);
         setPay(p => ({ ...p, amount: balance > 0 ? String(balance) : '' }));
     }, [bookingId]);
 
     useEffect(() => { load(); }, [load]);
+    // someone else paid, checked in or changed this booking: show it here too
+    useLiveUpdates(load);
+    const payRequest = useRef('');
 
     const patch = async (payload: Record<string, unknown>): Promise<boolean> => {
         setBusy(true); setError(null);
         try {
             const res = await fetch(`/api/ops/bookings/${bookingId}`, {
-                method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+                // the status this screen shows: if it changed meanwhile, the server refuses instead of overwriting
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedStatus: data?.booking?.status, ...payload }),
             });
             const json = await res.json();
             if (!res.ok) { setError(json.error || 'Failed'); return false; }
@@ -58,17 +62,28 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
         }
     };
 
-    const addPayment = async () => {
+    const addPayment = async (force = false) => {
         const amount = Number(pay.amount);
         if (!amount || amount <= 0) { setError('Enter the amount received'); return; }
+        if (!payRequest.current) payRequest.current = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
         setBusy(true); setError(null);
         try {
             const res = await fetch(`/api/ops/bookings/${bookingId}/payments`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount, method: pay.method }),
+                // the same id on a retry: lost signal or a double tap never records the money twice
+                body: JSON.stringify({ amount, method: pay.method, requestId: payRequest.current, force }),
             });
             const json = await res.json();
-            if (!res.ok) { setError(json.error || 'Failed to record payment'); return; }
+            if (!res.ok) {
+                // "looks like a repeat" or "more than the balance": ask, then send again on purpose
+                if (!force && ['duplicate', 'overpay'].includes(json.details?.warning)) {
+                    setBusy(false);
+                    if (confirm(json.error)) { payRequest.current = ''; return addPayment(true); }
+                    return;
+                }
+                setError(json.error || 'Failed to record payment'); return;
+            }
+            payRequest.current = '';
             setPanel('none');
             await load();
             onChanged();
@@ -110,14 +125,25 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     const autoTotal = Math.round(Number(b.price_per_night || 0) * stayNights);
     const toggle = (p: Panel) => setPanel(panel === p ? 'none' : p);
 
-    const checkIn = () => patch({ status: 'checked_in' });
+    const checkIn = () => {
+        if (b.check_in > today) {
+            const extra = Math.round((Date.parse(b.check_in) - Date.parse(today)) / 86_400_000);
+            if (!confirm(`${b.guest_name} is arriving ${extra} night${extra === 1 ? '' : 's'} early. The stay will start today and ${naira(extra * Number(b.price_per_night || 0))} is added to the total (change it after if you agreed otherwise). Continue?`)) return;
+        }
+        patch({ status: 'checked_in' });
+    };
     const checkOut = () => {
         if (owing && !confirm(`${b.guest_name} still owes ${naira(balance)}. Check out anyway?`)) return;
+        if (b.check_out > today && !confirm(`${b.guest_name} is leaving before ${fmtDay(b.check_out)}. The room goes back on sale from tonight. The total stays ${naira(b.total_amount)}: change it under Extend stay first if you are giving money back.`)) return;
         patch({ status: 'completed' });
     };
     const saveStay = async () => {
         if (!stay.checkIn || stayNights < 1) { setError('Pick a check-in date and at least 1 night'); return; }
-        const payload: Record<string, unknown> = { roomId: stay.unitId, checkIn: stay.checkIn, checkOut: stayCheckOut };
+        // only what changed, so this never undoes someone else's edit
+        const payload: Record<string, unknown> = {};
+        if (stay.unitId !== b.room_id) payload.roomId = stay.unitId;
+        if (stay.checkIn !== b.check_in) payload.checkIn = stay.checkIn;
+        if (stayCheckOut !== b.check_out) payload.checkOut = stayCheckOut;
         if (stay.price === 'standard') payload.totalAmount = autoTotal;
         if (stay.price === 'agreed') {
             const t = Number(stay.agreed);
@@ -210,7 +236,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                     <Field label="How was it paid?">
                         <Chips options={PAY_METHODS.map(m => ({ value: m, label: m }))} value={pay.method} onChange={m => setPay({ ...pay, method: m })} />
                     </Field>
-                    <BigButton tone="amber" onClick={addPayment} busy={busy}>Save payment</BigButton>
+                    <BigButton tone="amber" onClick={() => addPayment()} busy={busy}>Save payment</BigButton>
                 </div>
             )}
 
@@ -239,7 +265,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                             </p>
                             <Field label="Price for the whole stay">
                                 <Chips value={stay.price} onChange={v => setStay({ ...stay, price: v as typeof stay.price })} options={[
-                                    { value: 'standard', label: `Standard ${naira(autoTotal)}` },
+                                    { value: 'standard', label: `Same rate ${naira(autoTotal)}` },
                                     { value: 'agreed', label: 'Agreed / discount' },
                                     { value: 'keep', label: `Keep ${naira(b.total_amount)}` },
                                 ]} />
