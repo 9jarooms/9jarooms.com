@@ -53,6 +53,21 @@ export const expirePendingBookings = (inngest as any).createFunction(
             return kept;
         });
 
+        await step.run('release-stranded-nights', async () => {
+            // dead bookings (expired / cancelled / no-show) untouched for 10+ minutes with nights still
+            // attached and no money on them: those nights go back on sale
+            const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+            const { data: dead } = await supabase.from('bookings').select('id')
+                .in('status', ['expired', 'cancelled', 'no_show']).lt('updated_at', cutoff).gt('check_out', new Date().toISOString().slice(0, 10)).limit(200);
+            const ids = (dead || []).map((b: any) => b.id);
+            if (!ids.length) return 0;
+            const { data: paid } = await supabase.from('booking_payments').select('booking_id').in('booking_id', ids);
+            const withMoney = new Set((paid || []).map((p: any) => p.booking_id));
+            const free = ids.filter((id: string) => !withMoney.has(id));
+            if (free.length) await supabase.from('availability').delete().in('booking_id', free);
+            return free.length;
+        });
+
         if (expiredBookings.length === 0) {
             return { expired: 0 };
         }

@@ -111,18 +111,23 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     // a send whose answer never came back: until we know what happened to it, every tap re-sends
     // that same id (even if the screen behind moved to another unit), so it can never book twice
     // kept for the session too: closing the sheet and starting again still re-checks the lost tap
-    const pendingStored = (() => {
-        try {
-            const p = JSON.parse(sessionStorage.getItem('pending-booking-request') || 'null');
-            return p && Date.now() - p.at < 30 * 60 * 1000 ? p as { id: string; guest: string; at: number } : null;
-        } catch { return null; }
-    })();
-    const unknownAttempt = useRef<string | null>(pendingStored?.id || null);
-    const unknownGuest = useRef<string>(pendingStored?.guest || '');
+    // within this sheet, a tap whose answer never came is always re-sent with the same id, whatever
+    // was edited since: the server answers with what it saved, and the screen shows exactly that
+    const unknownAttempt = useRef<string | null>(null);
+    // a lost tap from an earlier sheet: ask the server what happened to it before anything else
+    const [earlier, setEarlier] = useState<null | { found: boolean; guestName?: string; unit?: string; total?: number; paid?: number; status?: string }>(null);
+    useEffect(() => {
+        let stored: { id: string; at: number } | null = null;
+        try { stored = JSON.parse(sessionStorage.getItem('pending-booking-request') || 'null'); } catch { /* ignore */ }
+        if (!stored?.id || Date.now() - stored.at > 24 * 60 * 60 * 1000) return;
+        fetch(`/api/ops/request/${encodeURIComponent(stored.id)}`).then(r => r.ok ? r.json() : null).then(j => {
+            if (!j) return;   // still offline: ask again next time
+            setEarlier(j);
+            try { sessionStorage.removeItem('pending-booking-request'); } catch { /* ignore */ }
+        }).catch(() => {});
+    }, []);
     const [firstTap, setFirstTap] = useState<{ unit: string; total: number; paid: number; status: string; guest: string } | null>(null);
-    // a lost tap is only re-checked for the same guest; another guest always gets a fresh attempt
-    const guestKey = `${guestName.trim().toLowerCase()}|${phone.replace(/\D/g, '').slice(-10)}`;
-    const requestId = unknownAttempt.current && unknownGuest.current === guestKey ? unknownAttempt.current : freshId;
+    const requestId = unknownAttempt.current || freshId;
     const isTransferMethod = /transfer|moniepoint|pos/i.test(payMethod);
 
     const submit = async () => {
@@ -164,8 +169,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             if (!res) { await new Promise(r => setTimeout(r, 2500)); res = await send(); }
             if (!res) {
                 unknownAttempt.current = requestId;
-                unknownGuest.current = guestKey;
-                try { sessionStorage.setItem('pending-booking-request', JSON.stringify({ id: requestId, guest: guestKey, at: Date.now() })); } catch { /* ignore */ }
+                try { sessionStorage.setItem('pending-booking-request', JSON.stringify({ id: requestId, at: Date.now() })); } catch { /* ignore */ }
                 throw new Error('No connection. When you have signal, tap the button again: it checks what happened and will not book twice.');
             }
             unknownAttempt.current = null;
@@ -173,6 +177,16 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             const json = await res.json();
             if (!res.ok) { onRefresh?.(); throw new Error(json.error || 'Could not create the booking'); }
             const id = json.bookingId as string;
+            if (json.duplicate && json.status === 'pending' && mode !== 'hold') {
+                // the first tap made a 15-minute lock: open it (Payment received is there)
+                const lockedUnit = data.units.find(u => u.id === json.roomId) || unit;
+                setHold({ bookingId: json.bookingId, paystackUrl: null, payUrl: null, expiresAt: json.expiresAt, holdMinutes: json.holdMinutes || 15, warning: 'Your first tap had already locked this room. Record the money here.',
+                    transfer: true, bank: json.bank || null, unitLabel: unitLabel(lockedUnit), total: Number(json.total || 0),
+                    checkIn: json.checkIn || checkIn, checkOut: json.checkOut || checkOut, nights: json.nights || nights });
+                setPaidAmount(String(json.total || ''));
+                onRefresh?.();
+                return;
+            }
             if (json.duplicate && json.status !== 'pending') {
                 // the first tap had gone through: show exactly what was saved (it may differ from this form)
                 const u = data.units.find(x => x.id === json.roomId);
@@ -310,6 +324,14 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                 value={mode}
                 onChange={v => setMode(v as 'booking' | 'block' | 'hold')}
             />
+            {earlier && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900">
+                    {earlier.found
+                        ? <>Your earlier tap with no signal <b>did go through</b>: {earlier.status === 'pending' ? 'a 15-minute lock' : 'a booking'} for <b>{earlier.guestName}</b> on <b>{earlier.unit}</b>, {naira(earlier.total)} ({naira(earlier.paid)} recorded). Open it from Today or Bookings if anything needs changing. Don&apos;t book them again.</>
+                        : <>Your earlier tap with no signal <b>did not go through</b>. Nothing was booked; you can book now.</>}
+                    <button type="button" onClick={() => setEarlier(null)} className="ml-2 underline">OK</button>
+                </div>
+            )}
             {mode === 'hold' && (
                 <p className="text-[12.5px] text-gray-500 -mt-1">
                     Nobody else can book the unit for 15 minutes while the guest sends a bank transfer. You confirm when you see the money.

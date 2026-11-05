@@ -401,7 +401,8 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
         const lost = await reclaim(supabase, id, await roomsOfBooking(supabase, booking), dateRange(booking.check_in, booking.check_out), 'booked');
         if (lost.length) {
             const note = `PAID BUT THE ROOM WAS LOST at the same moment (${lost[0].date}): move the guest or refund.`;
-            await supabase.from('bookings').update({ notes: note }).eq('id', id);
+            const { data: cur } = await supabase.from('bookings').select('notes').eq('id', id).single();
+            await supabase.from('bookings').update({ notes: [cur?.notes, note].filter(Boolean).join('\n') }).eq('id', id);
             await audit(supabase, recordedBy, id, 'lost_room_after_payment', { date: lost[0].date });
             return fail(`The money is recorded, but another booking took this room for ${lost[0].date} at the same moment. Move the guest to another room or refund them.`, 409, { warning: 'lost_room_after_payment' });
         }

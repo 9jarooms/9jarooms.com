@@ -137,12 +137,13 @@ export async function confirmPaidBooking(supabase: Db, input: {
         }
     }
 
-    // logged last: if anything above failed, a retry processes the payment again
-    // (unique per reference: if two confirmations raced, the second insert is refused harmlessly)
-    await supabase.from('transactions').insert({
+    // logged last: if anything above failed, a retry processes the payment again. Unique per
+    // reference: if two confirmations raced, only the one that logs it sends the messages.
+    const { error: txErr } = await supabase.from('transactions').insert({
         paystack_reference: input.reference, paystack_event: 'charge.success', amount, currency: 'NGN',
         status: 'success', booking_id: booking.id, raw_payload: input.raw ?? null,
     });
+    if (txErr && /duplicate|unique/i.test(txErr.message)) return { booking, alreadyPaid: true };
 
     if (refundNeeded) return { booking: { ...booking, status: 'cancelled' }, alreadyPaid: false, refundNeeded: true };
     // an extra payment on a finished booking: no "new booking" emails, the note flags the refund
