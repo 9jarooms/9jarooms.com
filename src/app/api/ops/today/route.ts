@@ -143,19 +143,15 @@ export async function GET(request: NextRequest) {
     });
 }
 
-// Money to give back: any booking (cancelled ones included) where more was received than the stay costs
+// Money to give back: any booking (cancelled ones included) where more was received than the stay costs.
+// Summed in the database, so it never misses rows however many payments there are.
 async function refundsDue(supabase: any, propertyIds: string[]) {
-    const since = new Date(Date.now() - 120 * 86_400_000).toISOString();
-    const { data } = await supabase.from('booking_payments')
-        .select('booking_id, amount, booking:bookings(id, guest_name, guest_phone, total_amount, status, property_id, room_id, check_in, check_out, nights, booking_source, notes, room_type_id, guest_email, expires_at)')
-        .gte('created_at', since);
-    const sums = new Map<string, { b: any; paid: number }>();
-    for (const r of (data || []) as any[]) {
-        if (!r.booking || !propertyIds.includes(r.booking.property_id)) continue;
-        const e = sums.get(r.booking_id) || { b: r.booking, paid: 0 };
-        e.paid += Number(r.amount); sums.set(r.booking_id, e);
-    }
-    return [...sums.values()]
-        .map(({ b, paid }) => ({ ...b, paid, total_amount: ['cancelled', 'no_show', 'expired'].includes(b.status) ? 0 : Number(b.total_amount) }))
-        .filter(b => b.paid > Number(b.total_amount) + 1);
+    const { data: due } = await supabase.rpc('refunds_due', { prop_ids: propertyIds });
+    const ids = (due || []).map((d: any) => d.booking_id);
+    if (!ids.length) return [];
+    const paid = new Map((due || []).map((d: any) => [d.booking_id, Number(d.paid)]));
+    const { data } = await supabase.from('bookings')
+        .select('id, guest_name, guest_phone, guest_email, total_amount, status, property_id, room_id, room_type_id, check_in, check_out, nights, booking_source, notes, expires_at')
+        .in('id', ids);
+    return (data || []).map((b: any) => ({ ...b, paid: paid.get(b.id) || 0, total_amount: ['cancelled', 'no_show', 'expired'].includes(b.status) ? 0 : Number(b.total_amount) }));
 }

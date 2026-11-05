@@ -305,7 +305,7 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                         ))}
                     </Section>
 
-                    {(data?.refundsDue || []).length > 0 && (
+                    {data?.role !== 'caretaker' && (data?.refundsDue || []).length > 0 && (
                         <Section title="Refund due · money to give back" count={data!.refundsDue!.length} empty="">
                             {data!.refundsDue!.map(b => (
                                 <BookingCard key={b.id} b={b} today={today} unit={unitNameOf(b)}

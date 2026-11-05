@@ -72,7 +72,8 @@ export const expirePendingBookings = (inngest as any).createFunction(
             if (error) throw new Error(`Failed to expire bookings: ${error.message}`);
             const done = (data || []).map((b: any) => b.id);
             if (done.length) {
-                const { error: relErr } = await supabase.from('availability').delete().in('booking_id', done).eq('status', 'held');
+                // every night of an expired hold goes back on sale (held, or booked by a payment that failed)
+                const { error: relErr } = await supabase.from('availability').delete().in('booking_id', done);
                 if (relErr) throw new Error(`Failed to release dates: ${relErr.message}`);
             }
             return done.length;

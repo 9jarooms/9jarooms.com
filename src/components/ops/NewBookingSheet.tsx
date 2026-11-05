@@ -110,9 +110,11 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
         , [attemptKey]);
     // a send whose answer never came back: until we know what happened to it, every tap re-sends
     // that same id (even if the screen behind moved to another unit), so it can never book twice
-    const unknownAttempt = useRef<string | null>(null);
+    // kept for the session too: closing the sheet and starting again still re-checks the lost tap
+    const unknownAttempt = useRef<string | null>((() => { try { return sessionStorage.getItem('pending-booking-request'); } catch { return null; } })());
+    const [firstTap, setFirstTap] = useState<{ unit: string; total: number; paid: number; status: string } | null>(null);
     const requestId = unknownAttempt.current || freshId;
-    const isTransferMethod = /transfer|moniepoint/i.test(payMethod);
+    const isTransferMethod = /transfer|moniepoint|pos/i.test(payMethod);
 
     const submit = async () => {
         if (!unit) { setError('Pick a unit'); return; }
@@ -153,14 +155,19 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             if (!res) { await new Promise(r => setTimeout(r, 2500)); res = await send(); }
             if (!res) {
                 unknownAttempt.current = requestId;
+                try { sessionStorage.setItem('pending-booking-request', requestId); } catch { /* ignore */ }
                 throw new Error('No connection. When you have signal, tap the button again: it checks what happened and will not book twice.');
             }
             unknownAttempt.current = null;
+            try { sessionStorage.removeItem('pending-booking-request'); } catch { /* ignore */ }
             const json = await res.json();
             if (!res.ok) { onRefresh?.(); throw new Error(json.error || 'Could not create the booking'); }
             const id = json.bookingId as string;
-            if (json.duplicate && mode === 'booking') {
-                onCreated();   // it had gone through the first time
+            if (json.duplicate) {
+                // the first tap had gone through: show exactly what was saved (it may differ from this form)
+                const u = data.units.find(x => x.id === json.roomId);
+                setFirstTap({ unit: u ? unitLabel(u) : 'the unit', total: Number(json.total || 0), paid: Number(json.paid || 0), status: json.status });
+                onRefresh?.();
                 return;
             }
 
@@ -181,6 +188,20 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             setBusy(false);
         }
     };
+
+    if (firstTap) {
+        const lock = firstTap.status === 'pending';
+        return (
+            <Sheet title="Your first tap went through" subtitle="Nothing new was created" onClose={onCreated}>
+                <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-[13.5px] text-amber-900 space-y-1">
+                    <p className="font-bold">{lock ? 'A 15-minute lock' : 'A booking'} for {guestName.trim()} on <b>{firstTap.unit}</b>, {naira(firstTap.total)}.</p>
+                    <p>Money recorded on it: <b>{naira(firstTap.paid)}</b>.</p>
+                    <p>If anything you changed since (room, price, money taken, booking instead of lock) is not shown above, open the booking from Today or Bookings and change it there. Give the guest the room shown above.</p>
+                </div>
+                <BigButton tone="dark" onClick={onCreated}>OK</BigButton>
+            </Sheet>
+        );
+    }
 
     if (hold) {
         // everything here comes from what was locked, never from the form behind it
@@ -352,7 +373,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                         </Field>
                     )}
                     {deposit > 0 && isTransferMethod && (
-                        <Field label="Transfer reference" hint="From the bank alert. Stops the same transfer being recorded twice.">
+                        <Field label="Reference" hint="From the bank alert or POS slip. Stops the same payment being recorded twice.">
                             <input className={inputCls} value={depositRef} onChange={e => setDepositRef(e.target.value)} autoComplete="off" />
                         </Field>
                     )}

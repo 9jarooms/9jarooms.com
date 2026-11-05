@@ -77,7 +77,9 @@ export async function claimDates(
         const other = stale.filter(c => c.status !== 'held').map(c => c.id);
         // re-checked at delete time: a hold confirmed a moment ago is "booked" now and is left alone
         if (held.length) await supabase.from('availability').delete().in('id', held).eq('status', 'held');
-        if (other.length) await supabase.from('availability').delete().in('id', other);   // no booking, or a dead one
+        // no booking, or a dead one. A "booked" night is left alone even then: a late payment may be
+        // confirming that booking this very moment (failed confirmations put their nights back to held).
+        if (other.length) await supabase.from('availability').delete().in('id', other).neq('status', 'booked');
     }
 
     // 2. Insert-only claim. Rows that already exist are left alone.
@@ -166,10 +168,10 @@ export function lagosToday() {
 // Rooms with a guest still checked in after their check-out date: they are in the room tonight, so
 // nobody else can be put there tonight (the stay has no nights past check-out in the table).
 export async function overstayRooms(supabase: Db, roomIds?: string[]): Promise<Set<string>> {
-    let q = supabase.from('bookings').select('room_id, id').eq('status', 'checked_in').lte('check_out', lagosToday());
-    if (roomIds) q = q.in('room_id', roomIds);
-    const { data } = await q;
+    const { data } = await supabase.from('bookings').select('room_id, id').eq('status', 'checked_in').lte('check_out', lagosToday());
     const ids = new Set<string>();
-    for (const b of data || []) for (const r of await roomsOfBooking(supabase, b as { id: string; room_id: string })) ids.add(r);
+    for (const b of data || []) for (const r of await roomsOfBooking(supabase, b as { id: string; room_id: string })) {
+        if (!roomIds || roomIds.includes(r)) ids.add(r);
+    }
     return ids;
 }

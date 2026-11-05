@@ -186,8 +186,12 @@ export async function POST(request: NextRequest) {
                 // the first try did not get the room: this retry is a fresh attempt
                 await supabase.from('bookings').update({ client_request_id: null }).eq('id', same.id);
             } else if (same) {
-                if (isHold) return transferHoldResponse(supabase, same.id, new Date(same.expires_at || Date.now()), { duplicate: true, roomId: same.room_id, total: Number(same.total_amount) });
-                return NextResponse.json({ success: true, bookingId: same.id, duplicate: true, roomId: same.room_id, total: Number(same.total_amount) });
+                // what the first tap actually created, so the phone can show it instead of assuming
+                const { data: pays } = await supabase.from('booking_payments').select('amount').eq('booking_id', same.id);
+                const first = { duplicate: true, roomId: same.room_id, total: Number(same.total_amount), status: same.status,
+                    paid: (pays || []).reduce((t, p) => t + Number(p.amount), 0) };
+                if (same.status === 'pending') return transferHoldResponse(supabase, same.id, new Date(same.expires_at || Date.now()), first);
+                return NextResponse.json({ success: true, bookingId: same.id, ...first });
             }
         }
         if (isInternalBooking && body.deposit && /transfer|moniepoint|pos/i.test(body.deposit.method || '') && !body.deposit.reference) {
@@ -195,6 +199,9 @@ export async function POST(request: NextRequest) {
         }
         if (isInternalBooking && body.deposit && body.totalAmount != null && body.deposit.amount > body.totalAmount + 1) {
             return NextResponse.json({ error: 'The amount paid is more than the price of the stay. Check both.' }, { status: 400 });
+        }
+        if (isInternalBooking && body.deposit?.reference && (body.deposit.reference.trim().length < 6 || !/\d/.test(body.deposit.reference))) {
+            return NextResponse.json({ error: 'That does not look like a bank or POS reference. Copy it from the alert or slip (letters and numbers).' }, { status: 400 });
         }
         if (isInternalBooking && body.deposit?.reference) {
             const { data: used } = await supabase.from('booking_payments').select('id').ilike('reference', body.deposit.reference.replace(/[%_\\]/g, c => '\\' + c)).maybeSingle();
@@ -210,7 +217,7 @@ export async function POST(request: NextRequest) {
             if (clientIp) {
                 const { count: open } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
                     .eq('client_ip', clientIp).eq('status', 'pending').gt('expires_at', new Date().toISOString());
-                if ((open || 0) >= 3) return NextResponse.json({ error: 'You already have rooms waiting for payment. Finish or wait for those first.' }, { status: 429 });
+                if ((open || 0) >= 6) return NextResponse.json({ error: 'You already have rooms waiting for payment. Finish or wait for those first.' }, { status: 429 });
             }
             if (who.length) {
                 const { count } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
@@ -480,6 +487,7 @@ export async function POST(request: NextRequest) {
                     booking_source: source,
                     // the staff member who took it (their 1.5% commission); never for blocks or website guests
                     created_by: isInternalBooking && bookingType !== 'maintenance' ? user.id : null,
+                    client_ip: isInternalBooking ? null : clientIp,
                 })
                 .select()
                 .single();
