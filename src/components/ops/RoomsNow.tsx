@@ -70,13 +70,13 @@ export default function RoomsNow({ propertyId }: { propertyId: string }) {
         <div className="space-y-4">
             {error && <p className="text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">No connection: showing the last saved view.</p>}
 
-            <div className="rounded-2xl bg-gradient-to-br from-green-600 to-green-700 p-5 text-white shadow-md">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-green-200">Tonight · {fmtDay(log.date)}</p>
+            <div className="rounded-2xl bg-white border border-gray-100 p-5 text-gray-900 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Tonight · {fmtDay(log.date)}</p>
                 <div className="mt-1 flex items-end justify-between gap-3">
-                    <p className="text-[34px] font-extrabold tracking-tight tabular-nums">{rate}%<span className="text-[15px] font-semibold text-white/80 ml-2">occupied</span></p>
-                    <p className="text-right text-[13px] text-white/85 pb-1.5">{inUse} of {sellable} rooms in use</p>
+                    <p className="text-[34px] font-extrabold tracking-tight tabular-nums">{rate}%<span className="text-[15px] font-semibold text-gray-500 ml-2">occupied</span></p>
+                    <p className="text-right text-[13px] text-gray-500 pb-1.5">{inUse} of {sellable} rooms in use</p>
                 </div>
-                <div className="mt-3 h-2 rounded-full bg-white/20 overflow-hidden"><div className="h-full bg-white rounded-full" style={{ width: `${rate}%` }} /></div>
+                <div className="mt-3 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-green-500 rounded-full" style={{ width: `${rate}%` }} /></div>
             </div>
 
             {overdueCount > 0 && (

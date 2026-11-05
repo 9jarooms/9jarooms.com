@@ -29,6 +29,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (body.isActive === false) return NextResponse.json({ error: 'Use Remove on the Rooms page to take a room out of use' }, { status: 400 });
     if (body.isActive !== undefined) update.is_active = body.isActive;
 
+    if (body.unitCode) {
+        // a room name is unique within its property (bookings, the daily log and staff go by it)
+        const { data: me } = await supabase.from('rooms').select('property_id').eq('id', id).single();
+        const { data: clash } = await supabase.from('rooms').select('id').eq('property_id', me?.property_id).eq('is_active', true)
+            .ilike('unit_code', body.unitCode.replace(/[%_\\]/g, c => '\\' + c)).neq('id', id).limit(1);
+        if (clash?.length) return NextResponse.json({ error: `This property already has a room called ${body.unitCode}` }, { status: 409 });
+    }
     if (Object.keys(update).length === 0) return NextResponse.json({ success: true, unchanged: true });
 
     const { data, error } = await supabase.from('rooms').update(update).eq('id', id).select('id, unit_code, name, price_per_night, is_active').single();

@@ -466,24 +466,44 @@ export function fetchCached<T>(url: string): Promise<T> {
 // ------------------------------------------------------------------
 const pulseListeners = new Set<() => void>();
 let pulseChannel: { unsubscribe: () => unknown } | null = null;
+let pulseLive = false;          // the socket has confirmed it is listening
+let pulseClient: ReturnType<typeof createClient> | null = null;
+function notifyAll() { memCache.clear(); pulseListeners.forEach(fn => fn()); }
 function startPulse() {
     if (pulseChannel || typeof window === 'undefined') return;
-    const supabase = createClient();
-    const ch = supabase.channel('ops-pulse')
-        .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'ops_pulse' }, () => {
-            memCache.clear();                     // anything cached may now be out of date
-            pulseListeners.forEach(fn => fn());
-        });
+    pulseClient = pulseClient || createClient();
+    const supabase = pulseClient;
+    const ch = supabase.channel(`ops-pulse-${Date.now()}`)
+        .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'ops_pulse' }, notifyAll);
     pulseChannel = ch;
     ch.subscribe((status: string) => {
-        // the socket dropped (bad signal, phone asleep): start a new one shortly and catch up on what was missed
+        if (status === 'SUBSCRIBED') {
+            // (re)connected: anything missed while it was down is fetched now
+            if (!pulseLive) { pulseLive = true; notifyAll(); }
+            return;
+        }
+        // the socket dropped (bad signal, phone asleep): start a new one shortly and catch up
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             if (pulseChannel !== ch) return;
-            pulseChannel = null;
+            pulseChannel = null; pulseLive = false;
             supabase.removeChannel(ch);
-            setTimeout(() => { if (pulseListeners.size) { startPulse(); pulseListeners.forEach(fn => fn()); } }, 5000);
+            setTimeout(() => { if (pulseListeners.size) startPulse(); }, 3000);
         }
     });
+}
+// An installed app that was in the background often comes back with a dead socket that never
+// reported closing: start a fresh one whenever the app is opened again or the signal returns.
+function revivePulse() {
+    if (!pulseListeners.size) return;
+    if (pulseChannel && pulseClient) { pulseClient.removeChannel(pulseChannel as any); }
+    pulseChannel = null; pulseLive = false;
+    startPulse();
+    notifyAll();
+}
+if (typeof window !== 'undefined') {
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') revivePulse(); });
+    window.addEventListener('online', revivePulse);
+    window.addEventListener('pageshow', e => { if ((e as PageTransitionEvent).persisted) revivePulse(); });
 }
 // Reload when anyone changes a booking, payment or night, plus a quiet catch-up when the phone comes
 // back to the app (it may have missed updates while asleep). Never on a timer: data changes in place,
@@ -498,12 +518,7 @@ export function useLiveUpdates(onChange: () => void, enabled = true) {
         const fire = () => { if (timer) clearTimeout(timer); timer = setTimeout(() => ref.current(), 350); };
         pulseListeners.add(fire);
         startPulse();
-        const visible = () => { if (document.visibilityState === 'visible') fire(); };
-        document.addEventListener('visibilitychange', visible);
-        return () => {
-            pulseListeners.delete(fire); if (timer) clearTimeout(timer);
-            document.removeEventListener('visibilitychange', visible);
-        };
+        return () => { pulseListeners.delete(fire); if (timer) clearTimeout(timer); };
     }, [enabled]);
 }
 

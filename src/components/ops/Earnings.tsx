@@ -71,14 +71,14 @@ export default function Earnings() {
 
             {error && <p className="text-[13px] text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
 
-            <div className="rounded-2xl bg-gradient-to-br from-green-600 to-green-700 p-5 text-white shadow-md">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-green-200 flex items-center gap-1.5"><Wallet size={13} /> Commission · {monthName(month)}</p>
+            <div className="rounded-2xl bg-white border border-gray-100 p-5 text-gray-900 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 flex items-center gap-1.5"><Wallet size={13} /> Commission · {monthName(month)}</p>
                 <p className="text-[34px] font-extrabold tracking-tight mt-1 tabular-nums">{me ? naira(me.calculated) : '—'}</p>
-                <p className="text-white/80 text-sm">{me ? `${me.bookings} booking${me.bookings === 1 ? '' : 's'} taken in the app · 1.5% of each stay` : 'Loading…'}</p>
+                <p className="text-gray-500 text-sm">{me ? `${me.bookings} booking${me.bookings === 1 ? '' : 's'} taken in the app · 1.5% of each stay` : 'Loading…'}</p>
                 {me && (
                     <>
-                        <div className="mt-4 h-2 rounded-full bg-white/20 overflow-hidden"><div className="h-full bg-white rounded-full" style={{ width: `${capPct}%` }} /></div>
-                        <p className="mt-1.5 text-[12px] text-white/75">
+                        <div className="mt-4 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-green-500 rounded-full" style={{ width: `${capPct}%` }} /></div>
+                        <p className="mt-1.5 text-[12px] text-gray-500">
                             {me.special ? 'Verified commission reached ₦500,000: you qualify for the special ₦300,000 payout.'
                                 : me.nearSpecial ? 'You reached ₦500,000. The special ₦300,000 applies once management has verified ₦500,000 of it.'
                                 : me.calculated >= 200_000 ? 'Monthly cap of ₦200,000 reached. Reach ₦500,000 for the special ₦300,000 payout.'

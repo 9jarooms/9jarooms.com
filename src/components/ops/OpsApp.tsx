@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Children, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Plus, RefreshCw, Search, ChevronRight, Pencil, EyeOff, ImageOff } from 'lucide-react';
 import {
     BookingCard, KindPill, isoToday, fmtDay, naira, balanceOf, owes, shiftIso, cacheGet, fetchCached,
@@ -35,12 +35,6 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
     const [newBooking, setNewBooking] = useState<NewBookingPreset | null>(null);
     const [unitSheet, setUnitSheet] = useState<string | null>(null);
     const [typeSheet, setTypeSheet] = useState<string | null>(null);
-    const [showTraining, setShowTraining] = useState(false);
-    useEffect(() => {
-        const t = setTimeout(() => { try { setShowTraining(localStorage.getItem('training-nudge-off') !== '1'); } catch { /* ignore */ } }, 0);
-        return () => clearTimeout(t);
-    }, []);
-    const hideTraining = () => { setShowTraining(false); try { localStorage.setItem('training-nudge-off', '1'); } catch { /* ignore */ } };
 
     // remembered property (read after mount so server + client render the same)
     useEffect(() => {
@@ -250,16 +244,6 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
 
             {data && tab === 'today' && (
                 <div className="space-y-6">
-                    {showTraining && (
-                        <div className="rounded-2xl bg-gradient-to-br from-green-600 to-green-700 text-white p-4 flex items-start gap-3 shadow-md">
-                            <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-[15px]">New to the app? Start with Training</p>
-                                <p className="text-[13px] text-white/80 mt-0.5">Eight one-minute lessons with step-by-step guides.</p>
-                                <a href="/dashboard/training" className="inline-flex mt-3 h-9 px-4 rounded-xl bg-white text-green-700 font-semibold text-[13px] items-center">Open Training</a>
-                            </div>
-                            <button type="button" onClick={hideTraining} aria-label="Hide" className="text-white/70 text-[13px] px-2 py-1">Hide</button>
-                        </div>
-                    )}
                     <div className="grid grid-cols-4 gap-2">
                         {[
                             { label: 'Free tonight', value: freeTonight, accent: true, go: 'units' as Tab },
@@ -489,6 +473,10 @@ function shortName(name: string) {
 function Section({ title, count, empty, right, children }: {
     title: string; count: number; empty: string; right?: ReactNode; children: ReactNode;
 }) {
+    // long lists stay short: 3 cards, then "Show all"
+    const [all, setAll] = useState(false);
+    const items = Children.toArray(children);
+    const shown = all ? items : items.slice(0, 3);
     return (
         <section>
             <div className="flex items-center justify-between px-1 mb-2">
@@ -499,7 +487,14 @@ function Section({ title, count, empty, right, children }: {
             </div>
             {count === 0
                 ? <p className="text-[13px] text-gray-400 bg-white/60 border border-dashed border-gray-200 rounded-2xl px-4 py-4 text-center">{empty}</p>
-                : <div className="space-y-2.5">{children}</div>}
+                : <div className="space-y-2.5">
+                    {shown}
+                    {items.length > 3 && (
+                        <button type="button" onClick={() => setAll(!all)} className="w-full py-2.5 text-[13px] font-semibold text-gray-600 bg-white border border-gray-200 rounded-2xl">
+                            {all ? 'Show fewer' : `Show all ${items.length}`}
+                        </button>
+                    )}
+                </div>}
         </section>
     );
 }
@@ -548,6 +543,7 @@ function BookingSearch({ propertyId, today, unitNameOf, onOpen }: {
         const t = setTimeout(load, q ? 300 : 0);
         return () => clearTimeout(t);
     }, [load, q]);
+    useLiveUpdates(load);   // a booking made on another phone appears here by itself
 
     return (
         <div className="space-y-3">

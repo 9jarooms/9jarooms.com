@@ -99,14 +99,14 @@ export default function FindRoomPanel({ data, onHold }: {
             </div>
 
             {shareable.length > 1 && (
-                <div className="rounded-2xl bg-gradient-to-br from-green-600 to-green-700 p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="rounded-2xl bg-white border border-gray-100 p-5 text-gray-900 shadow-sm flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-widest text-green-200">Send to the guest</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Send to the guest</p>
                         <p className="font-semibold text-lg leading-snug mt-1">{shareable.length} options on the website for {stayLabel}</p>
-                        <p className="text-white/70 text-sm mt-1">One message with every option and its booking link. Nothing is held until they pay.</p>
+                        <p className="text-gray-500 text-sm mt-1">One message with every option and its booking link. Nothing is held until they pay.</p>
                     </div>
                     <button type="button" onClick={() => share(messageForAll(shareable))}
-                        className="shrink-0 flex items-center justify-center gap-2 px-4 py-3 bg-white text-green-700 hover:bg-green-50 rounded-xl text-sm font-semibold transition-all shadow-sm">
+                        className="shrink-0 flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white hover:bg-green-700 rounded-xl text-sm font-semibold transition-all shadow-sm">
                         <Share2 size={16} /> Share all on WhatsApp
                     </button>
                 </div>

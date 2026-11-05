@@ -4,6 +4,7 @@ import { Manrope } from 'next/font/google';
 import { createServerClient, createAdminClient } from '@/lib/supabase/server';
 import SidebarNav from './components/SidebarNav';
 import MobileNav from './components/MobileNav';
+import LiveAlerts from '@/components/ops/LiveAlerts';
 
 const manrope = Manrope({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800'] });
 
@@ -43,6 +44,7 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
                 </div>
             </aside>
             <MobileNav role={role.role} email={user.email || ''} />
+            <LiveAlerts href="/crm/activity" />
             <main className="flex-1 min-w-0">{children}</main>
         </div>
     );

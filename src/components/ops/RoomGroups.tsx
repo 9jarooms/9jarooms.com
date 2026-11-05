@@ -56,6 +56,22 @@ export default function RoomGroups() {
         return [...m.entries()].sort((a, b) => b[0] - a[0]);
     }, [shown]);
 
+    const renameSelected = async () => {
+        const id = [...sel][0];
+        const p = propOfUnit.get(id);
+        const u = p?.units.find(x => x.id === id);
+        if (!p || !u) return;
+        const name = prompt(`New name for room ${u.code} (${p.name}):`, u.code)?.trim().toUpperCase().replace(/\s+/g, ' ');
+        if (!name || name === u.code) return;
+        if (p.units.some(x => x.id !== id && x.code.toUpperCase() === name)) { setError(`${p.name} already has a room called ${name}`); return; }
+        setBusy(true); setError(null);
+        const res = await fetch(`/api/crm/rooms/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ unitCode: name, name: `Unit ${name}` }) });
+        const j = await res.json().catch(() => ({}));
+        setBusy(false);
+        if (!res.ok) { setError(j.error || 'Could not rename'); return; }
+        setSel(new Set());
+        load();
+    };
     const toggle = (id: string) => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
     const selectMany = (ids: string[]) => setSel(s => {
         const n = new Set(s); const all = ids.every(i => n.has(i));
@@ -126,10 +142,14 @@ export default function RoomGroups() {
                 </select>
                 <button type="button" onClick={load} aria-label="Refresh" className="w-12 h-12 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-900 hover:text-white transition-all shrink-0"><RefreshCw size={18} /></button>
             </div>
-            <div className="flex items-center justify-between gap-2 mb-4">
-                <p className="text-[13px] text-gray-500 px-1">{totalRooms} rooms{pid === 'all' ? ` in ${shown.length} properties` : ''}</p>
-                <Chips options={[{ value: 'now', label: 'Right now' }, { value: 'groups', label: 'By group' }, { value: 'price', label: 'By price' }]} value={view} onChange={v => { setView(v as 'now' | 'groups' | 'price'); setSel(new Set()); }} />
+            {/* one even row of three, never squeezed next to other things */}
+            <div className="grid grid-cols-3 gap-1 p-1 mb-2 rounded-2xl bg-gray-100">
+                {([['now', 'Right now'], ['groups', 'By group'], ['price', 'By price']] as const).map(([v, label]) => (
+                    <button key={v} type="button" onClick={() => { setView(v); setSel(new Set()); }}
+                        className={`h-10 rounded-xl text-[14px] font-semibold ${view === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{label}</button>
+                ))}
             </div>
+            <p className="text-[13px] text-gray-500 px-1 mb-4">{totalRooms} rooms{pid === 'all' ? ` in ${shown.length} properties` : ''}</p>
 
             {error && <p className="text-[13px] text-red-600 bg-red-50 rounded-xl px-3 py-2 mb-3">{error}</p>}
 
@@ -219,6 +239,12 @@ export default function RoomGroups() {
                             <span className="font-semibold text-[15px] truncate">{sel.size} selected{selProp && pid === 'all' ? ` · ${selProp.name}` : ''}</span>
                             <button type="button" onClick={() => setSel(new Set())} className="ml-auto text-white/70 flex items-center gap-1 text-[13px] shrink-0"><X size={14} /> Clear</button>
                         </div>
+                        {sel.size === 1 && (
+                            <button type="button" onClick={renameSelected} disabled={busy} aria-label="Rename room"
+                                className="h-14 w-14 rounded-full bg-white border border-gray-200 text-gray-700 flex items-center justify-center shadow-lg shrink-0">
+                                <Pencil size={18} />
+                            </button>
+                        )}
                         <button type="button" onClick={removeSelected} disabled={!selProp || busy} aria-label="Remove selected rooms"
                             className="h-14 w-14 rounded-full bg-white border border-red-200 text-red-600 flex items-center justify-center shadow-lg disabled:text-gray-300 disabled:border-gray-200 shrink-0">
                             <Trash2 size={19} />

@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { clearOpsCache } from '@/components/ops/shared';
-import { Home, Search, Building2, UserCircle, LogOut, Smartphone, X, Layers, ClipboardList, GraduationCap, Wallet } from 'lucide-react';
+import LiveAlerts from '@/components/ops/LiveAlerts';
+import { Home, Search, Building2, UserCircle, LogOut, Smartphone, X, Layers, ClipboardList, GraduationCap, Wallet, Menu as MenuIcon, Monitor } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 
@@ -39,6 +40,7 @@ export default function DashboardShell({ user, role = 'caretaker', caretakerName
     const router = useRouter();
     const onFind = pathname === '/dashboard' && searchParams.get('tab') === 'find';
     const [showInstall, setShowInstall] = useState(false);
+    const [menu, setMenu] = useState(false);
     const [platform, setPlatform] = useState<'ios' | 'android' | 'other'>('other');
 
     // One-time nudge to add the portal to the home screen, so it opens like
@@ -78,29 +80,28 @@ export default function DashboardShell({ user, role = 'caretaker', caretakerName
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-800">
+            <LiveAlerts href="/dashboard?tab=bookings" />
             {/* Mobile top bar */}
             <header className="lg:hidden fixed top-0 inset-x-0 z-40 h-14 bg-white/95 backdrop-blur-md border-b border-black/[0.06] shadow-sm px-4 flex items-center justify-between">
                 <Link href="/dashboard" className="shrink-0 flex items-center">
                     <img src="/logo-transparent.png" alt="9jaRooms" className="h-7 w-auto object-contain" />
                 </Link>
-                <div className="flex items-center gap-1 min-w-0">
-                    <Link href="/dashboard/training" className={`h-8 px-3 mr-1 rounded-full text-[12.5px] font-semibold flex items-center gap-1.5 shrink-0 ${pathname.startsWith('/dashboard/training') ? 'bg-green-500 text-white' : 'bg-green-50 text-green-700'}`}>
-                        <GraduationCap size={15} /> Training
-                    </Link>
-                    {role !== 'caretaker' ? (
-                        <Link href="/crm/calendar" className="h-8 px-3 rounded-full bg-gray-900 text-white text-[12px] font-semibold flex items-center shrink-0">
-                            {ROLE_NAME[role]} · Console
-                        </Link>
-                    ) : (
-                        <span className="text-[12px] font-semibold text-gray-500 truncate max-w-[34vw]">{caretakerName}</span>
-                    )}
-                    <Link href="/dashboard/account" aria-label="My account and password" className={`w-9 h-9 flex items-center justify-center rounded-full ${pathname.startsWith('/dashboard/account') ? 'text-green-600 bg-green-50' : 'text-gray-500 hover:bg-gray-100'}`}>
-                        <UserCircle size={19} />
-                    </Link>
-                    <button type="button" onClick={handleLogout} aria-label="Sign out" className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
-                        <LogOut size={18} />
+                {/* one quiet menu instead of a row of buttons */}
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[12.5px] text-gray-500 truncate max-w-[45vw]">{caretakerName}</span>
+                    <button type="button" onClick={() => setMenu(m => !m)} aria-label="Menu" aria-expanded={menu}
+                        className={`w-10 h-10 -mr-1 flex items-center justify-center rounded-full ${menu ? 'bg-gray-100 text-gray-900' : 'text-gray-600'}`}>
+                        {menu ? <X size={20} /> : <MenuIcon size={20} />}
                     </button>
                 </div>
+                {menu && (
+                    <div className="absolute top-14 right-3 w-60 rounded-2xl bg-white border border-gray-200 shadow-xl py-2 text-[15px]" onClick={() => setMenu(false)}>
+                        <Link href="/dashboard/account" className="flex items-center gap-3 px-4 py-3 text-gray-800"><UserCircle size={18} className="text-gray-400" /> My account & password</Link>
+                        <Link href="/dashboard/training" className="flex items-center gap-3 px-4 py-3 text-gray-800"><GraduationCap size={18} className="text-gray-400" /> Training</Link>
+                        {role !== 'caretaker' && <Link href="/crm/activity" className="flex items-center gap-3 px-4 py-3 text-gray-800"><Monitor size={18} className="text-gray-400" /> {ROLE_NAME[role]} console</Link>}
+                        <button type="button" onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-600 border-t border-gray-100 mt-1"><LogOut size={18} /> Sign out</button>
+                    </div>
+                )}
             </header>
 
             {/* Desktop sidebar */}
@@ -158,18 +159,10 @@ export default function DashboardShell({ user, role = 'caretaker', caretakerName
             {/* Main content */}
             <main className="lg:ml-64 pt-14 lg:pt-0 pb-24 lg:pb-8 min-h-screen">
                 {showInstall && (
-                    <div className="lg:hidden mx-4 mt-3 rounded-2xl bg-gradient-to-br from-green-600 to-green-700 text-white px-4 py-3 flex items-start gap-3 shadow-md">
-                        <Smartphone size={20} className="shrink-0 mt-0.5 text-green-300" />
-                        <div className="text-[13px] leading-snug flex-1">
-                            <p className="font-semibold">Add 9jaRooms to your home screen</p>
-                            <p className="text-white/80 mt-0.5">
-                                {platform === 'ios'
-                                    ? 'Tap the Share button below, then “Add to Home Screen”.'
-                                    : 'Tap the ⋮ menu at the top right, then “Add to Home screen”.'}
-                                {' '}It then opens like an app, straight to Today.
-                            </p>
-                        </div>
-                        <button type="button" onClick={dismissInstall} aria-label="Dismiss" className="p-1 -mr-1 rounded-lg text-white/70 active:bg-white/10"><X size={18} /></button>
+                    <div className="lg:hidden mx-4 mt-3 flex items-center gap-2 text-[12.5px] text-gray-500">
+                        <Smartphone size={15} className="shrink-0 text-gray-400" />
+                        <span className="flex-1">{platform === 'ios' ? 'Tip: Share → “Add to Home Screen” to open this like an app.' : 'Tip: ⋮ menu → “Add to Home screen” to open this like an app.'}</span>
+                        <button type="button" onClick={dismissInstall} aria-label="Dismiss" className="p-1 text-gray-400"><X size={15} /></button>
                     </div>
                 )}
                 <div className="p-4 sm:p-6 lg:p-8 page-enter">
