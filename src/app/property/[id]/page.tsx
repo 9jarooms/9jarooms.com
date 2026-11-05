@@ -11,12 +11,12 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { id } = await params;
-    const supabase = await createServerClient();
-
-    const { data: p } = await supabase
+    const { createAdminClient: admin } = await import('@/lib/supabase/server');
+    const { data: p } = await admin()
         .from('properties')
         .select('name, description, area, city, price_per_night, thumbnail, images, type')
         .eq('id', id)
+        .eq('is_active', true)
         .single();
 
     if (!p) return {};
@@ -51,12 +51,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PropertyPage({ params }: Props) {
     const { id } = await params;
     const supabase = await createServerClient();
+    const { createAdminClient: admin } = await import('@/lib/supabase/server');
 
-    // Fetch property with rooms and availability
-    const { data: property } = await supabase
+    // Fetch the listing on the server (private fields are stripped below before anything reaches the
+    // browser). Only live listings are public.
+    const { data: property } = await admin()
         .from('properties')
-        .select('*, owner:owners(name, paystack_subaccount_code)')
+        .select('*')
         .eq('id', id)
+        .eq('is_active', true)
         .single();
 
     if (!property) {
@@ -199,9 +202,9 @@ export default async function PropertyPage({ params }: Props) {
         .map((slot) => `${slot.room_id}|${slot.date}`);
 
     // Fetch similar properties (same area, exclude current)
-    const { data: similarProperties } = await supabase
+    const { data: similarProperties } = await admin()
         .from('properties')
-        .select('*, rooms(id, price_per_night, max_guests)')
+        .select('id, name, description, city, state, area, price_per_night, amenities, images, max_guests, type, thumbnail, category, minimum_stay, is_active, rooms(id, price_per_night, max_guests)')
         .eq('area', property.area)
         .eq('is_active', true)
         .neq('id', id)

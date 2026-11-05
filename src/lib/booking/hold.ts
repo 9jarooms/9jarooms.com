@@ -77,7 +77,7 @@ export async function claimDates(
         const other = stale.filter(c => c.status !== 'held').map(c => c.id);
         // re-checked at delete time: a hold confirmed a moment ago is "booked" now and is left alone
         if (held.length) await supabase.from('availability').delete().in('id', held).eq('status', 'held');
-        if (other.length) await supabase.from('availability').delete().in('id', other).neq('status', 'booked');
+        if (other.length) await supabase.from('availability').delete().in('id', other);   // no booking, or a dead one
     }
 
     // 2. Insert-only claim. Rows that already exist are left alone.
@@ -143,9 +143,18 @@ export async function reclaim(
         return conflicts;
     }
     const want = new Set(roomIds.flatMap(r => dates.map(d => `${r}|${d}`)));
-    const extra = mine.filter(c => !want.has(`${c.room_id}|${c.date}`)).map(c => c.id);
-    if (extra.length) await supabase.from('availability').delete().in('id', extra);
     await supabase.from('availability').update({ status }).eq('booking_id', bookingId).neq('status', status);
+    const { data: after } = await supabase.from('availability').select('id, room_id, date').eq('booking_id', bookingId);
+    const have = new Set((after || []).map(c => `${c.room_id}|${c.date}`));
+    const lost = [...want].filter(k => !have.has(k));
+    if (lost.length) {
+        const added = (after || []).filter(c => !had.has(c.id)).map(c => c.id);
+        if (added.length) await supabase.from('availability').delete().in('id', added);
+        const [room_id, date] = lost[0].split('|');
+        return [{ room_id, date, booking_id: null, status: 'missing' }];
+    }
+    const extra = (after || []).filter(c => !want.has(`${c.room_id}|${c.date}`)).map(c => c.id);
+    if (extra.length) await supabase.from('availability').delete().in('id', extra);
     return [];
 }
 

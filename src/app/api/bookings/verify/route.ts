@@ -87,6 +87,10 @@ export async function GET(request: NextRequest) {
             .eq('paystack_reference', reference)
             .single();
 
+        // the payment was processed (here or by the webhook) but the room was lost: never say "confirmed"
+        if (updatedBooking && ['cancelled', 'expired', 'no_show'].includes(updatedBooking.status)) {
+            return NextResponse.json({ status: 'refund_needed', booking: publicView(updatedBooking) });
+        }
         return NextResponse.json({ status: 'success', booking: publicView(updatedBooking) });
     } catch (error: any) {
         console.error('API /bookings/verify Error:', error);

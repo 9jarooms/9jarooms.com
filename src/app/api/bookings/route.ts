@@ -128,6 +128,7 @@ export async function POST(request: NextRequest) {
         const body = validation.data;
         const { propertyId, mode, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
         const isHold = !!(isManualBooking && body.hold);
+        const clientIp = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null;
         // staff locks are paid by bank transfer and confirmed when the money is seen in the account.
         // No Paystack link: Paystack money arrives a day later, too late to refund a guest who paid
         // after the lock ran out.
@@ -189,8 +190,11 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ success: true, bookingId: same.id, duplicate: true, roomId: same.room_id, total: Number(same.total_amount) });
             }
         }
-        if (isInternalBooking && body.deposit && /transfer|moniepoint/i.test(body.deposit.method || '') && !body.deposit.reference) {
+        if (isInternalBooking && body.deposit && /transfer|moniepoint|pos/i.test(body.deposit.method || '') && !body.deposit.reference) {
             return NextResponse.json({ error: 'Type the transfer reference from the bank alert' }, { status: 400 });
+        }
+        if (isInternalBooking && body.deposit && body.totalAmount != null && body.deposit.amount > body.totalAmount + 1) {
+            return NextResponse.json({ error: 'The amount paid is more than the price of the stay. Check both.' }, { status: 400 });
         }
         if (isInternalBooking && body.deposit?.reference) {
             const { data: used } = await supabase.from('booking_payments').select('id').ilike('reference', body.deposit.reference.replace(/[%_\\]/g, c => '\\' + c)).maybeSingle();
@@ -201,10 +205,13 @@ export async function POST(request: NextRequest) {
             // one guest cannot keep many rooms locked without paying
             const who = [guestEmail ? `guest_email.eq.${guestEmail.replace(/[,()]/g, '')}` : '', guestPhone ? `guest_phone.eq.${guestPhone.replace(/[,()]/g, '')}` : '',
                 user ? `user_id.eq.${user.id}` : ''].filter(Boolean);
-            // nobody can lock up a whole property with fake details: at most 6 unpaid website checkouts at once
-            const { count: open } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
-                .eq('property_id', propertyId).eq('status', 'pending').is('created_by', null).gt('expires_at', new Date().toISOString());
-            if ((open || 0) >= 6) return NextResponse.json({ error: 'Many guests are checking out this property right now. Please try again in a few minutes.' }, { status: 429 });
+            // one network address cannot hold more than 3 unpaid website checkouts at once (kept in the
+            // database, so it holds across servers; one person can never block a whole property)
+            if (clientIp) {
+                const { count: open } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
+                    .eq('client_ip', clientIp).eq('status', 'pending').gt('expires_at', new Date().toISOString());
+                if ((open || 0) >= 3) return NextResponse.json({ error: 'You already have rooms waiting for payment. Finish or wait for those first.' }, { status: 429 });
+            }
             if (who.length) {
                 const { count } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
                     .eq('status', 'pending').gt('expires_at', new Date().toISOString()).or(who.join(','));
@@ -596,8 +603,7 @@ export async function POST(request: NextRequest) {
         // a guest still checked in past their check-out date is still in the room tonight
         const today = lagosToday();
         if (dates.includes(today)) {
-            const { count: overstay } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
-                .eq('room_id', roomId).eq('status', 'checked_in').lte('check_out', today);
+            const overstay = (await overstayRooms(supabase)).has(roomId as string);
             if (overstay) return NextResponse.json({ error: isInternalBooking
                 ? 'A guest is still checked in to this room past their check-out. Check them out (or extend them) first.'
                 : 'Sorry, this room is not free tonight. Please pick another room or date.' }, { status: 409 });
@@ -696,6 +702,7 @@ export async function POST(request: NextRequest) {
                 booking_source: source,
                 created_by: isInternalBooking && bookingType !== 'maintenance' ? user.id : null,
                 client_request_id: isInternalBooking ? body.requestId || null : null,
+                client_ip: isInternalBooking ? null : clientIp,
                 ...(isInternalBooking && body.totalAmount != null ? { price_per_night: Math.round(totalAmount / Math.max(nightCount, 1)) } : {}),
             })
             .select()
@@ -754,10 +761,15 @@ export async function POST(request: NextRequest) {
             await supabase.from('audit_log').insert({ actor: user.id, booking_id: booking.id, action: 'agreed_price', detail: { standard: standardTotal, agreed: Math.round(body.totalAmount) } });
         }
         if (isInternalBooking && !isHold && body.deposit && bookingType !== 'maintenance') {
-            await supabase.from('booking_payments').insert({
+            const { error: depErr } = await supabase.from('booking_payments').insert({
                 booking_id: booking.id, amount: body.deposit.amount, method: body.deposit.method || null, note: 'At booking', recorded_by: user.id,
                 reference: body.deposit.reference || null,
             });
+            if (depErr) {
+                // the money could not be recorded: undo the booking rather than leave it without its deposit
+                await rollbackReservation(supabase, booking.id);
+                return NextResponse.json({ error: /reference/i.test(depErr.message) ? 'That transfer reference was just recorded on another booking.' : 'Could not record the payment. Nothing was booked; try again.' }, { status: 409 });
+            }
         }
         if (transferHold) return transferHoldResponse(supabase, booking.id, expiresAt, { total: totalAmount, roomId });
         // 6. Initialize Paystack for public bookings AND operator bookings (operator sends link to client)

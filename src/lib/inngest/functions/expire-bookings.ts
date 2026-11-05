@@ -1,7 +1,7 @@
 import { inngest } from '../client';
 import { createAdminClient } from '@/lib/supabase/server';
 import { verifyPayment } from '@/lib/paystack';
-import { confirmPaidBooking } from '@/lib/booking/payment-confirmed';
+import { confirmPaidBooking, announcePayment } from '@/lib/booking/payment-confirmed';
 
 // Cron: Expire unpaid bookings and holds once expires_at passes (HOLD_MINUTES)
 export const expirePendingBookings = (inngest as any).createFunction(
@@ -36,11 +36,13 @@ export const expirePendingBookings = (inngest as any).createFunction(
                     const v = await verifyPayment(b.paystack_reference);
                     const st = v?.data?.status;
                     if (st === 'success') {
-                        await confirmPaidBooking(supabase, { reference: b.paystack_reference, amountKobo: v.data.amount, raw: v.data });
+                        const r = await confirmPaidBooking(supabase, { reference: b.paystack_reference, amountKobo: v.data.amount, raw: v.data });
+                        await announcePayment(supabase, r);   // same messages as the webhook (it will find this already done)
                         kept.push(b.id);
-                    } else if (['ongoing', 'pending', 'processing', 'queued'].includes(String(st)) &&
+                    } else if (['ongoing', 'pending', 'processing', 'queued'].includes(String(st)) && !b.hold_extended_at &&
                         Date.now() - new Date(b.created_at).getTime() < 45 * 60 * 1000) {
-                        await supabase.from('bookings').update({ expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), hold_extended_at: new Date().toISOString() })
+                        // once only: a checkout left open cannot keep a room locked
+                        await supabase.from('bookings').update({ expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(), hold_extended_at: new Date().toISOString() })
                             .eq('id', b.id).eq('status', 'pending');
                         kept.push(b.id);
                     }

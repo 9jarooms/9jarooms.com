@@ -48,9 +48,13 @@ export async function confirmPaidBooking(supabase: Db, input: {
 }): Promise<PaidBookingResult> {
     const select = '*, room:rooms(id, name, unit_code, room_type_id), room_type:room_types(name), property:properties(*, owner:owners(name, email))';
     // the payment reference is the key; a booking id from metadata is only trusted when it matches it
-    let { data: booking } = await supabase.from('bookings').select(select).eq('paystack_reference', input.reference).maybeSingle();
+    // a database error is not "not found": throw, so Paystack retries
+    const first = await supabase.from('bookings').select(select).eq('paystack_reference', input.reference).maybeSingle();
+    if (first.error) throw new Error(`Booking lookup failed: ${first.error.message}`);
+    let booking = first.data;
     if (!booking && input.bookingId) {
-        const { data: byId } = await supabase.from('bookings').select(select).eq('id', input.bookingId).maybeSingle();
+        const { data: byId, error: idErr } = await supabase.from('bookings').select(select).eq('id', input.bookingId).maybeSingle();
+        if (idErr) throw new Error(`Booking lookup failed: ${idErr.message}`);
         if (byId && (!byId.paystack_reference || byId.paystack_reference === input.reference)) booking = byId;
     }
     if (!booking) throw new BookingNotFound(input.reference);
@@ -83,6 +87,9 @@ export async function confirmPaidBooking(supabase: Db, input: {
             if (movedTo) {
                 await supabase.from('bookings').update({ room_id: movedTo }).eq('id', booking.id);
                 await supabase.from('booking_rooms').update({ room_id: movedTo }).eq('booking_id', booking.id);
+                // emails and messages must name the room they actually have
+                const { data: room } = await supabase.from('rooms').select('id, name, unit_code, room_type_id').eq('id', movedTo).single();
+                booking.room = room; booking.room_id = movedTo;
             } else {
                 refundNeeded = true;
                 await releaseClaim(supabase, booking.id);   // no leftover nights blocking the room
@@ -264,4 +271,21 @@ export async function notifyGuestBookingConfirmed(booking: any): Promise<{ sent:
         return { sent: false, reason: error.message };
     }
     return { sent: true };
+}
+
+// Tell everyone what a Paystack confirmation means: refund alert, or the paid booking messages.
+// Never throws (a failed message must not undo or block a processed payment).
+export async function announcePayment(supabase: Db, r: PaidBookingResult) {
+    const { notifyCaretakersPaid, notifyCaretakersRefundNeeded } = await import('@/lib/booking/notify-caretakers');
+    try {
+        if (r.refundNeeded) { await notifyCaretakersRefundNeeded(supabase, r.booking.id); return; }
+        if (r.alreadyPaid) return;
+        await Promise.all([
+            notifyTeamNewBooking(supabase, r.booking).catch(() => null),
+            notifyGuestBookingConfirmed(r.booking).catch(() => null),
+            notifyCaretakersPaid(supabase, r.booking.id).catch(() => null),
+        ]);
+    } catch (e: any) {
+        console.error('[announcePayment]', e?.message);
+    }
 }

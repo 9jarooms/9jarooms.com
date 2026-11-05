@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { createAdminClient } from '@/lib/supabase/server';
-import { reclaim, roomsOfBooking, stayDates, lagosToday } from '@/lib/booking/hold';
+import { reclaim, roomsOfBooking, stayDates, lagosToday, overstayRooms } from '@/lib/booking/hold';
 
 // Booking operations shared by the CRM (/api/crm/*) and the mobile
 // operations surface (/api/ops/*). Routes handle auth + scoping and
@@ -207,7 +207,13 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
             if (!room || room.property_id !== booking.property_id || room.is_active === false) return fail('That unit is not in this property', 400);
             update.room_type_id = room.room_type_id ?? null;
         }
-        const conflicts = await reclaim(supabase, id, rooms.length > 1 ? rooms : [roomId], dates, booking.status === 'pending' ? 'held' : 'booked');
+        const target = rooms.length > 1 ? rooms : [roomId];
+        if (dates.includes(today)) {
+            const busy = await overstayRooms(supabase, target);
+            for (const r of await roomsOfBooking(supabase, booking)) if (booking.status === 'checked_in' && booking.check_out <= today) busy.delete(r);   // that is this guest
+            if ([...busy].some(r => target.includes(r))) return fail('A guest is still checked in to that room past their check-out. Check them out (or extend them) first.', 409);
+        }
+        const conflicts = await reclaim(supabase, id, target, dates, booking.status === 'pending' ? 'held' : 'booked');
         if (conflicts.length > 0) return fail(`Not free on ${conflicts[0].date}: another booking has that night.`, 409);
         if (roomId !== booking.room_id) await supabase.from('booking_rooms').update({ room_id: roomId }).eq('booking_id', id).eq('room_id', booking.room_id);
         update.room_id = roomId; update.check_in = checkIn; update.check_out = checkOut; update.nights = dates.length;
@@ -310,11 +316,20 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
         const { data: same } = await supabase.from('booking_payments').select('*').eq('client_request_id', input.requestId).maybeSingle();
         if (same) return ok({ success: true, payment: same, paid: await ledgerSum(supabase, id) });
     }
-    const isTransfer = /transfer|moniepoint/i.test(input.method || '');
-    const reference = (input.reference || '').trim() || null;
-    if (isTransfer && input.amount > 0 && !reference) {
-        return fail('Type the transfer reference from the bank alert (it stops the same transfer being recorded twice).', 400);
+    const isTransfer = /transfer|moniepoint|pos/i.test(input.method || '');
+    const isRefund = input.method === 'Refund';
+    const typed = (input.reference || '').trim();
+    if (!input.method) return fail('Pick how it was paid', 400);
+    if (isTransfer && input.amount > 0 && !typed) {
+        return fail('Type the reference from the bank alert or POS slip (it stops the same payment being recorded twice).', 400);
     }
+    // a real reference has digits and some length; "transfer", "-" or a name are not references
+    if (isTransfer && typed && (typed.length < 6 || !/\d/.test(typed))) {
+        return fail('That does not look like a bank reference. Copy the reference / session ID from the bank alert (letters and numbers).', 400);
+    }
+    // a refund quotes a reference in its note; only incoming money is checked for repeats
+    const reference = isRefund ? null : (typed || null);
+    if (isRefund && typed) input = { ...input, note: [input.note, `Refund ref: ${typed}`].filter(Boolean).join(' · ') };
     if (reference) {
         const { data: used } = await supabase.from('booking_payments').select('booking_id, amount, booking:bookings(guest_name)')
             .ilike('reference', reference.replace(/[%_\\]/g, c => '\\' + c)).maybeSingle();
@@ -363,7 +378,10 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
         .single();
 
     if (error) {
-        if (input.requestId && /duplicate|unique/i.test(error.message)) {
+        if (['pending', 'expired'].includes(booking.status) && input.amount > 0) {
+            await supabase.from('availability').update({ status: 'held' }).eq('booking_id', id);
+        }
+        if (input.requestId && /duplicate|unique/i.test(error.message) && !/reference/i.test(error.message)) {
             const { data: same } = await supabase.from('booking_payments').select('*').eq('client_request_id', input.requestId).maybeSingle();
             return ok({ success: true, payment: same, paid: await ledgerSum(supabase, id) });
         }

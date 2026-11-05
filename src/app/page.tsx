@@ -30,7 +30,8 @@ export default async function HomePage() {
         supabase.from('site_settings').select('value').eq('key', 'category_thumbnails').maybeSingle(),
     ]);
 
-    const allProperties = propertiesRes.data || [];
+    // public page: never ship the address, arrival instructions or owner fields to the browser
+    const allProperties = (propertiesRes.data || []).map(({ address: _a, check_in_instructions: _c, owner_id: _o, caretaker_id: _k, ...p }: any) => p);
     const featuredProperties = allProperties.filter((p: any) => p.is_featured);
     const byBookings = (a: any, b: any) => (b.bookings?.[0]?.count || 0) - (a.bookings?.[0]?.count || 0);
     const top4Properties = (

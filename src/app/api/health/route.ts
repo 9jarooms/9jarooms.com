@@ -8,8 +8,7 @@ export async function GET() {
         // Test database connection
         const { data, error } = await supabase
             .from('properties')
-            .select('count')
-            .limit(1);
+            .select('id', { count: 'exact', head: true });
 
         if (error) {
             return NextResponse.json(

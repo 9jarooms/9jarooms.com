@@ -30,7 +30,7 @@ export default async function PropertyManagePage({ params }: Props) {
 
     const { data: availability } = await supabase
         .from('availability')
-        .select('*')
+        .select('id, room_id, date, status')
         .in('room_id', roomIds);
 
     const { data: bookings } = await supabase
@@ -44,7 +44,7 @@ export default async function PropertyManagePage({ params }: Props) {
         <PropertyManageClient
             property={property}
             rooms={rooms || []}
-            availability={availability || []}
+            availability={(availability || []).map(a => ({ ...a, booking_id: null }))}
             bookings={bookings || []}
         />
     );

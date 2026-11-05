@@ -28,7 +28,7 @@ function BookingConfirmContent() {
     const searchParams = useSearchParams();
     const reference = searchParams.get('reference');
 
-    const [status, setStatus] = useState<'loading' | 'success' | 'failed' | 'error'>('loading');
+    const [status, setStatus] = useState<'loading' | 'success' | 'failed' | 'error' | 'refund'>('loading');
     const [booking, setBooking] = useState<any>(null);
     const [errorMsg, setErrorMsg] = useState('');
 
@@ -53,6 +53,8 @@ function BookingConfirmContent() {
                 if (res.ok && result.status === 'success') {
                     setBooking(result.booking);
                     setStatus('success');
+                } else if (res.ok && result.status === 'refund_needed') {
+                    setStatus('refund');
                 } else if (res.ok && result.status === 'pending') {
                     // Payment still processing at Paystack... poll again
                     pollCount++;
@@ -167,6 +169,12 @@ function BookingConfirmContent() {
                         </div>
                     )}
 
+                    {status === 'refund' && (
+                        <div className="text-center py-10 px-6">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-3">We received your payment, but the room is no longer free</h2>
+                            <p className="text-gray-600 max-w-md mx-auto">Your payment came in after the 15 minutes to pay had ended, and the room had already been booked. We are sorry. Our team has been alerted and will contact you on WhatsApp today to offer another room or refund you in full. You do not need to do anything.</p>
+                        </div>
+                    )}
                     {(status === 'failed' || status === 'error') && (
                         <div className="bg-white rounded-3xl p-8 md:p-12 text-center shadow-lg border border-red-100 flex flex-col items-center justify-center min-h-[300px] md:min-h-[400px]">
                             <div className="w-16 h-16 md:w-20 md:h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6">
