@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -19,7 +19,13 @@ export default function LoginPage() {
         return input.includes('@') ? input : `${input.toLowerCase()}@9jarooms.internal`;
     };
 
+    // Sign-in, the auth event and the existing-session check can all fire at once: only the first
+    // decides where to go. The others used to see their request cancelled by that navigation and
+    // fall back to /account, sending admins to the customer page.
+    const redirecting = useRef(false);
     const redirectBasedOnRole = async (accessToken: string) => {
+        if (redirecting.current) return;
+        redirecting.current = true;
         try {
             const roleResponse = await fetch('/api/auth/role', {
                 headers: {
@@ -32,6 +38,7 @@ export default function LoginPage() {
                 if (roleResponse.status === 401) {
                     setError('Session invalid, please try again');
                     setLoading(false);
+                    redirecting.current = false;
                     return;
                 }
                 console.warn('Defaulting to dashboard due to role fetch failure');
@@ -70,8 +77,9 @@ export default function LoginPage() {
                     router.push('/account'); // default to customer dashboard
             }
         } catch (err) {
+            // a network hiccup is not "you are a customer": let the next attempt decide
             console.error('Redirect Error:', err);
-            router.push('/account');
+            redirecting.current = false;
         }
     };
 
