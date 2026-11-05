@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
 
         // the same request arriving twice (signal dropped, button tapped again) returns the first booking
         if (isInternalBooking && body.requestId) {
-            const { data: same } = await supabase.from('bookings').select('id, status, expires_at, room_id, total_amount').eq('client_request_id', body.requestId).maybeSingle();
+            const { data: same } = await supabase.from('bookings').select('id, status, expires_at, room_id, total_amount, guest_name, check_in, check_out, nights').eq('client_request_id', body.requestId).maybeSingle();
             if (same && ['cancelled', 'expired', 'no_show'].includes(same.status)) {
                 // the first try did not get the room: this retry is a fresh attempt
                 await supabase.from('bookings').update({ client_request_id: null }).eq('id', same.id);
@@ -189,7 +189,8 @@ export async function POST(request: NextRequest) {
                 // what the first tap actually created, so the phone can show it instead of assuming
                 const { data: pays } = await supabase.from('booking_payments').select('amount').eq('booking_id', same.id);
                 const first = { duplicate: true, roomId: same.room_id, total: Number(same.total_amount), status: same.status,
-                    paid: (pays || []).reduce((t, p) => t + Number(p.amount), 0) };
+                    paid: (pays || []).reduce((t, p) => t + Number(p.amount), 0), guestName: same.guest_name,
+                    checkIn: same.check_in, checkOut: same.check_out, nights: same.nights };
                 if (same.status === 'pending') return transferHoldResponse(supabase, same.id, new Date(same.expires_at || Date.now()), first);
                 return NextResponse.json({ success: true, bookingId: same.id, ...first });
             }

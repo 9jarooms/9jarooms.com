@@ -146,7 +146,8 @@ export async function GET(request: NextRequest) {
 // Money to give back: any booking (cancelled ones included) where more was received than the stay costs.
 // Summed in the database, so it never misses rows however many payments there are.
 async function refundsDue(supabase: any, propertyIds: string[]) {
-    const { data: due } = await supabase.rpc('refunds_due', { prop_ids: propertyIds });
+    const { data: due, error } = await supabase.rpc('refunds_due', { prop_ids: propertyIds });
+    if (error) { console.error('[today] refunds_due failed:', error.message); return null; }   // shown as "unavailable", never as "none"
     const ids = (due || []).map((d: any) => d.booking_id);
     if (!ids.length) return [];
     const paid = new Map((due || []).map((d: any) => [d.booking_id, Number(d.paid)]));

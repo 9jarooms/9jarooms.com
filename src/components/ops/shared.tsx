@@ -34,7 +34,7 @@ export interface OpsToday {
     roomTypes: OpsRoomType[]; units: OpsUnit[];
     bookings: OpsBooking[]; blocks: OpsBlock[]; held: OpsHeld[];
     lapsed?: OpsBooking[];      // transfer locks that ran out in the last hour (money may still come)
-    refundsDue?: OpsBooking[];  // more received than the stay costs (cancelled bookings count as ₦0)
+    refundsDue?: OpsBooking[] | null;  // more received than the stay costs (cancelled count as ₦0); null = could not load
     serverNow?: number;
 }
 export type UnitKind = 'free' | 'occupied' | 'arriving' | 'cleaning' | 'maintenance';

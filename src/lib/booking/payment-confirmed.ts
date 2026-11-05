@@ -127,6 +127,14 @@ export async function confirmPaidBooking(supabase: Db, input: {
             .eq('id', booking.id);
         if (upErr) throw new Error(`Failed to mark booking paid: ${upErr.message}`);
         booking.status = status;
+        // the expiry job may have run in the same instant: make sure every night is still ours
+        const again = await reclaim(supabase, booking.id, await roomsOfBooking(supabase, booking), stayDates(booking.check_in, booking.check_out), 'booked');
+        if (again.length) {
+            await releaseClaim(supabase, booking.id);
+            await supabase.from('bookings').update({ status: 'cancelled', notes: [booking.notes, ...notes, `ROOM LOST WHILE CONFIRMING (${input.reference}): refund or move the guest.`].filter(Boolean).join('\n') }).eq('id', booking.id);
+            await supabase.from('transactions').insert({ paystack_reference: input.reference, paystack_event: 'charge.success', amount, currency: 'NGN', status: 'success', booking_id: booking.id, raw_payload: input.raw ?? null });
+            return { booking: { ...booking, status: 'cancelled' }, alreadyPaid: false, refundNeeded: true };
+        }
     }
 
     // logged last: if anything above failed, a retry processes the payment again

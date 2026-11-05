@@ -305,6 +305,9 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                         ))}
                     </Section>
 
+                    {data?.role !== 'caretaker' && data?.refundsDue === null && (
+                        <p className="text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">The Refund due list could not load right now. It will try again on the next update.</p>
+                    )}
                     {data?.role !== 'caretaker' && (data?.refundsDue || []).length > 0 && (
                         <Section title="Refund due · money to give back" count={data!.refundsDue!.length} empty="">
                             {data!.refundsDue!.map(b => (

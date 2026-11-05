@@ -111,9 +111,18 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     // a send whose answer never came back: until we know what happened to it, every tap re-sends
     // that same id (even if the screen behind moved to another unit), so it can never book twice
     // kept for the session too: closing the sheet and starting again still re-checks the lost tap
-    const unknownAttempt = useRef<string | null>((() => { try { return sessionStorage.getItem('pending-booking-request'); } catch { return null; } })());
-    const [firstTap, setFirstTap] = useState<{ unit: string; total: number; paid: number; status: string } | null>(null);
-    const requestId = unknownAttempt.current || freshId;
+    const pendingStored = (() => {
+        try {
+            const p = JSON.parse(sessionStorage.getItem('pending-booking-request') || 'null');
+            return p && Date.now() - p.at < 30 * 60 * 1000 ? p as { id: string; guest: string; at: number } : null;
+        } catch { return null; }
+    })();
+    const unknownAttempt = useRef<string | null>(pendingStored?.id || null);
+    const unknownGuest = useRef<string>(pendingStored?.guest || '');
+    const [firstTap, setFirstTap] = useState<{ unit: string; total: number; paid: number; status: string; guest: string } | null>(null);
+    // a lost tap is only re-checked for the same guest; another guest always gets a fresh attempt
+    const guestKey = `${guestName.trim().toLowerCase()}|${phone.replace(/\D/g, '').slice(-10)}`;
+    const requestId = unknownAttempt.current && unknownGuest.current === guestKey ? unknownAttempt.current : freshId;
     const isTransferMethod = /transfer|moniepoint|pos/i.test(payMethod);
 
     const submit = async () => {
@@ -155,7 +164,8 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             if (!res) { await new Promise(r => setTimeout(r, 2500)); res = await send(); }
             if (!res) {
                 unknownAttempt.current = requestId;
-                try { sessionStorage.setItem('pending-booking-request', requestId); } catch { /* ignore */ }
+                unknownGuest.current = guestKey;
+                try { sessionStorage.setItem('pending-booking-request', JSON.stringify({ id: requestId, guest: guestKey, at: Date.now() })); } catch { /* ignore */ }
                 throw new Error('No connection. When you have signal, tap the button again: it checks what happened and will not book twice.');
             }
             unknownAttempt.current = null;
@@ -163,10 +173,10 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             const json = await res.json();
             if (!res.ok) { onRefresh?.(); throw new Error(json.error || 'Could not create the booking'); }
             const id = json.bookingId as string;
-            if (json.duplicate) {
+            if (json.duplicate && json.status !== 'pending') {
                 // the first tap had gone through: show exactly what was saved (it may differ from this form)
                 const u = data.units.find(x => x.id === json.roomId);
-                setFirstTap({ unit: u ? unitLabel(u) : 'the unit', total: Number(json.total || 0), paid: Number(json.paid || 0), status: json.status });
+                setFirstTap({ unit: u ? unitLabel(u) : 'the unit', total: Number(json.total || 0), paid: Number(json.paid || 0), status: json.status, guest: json.guestName || guestName.trim() });
                 onRefresh?.();
                 return;
             }
@@ -175,7 +185,8 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                 const lockedUnit = data.units.find(u => u.id === (json.roomId || unit.id)) || unit;
                 const lockedTotal = json.total != null ? Number(json.total) : total;
                 setHold({ bookingId: id, paystackUrl: json.paystackUrl || null, payUrl: json.payUrl || null, expiresAt: json.expiresAt, holdMinutes: json.holdMinutes || 15, warning: json.warning || null,
-                    transfer: true, bank: json.bank || null, unitLabel: unitLabel(lockedUnit), total: lockedTotal, checkIn, checkOut, nights });
+                    transfer: true, bank: json.bank || null, unitLabel: unitLabel(lockedUnit), total: lockedTotal,
+                    checkIn: json.checkIn || checkIn, checkOut: json.checkOut || checkOut, nights: json.nights || nights });
                 setPaidAmount(String(lockedTotal));
                 onRefresh?.();
                 return;
@@ -194,7 +205,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
         return (
             <Sheet title="Your first tap went through" subtitle="Nothing new was created" onClose={onCreated}>
                 <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-[13.5px] text-amber-900 space-y-1">
-                    <p className="font-bold">{lock ? 'A 15-minute lock' : 'A booking'} for {guestName.trim()} on <b>{firstTap.unit}</b>, {naira(firstTap.total)}.</p>
+                    <p className="font-bold">{lock ? 'A 15-minute lock' : 'A booking'} for {firstTap.guest} on <b>{firstTap.unit}</b>, {naira(firstTap.total)}.</p>
                     <p>Money recorded on it: <b>{naira(firstTap.paid)}</b>.</p>
                     <p>If anything you changed since (room, price, money taken, booking instead of lock) is not shown above, open the booking from Today or Bookings and change it there. Give the guest the room shown above.</p>
                 </div>
