@@ -409,6 +409,8 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
         }
     }
     if (input.amount < 0) await audit(supabase, recordedBy, id, 'refund', { amount: input.amount, note: input.note });
+    const { pushPayment } = await import('@/lib/push');
+    await pushPayment(supabase, id, input.amount, input.method || null, recordedBy);
 
     return ok({ success: true, payment, paid: await ledgerSum(supabase, id) });
 }

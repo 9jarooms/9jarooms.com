@@ -6,6 +6,7 @@ import { computeOptions, groupDuplexes, freeDuplexes, type ApartmentLite, type R
 import { findFreeUnits, priceRoomTypeStay, isBlockedSlot } from '@/lib/booking/room-types';
 import { claimDates, releaseClaim, reclaim, holdExpiry, stayDates, lagosToday, overstayRooms, HOLD_MINUTES } from '@/lib/booking/hold';
 import { notifyCaretakersHold } from '@/lib/booking/notify-caretakers';
+import { pushBooking } from '@/lib/push';
 
 const bookingSchema = z.object({
     roomId: z.string().uuid().optional(),
@@ -78,6 +79,7 @@ async function paystackFailed(
 // A hold the guest pays by bank transfer: the nights are locked for HOLD_MINUTES and staff
 // tap Record payment when the money lands. No Paystack link is made.
 async function transferHoldResponse(supabase: AdminClient, bookingId: string, expiresAt: Date, extra: Record<string, unknown> = {}) {
+    if (!extra.duplicate) await pushBooking(supabase, bookingId);   // phones of the rest of the team
     const { data } = await supabase.from('site_settings').select('value').eq('key', 'bank_transfer').maybeSingle();
     return NextResponse.json({
         ...extra,
@@ -569,6 +571,7 @@ export async function POST(request: NextRequest) {
                     return paystackFailed(supabase, booking.id, isHold, request.nextUrl.origin, expiresAt, message);
                 }
             } else {
+                if (bookingType !== 'maintenance') await pushBooking(supabase, booking.id);
                 return NextResponse.json({
                     success: true,
                     bookingId: booking.id,
@@ -831,6 +834,7 @@ export async function POST(request: NextRequest) {
             }
         } else {
             // Return success for internal booking immediately
+            if (bookingType !== 'maintenance') await pushBooking(supabase, booking.id);
             return NextResponse.json({
                 success: true,
                 bookingId: booking.id,

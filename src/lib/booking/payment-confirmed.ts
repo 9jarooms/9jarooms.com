@@ -289,7 +289,9 @@ export async function announcePayment(supabase: Db, r: PaidBookingResult) {
     try {
         if (r.refundNeeded) { await notifyCaretakersRefundNeeded(supabase, r.booking.id); return; }
         if (r.alreadyPaid) return;
+        const { pushBooking } = await import('@/lib/push');
         await Promise.all([
+            pushBooking(supabase, r.booking.id),
             notifyTeamNewBooking(supabase, r.booking).catch(() => null),
             notifyGuestBookingConfirmed(r.booking).catch(() => null),
             notifyCaretakersPaid(supabase, r.booking.id).catch(() => null),

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Mail, User, Phone, Lock, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { NotificationsSetting } from '@/components/ops/LiveAlerts';
 
 type Profile = {
     name: string;
@@ -130,6 +131,8 @@ export default function AccountPage() {
                 <h1 className="text-2xl font-bold text-gray-900">My Account</h1>
                 <p className="text-gray-500 mt-1">Manage your profile and login details.</p>
             </div>
+
+            <NotificationsSetting />
 
             {/* Profile Info (read-only) */}
             <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">

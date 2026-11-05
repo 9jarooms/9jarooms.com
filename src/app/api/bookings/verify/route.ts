@@ -4,6 +4,7 @@ import { verifyPayment } from '@/lib/paystack';
 import { confirmPaidBooking, notifyTeamNewBooking, notifyGuestBookingConfirmed } from '@/lib/booking/payment-confirmed';
 import { notifyCaretakersPaid, notifyCaretakersRefundNeeded } from '@/lib/booking/notify-caretakers';
 import { inngest } from '@/lib/inngest/client';
+import { pushBooking } from '@/lib/push';
 
 // Called by /booking/confirm when Paystack redirects the guest back.
 // Verifies with Paystack and confirms the booking if the webhook has not
@@ -69,6 +70,7 @@ export async function GET(request: NextRequest) {
                 notifyTeamNewBooking(supabase, confirmed),
                 notifyGuestBookingConfirmed(confirmed),
                 notifyCaretakersPaid(supabase, confirmed.id),
+                pushBooking(supabase, confirmed.id),
             ]);
             console.log(`[Verify] ${reference} confirmed · team email: ${team.sent ? team.to?.join(',') : team.reason} · guest email: ${guest.sent ? 'sent' : guest.reason}`);
             try {

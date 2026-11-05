@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { confirmPaidBooking, notifyTeamNewBooking, notifyGuestBookingConfirmed, BookingNotFound } from '@/lib/booking/payment-confirmed';
 import { notifyCaretakersPaid, notifyCaretakersRefundNeeded } from '@/lib/booking/notify-caretakers';
 import { inngest } from '@/lib/inngest/client';
+import { pushBooking } from '@/lib/push';
 
 // Paystack webhook: https://www.9jarooms.com/api/webhooks/paystack
 // Signature-checked with the secret key. On charge.success the booking is
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
                 notifyTeamNewBooking(supabase, booking).catch(e => ({ sent: false, reason: e?.message } as any)),
                 notifyGuestBookingConfirmed(booking).catch(e => ({ sent: false, reason: e?.message } as any)),
                 notifyCaretakersPaid(supabase, booking.id).catch(() => null),
+                pushBooking(supabase, booking.id),
             ]);
             console.log(`[Paystack] ${reference} confirmed · team email: ${team.sent ? team.to?.join(',') : team.reason} · guest email: ${guest.sent ? 'sent' : guest.reason}`);
 
