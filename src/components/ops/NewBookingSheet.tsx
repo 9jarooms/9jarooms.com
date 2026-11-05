@@ -349,9 +349,13 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             {(earlier?.length || earlierWaiting > 0) ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900 space-y-1">
                     {(earlier || []).map((e, i) => (
-                        <p key={i}>{e.found
-                            ? <>An earlier tap with no signal <b>did go through</b>: {e.status === 'pending' ? 'a 15-minute lock' : 'a booking'} for <b>{e.guestName}</b> on <b>{e.unit}</b>, {naira(e.total)} ({naira(e.paid)} recorded). Don&apos;t book them again; open it from Today or Bookings to change anything.</>
-                            : <>An earlier tap with no signal <b>did not go through</b> (nothing was saved from it). Check Today for that guest before booking them again.</>}</p>
+                        <p key={i}>{!e.found
+                            ? <>An earlier tap with no signal <b>did not go through</b> (nothing was saved from it). Check Today for that guest before booking them again.</>
+                            : e.status === 'expired'
+                                ? <>An earlier lock for <b>{e.guestName}</b> on <b>{e.unit}</b> <b>ran out</b>: nothing is held for them now. Lock or book again if they still want it{Number(e.paid) > 0 ? ` (₦${Math.round(Number(e.paid)).toLocaleString('en-NG')} is recorded on it: open it from Bookings)` : ''}.</>
+                                : ['cancelled', 'no_show'].includes(e.status || '')
+                                    ? <>An earlier tap for <b>{e.guestName}</b> on <b>{e.unit}</b> was <b>cancelled</b> (for example the room was taken at that moment): nothing is held. Book again if they still want a room.</>
+                                    : <>An earlier tap with no signal <b>did go through</b>: {e.status === 'pending' ? 'a 15-minute lock (still running)' : 'a booking'} for <b>{e.guestName}</b> on <b>{e.unit}</b>, {naira(e.total)} ({naira(e.paid)} recorded). Don&apos;t book them again; open it from Today or Bookings to change anything.</>}</p>
                     ))}
                     {earlierWaiting > 0 && <p>Still checking {earlierWaiting} earlier tap{earlierWaiting === 1 ? '' : 's'} made with no signal. Check Today before booking the same guest again.</p>}
                     <button type="button" onClick={() => { setEarlier(null); setEarlierWaiting(0); }} className="underline">OK</button>
