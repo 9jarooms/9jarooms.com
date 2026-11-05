@@ -118,7 +118,7 @@ export async function dailyLog(supabase: Db, date: string, propertyId?: string |
     return {
         date,
         properties,
-        future: (future || []).map(b => ({ bookingId: b.id, guest: b.guest_name, phone: b.guest_phone, unit: unitName.get(b.room_id) || '—',
+        future: (future || []).map(b => ({ bookingId: b.id, unitId: b.room_id, guest: b.guest_name, phone: b.guest_phone, unit: unitName.get(b.room_id) || '—',
             checkIn: b.check_in, checkOut: b.check_out, nights: b.nights, total: Number(b.total_amount || 0), paid: paid[b.id] || 0, status: b.status })),
         owing,
         totals: {

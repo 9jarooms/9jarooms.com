@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Globe, EyeOff, Layers, ImageOff, Pencil, X, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import { Sheet, BigButton, Field, Chips, inputCls, naira } from './shared';
 import RoomTypeSheet from './RoomTypeSheet';
+import RoomsNow from './RoomsNow';
 
 interface Unit { id: string; code: string; typeId: string | null; price: number | null }
 interface Group { id: string; name: string; price: number; live: boolean; images: string[] }
@@ -16,7 +17,7 @@ interface Prop { id: string; name: string; area: string | null; live: boolean; p
 export default function RoomGroups() {
     const [data, setData] = useState<Prop[] | null>(null);
     const [pid, setPid] = useState<string>('all');           // 'all' = every property
-    const [view, setView] = useState<'groups' | 'price'>('groups');
+    const [view, setView] = useState<'now' | 'groups' | 'price'>('now');
     const [sel, setSel] = useState<Set<string>>(new Set());
     const [grouping, setGrouping] = useState(false);
     const [adding, setAdding] = useState<string | null>(null);   // property id
@@ -127,10 +128,12 @@ export default function RoomGroups() {
             </div>
             <div className="flex items-center justify-between gap-2 mb-4">
                 <p className="text-[13px] text-gray-500 px-1">{totalRooms} rooms{pid === 'all' ? ` in ${shown.length} properties` : ''}</p>
-                <Chips options={[{ value: 'groups', label: 'By group' }, { value: 'price', label: 'By price' }]} value={view} onChange={v => setView(v as 'groups' | 'price')} />
+                <Chips options={[{ value: 'now', label: 'Right now' }, { value: 'groups', label: 'By group' }, { value: 'price', label: 'By price' }]} value={view} onChange={v => { setView(v as 'now' | 'groups' | 'price'); setSel(new Set()); }} />
             </div>
 
             {error && <p className="text-[13px] text-red-600 bg-red-50 rounded-xl px-3 py-2 mb-3">{error}</p>}
+
+            {view === 'now' ? <RoomsNow propertyId={pid} /> : (<>
 
             {prop && (
                 <button type="button" onClick={() => setPropertyLive(prop, !prop.live)} disabled={busy}
@@ -202,6 +205,7 @@ export default function RoomGroups() {
                     ))}
                 </div>
             )}
+            </>)}
 
             {sel.size > 0 && (
                 <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] lg:bottom-6 z-40 mt-4">
