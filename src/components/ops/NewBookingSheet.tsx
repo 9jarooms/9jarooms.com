@@ -51,6 +51,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     const [transferRef, setTransferRef] = useState('');
     const [depositRef, setDepositRef] = useState('');
     const payAttempt = useRef('');
+    const [lockMethod, setLockMethod] = useState('Bank Transfer');
     const [copied, setCopied] = useState(false);
     const [guestName, setGuestName] = useState('');
     const [phone, setPhone] = useState('');
@@ -115,16 +116,22 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     // was edited since: the server answers with what it saved, and the screen shows exactly that
     const unknownAttempt = useRef<string | null>(null);
     // a lost tap from an earlier sheet: ask the server what happened to it before anything else
-    const [earlier, setEarlier] = useState<null | { found: boolean; guestName?: string; unit?: string; total?: number; paid?: number; status?: string }>(null);
+    type Earlier = { found: boolean; guestName?: string; unit?: string; total?: number; paid?: number; status?: string };
+    const [earlier, setEarlier] = useState<Earlier[] | null>(null);
+    const [earlierWaiting, setEarlierWaiting] = useState(0);   // lost taps not yet checked (still no signal)
     useEffect(() => {
-        let stored: { id: string; at: number } | null = null;
-        try { stored = JSON.parse(sessionStorage.getItem('pending-booking-request') || 'null'); } catch { /* ignore */ }
-        if (!stored?.id || Date.now() - stored.at > 24 * 60 * 60 * 1000) return;
-        fetch(`/api/ops/request/${encodeURIComponent(stored.id)}`).then(r => r.ok ? r.json() : null).then(j => {
-            if (!j) return;   // still offline: ask again next time
-            setEarlier(j);
-            try { sessionStorage.removeItem('pending-booking-request'); } catch { /* ignore */ }
-        }).catch(() => {});
+        let list: { id: string; at: number }[] = [];
+        try { list = JSON.parse(sessionStorage.getItem('pending-booking-requests') || '[]'); } catch { /* ignore */ }
+        list = list.filter(x => x?.id && Date.now() - x.at < 24 * 60 * 60 * 1000);
+        if (!list.length) return;
+        Promise.all(list.map(x => fetch(`/api/ops/request/${encodeURIComponent(x.id)}`).then(r => r.ok ? r.json() : null).catch(() => null)))
+            .then(results => {
+                const done = results.map((r, i) => r ? list[i].id : null).filter(Boolean);
+                const left = list.filter(x => !done.includes(x.id));
+                try { sessionStorage.setItem('pending-booking-requests', JSON.stringify(left)); } catch { /* ignore */ }
+                setEarlier(results.filter(Boolean) as Earlier[]);
+                setEarlierWaiting(left.length);
+            });
     }, []);
     const [firstTap, setFirstTap] = useState<{ unit: string; total: number; paid: number; status: string; guest: string } | null>(null);
     const requestId = unknownAttempt.current || freshId;
@@ -169,11 +176,18 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             if (!res) { await new Promise(r => setTimeout(r, 2500)); res = await send(); }
             if (!res) {
                 unknownAttempt.current = requestId;
-                try { sessionStorage.setItem('pending-booking-request', JSON.stringify({ id: requestId, at: Date.now() })); } catch { /* ignore */ }
+                try {
+                    const list = JSON.parse(sessionStorage.getItem('pending-booking-requests') || '[]') as { id: string; at: number }[];
+                    if (!list.some(x => x.id === requestId)) list.push({ id: requestId, at: Date.now() });
+                    sessionStorage.setItem('pending-booking-requests', JSON.stringify(list));
+                } catch { /* ignore */ }
                 throw new Error('No connection. When you have signal, tap the button again: it checks what happened and will not book twice.');
             }
+            if (unknownAttempt.current) {
+                const done = unknownAttempt.current;
+                try { sessionStorage.setItem('pending-booking-requests', JSON.stringify((JSON.parse(sessionStorage.getItem('pending-booking-requests') || '[]') as { id: string }[]).filter(x => x.id !== done))); } catch { /* ignore */ }
+            }
             unknownAttempt.current = null;
-            try { sessionStorage.removeItem('pending-booking-request'); } catch { /* ignore */ }
             const json = await res.json();
             if (!res.ok) { onRefresh?.(); throw new Error(json.error || 'Could not create the booking'); }
             const id = json.bookingId as string;
@@ -183,7 +197,9 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                 setHold({ bookingId: json.bookingId, paystackUrl: null, payUrl: null, expiresAt: json.expiresAt, holdMinutes: json.holdMinutes || 15, warning: 'Your first tap had already locked this room. Record the money here.',
                     transfer: true, bank: json.bank || null, unitLabel: unitLabel(lockedUnit), total: Number(json.total || 0),
                     checkIn: json.checkIn || checkIn, checkOut: json.checkOut || checkOut, nights: json.nights || nights });
-                setPaidAmount(String(json.total || ''));
+                setPaidAmount(String(deposit > 0 ? deposit : json.total || ''));
+                if (payMethod) setLockMethod(payMethod);
+                if (depositRef) setTransferRef(depositRef);
                 onRefresh?.();
                 return;
             }
@@ -244,12 +260,13 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
         // the money is in the account: record it with the bank's reference, which confirms the booking
         const confirmPaid = async (force = false) => {
             if (amount <= 0) { setError('Type the amount that came in'); return; }
-            if (!transferRef.trim()) { setError('Type the transfer reference from the bank alert'); return; }
+            const needsRef = /transfer|moniepoint|pos/i.test(lockMethod);
+            if (needsRef && !transferRef.trim()) { setError('Type the reference from the bank alert or POS slip'); return; }
             setBusy(true); setError(null);
             try {
                 const send = () => fetch(`/api/ops/bookings/${hold.bookingId}/payments`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ amount, method: 'Bank Transfer', reference: transferRef.trim(), note: 'Transfer for a locked room', requestId: payAttempt.current, force }),
+                    body: JSON.stringify({ amount, method: lockMethod, reference: /transfer|moniepoint|pos/i.test(lockMethod) ? transferRef.trim() : null, note: 'Payment for a locked room', requestId: payAttempt.current, force }),
                 }).catch(() => null);
                 let res = await send();
                 if (!res) { await new Promise(r => setTimeout(r, 2500)); res = await send(); }
@@ -285,6 +302,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
         return (
             <Sheet title={`${hold.unitLabel} is locked`} subtitle={`For ${hold.holdMinutes} minutes · ${fmtDay(hold.checkIn)} → ${fmtDay(hold.checkOut)}`} onClose={onClose}>
                 {error && <p className="text-[13px] text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+                {hold.warning && <p className="text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">{hold.warning}</p>}
                 <div className={`rounded-2xl border px-4 py-3 text-[13.5px] space-y-1 ${lapsed ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-green-50 border-green-200 text-green-900'}`}>
                     <p className="font-bold flex items-center gap-1.5"><Lock size={15} /> {lapsed ? `The lock ended at ${until}` : `Nobody else can book it until ${until}`}</p>
                     <p>{lapsed
@@ -295,11 +313,15 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                 <BigButton onClick={() => openWhatsApp(lockMessage, phone)} icon={<Share2 size={18} />} className="!bg-[#25D366]">
                     {phone.trim() ? `Tell ${guestName.trim()} on WhatsApp` : 'Send on WhatsApp'}
                 </BigButton>
+                <Field label="How did they pay?">
+                    <Chips options={['Bank Transfer', 'Cash', 'POS', 'Moniepoint'].map(m => ({ value: m, label: m }))} value={lockMethod}
+                        onChange={m => { payAttempt.current = ''; setLockMethod(m); }} />
+                </Field>
                 <div className="grid grid-cols-2 gap-3">
                     <Field label="Amount received (₦)">
                         <input type="number" inputMode="numeric" min={0} className={inputCls} value={paidAmount} onChange={e => { payAttempt.current = ''; setPaidAmount(e.target.value); }} />
                     </Field>
-                    <Field label="Transfer reference">
+                    <Field label={/transfer|moniepoint|pos/i.test(lockMethod) ? 'Reference' : 'Reference (not needed for cash)'}>
                         <input className={inputCls} value={transferRef} onChange={e => { payAttempt.current = ''; setTransferRef(e.target.value); }} placeholder="from the bank alert" autoComplete="off" />
                     </Field>
                 </div>
@@ -324,14 +346,17 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                 value={mode}
                 onChange={v => setMode(v as 'booking' | 'block' | 'hold')}
             />
-            {earlier && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900">
-                    {earlier.found
-                        ? <>Your earlier tap with no signal <b>did go through</b>: {earlier.status === 'pending' ? 'a 15-minute lock' : 'a booking'} for <b>{earlier.guestName}</b> on <b>{earlier.unit}</b>, {naira(earlier.total)} ({naira(earlier.paid)} recorded). Open it from Today or Bookings if anything needs changing. Don&apos;t book them again.</>
-                        : <>Your earlier tap with no signal <b>did not go through</b>. Nothing was booked; you can book now.</>}
-                    <button type="button" onClick={() => setEarlier(null)} className="ml-2 underline">OK</button>
+            {(earlier?.length || earlierWaiting > 0) ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900 space-y-1">
+                    {(earlier || []).map((e, i) => (
+                        <p key={i}>{e.found
+                            ? <>An earlier tap with no signal <b>did go through</b>: {e.status === 'pending' ? 'a 15-minute lock' : 'a booking'} for <b>{e.guestName}</b> on <b>{e.unit}</b>, {naira(e.total)} ({naira(e.paid)} recorded). Don&apos;t book them again; open it from Today or Bookings to change anything.</>
+                            : <>An earlier tap with no signal <b>did not go through</b> (nothing was saved from it). Check Today for that guest before booking them again.</>}</p>
+                    ))}
+                    {earlierWaiting > 0 && <p>Still checking {earlierWaiting} earlier tap{earlierWaiting === 1 ? '' : 's'} made with no signal. Check Today before booking the same guest again.</p>}
+                    <button type="button" onClick={() => { setEarlier(null); setEarlierWaiting(0); }} className="underline">OK</button>
                 </div>
-            )}
+            ) : null}
             {mode === 'hold' && (
                 <p className="text-[12.5px] text-gray-500 -mt-1">
                     Nobody else can book the unit for 15 minutes while the guest sends a bank transfer. You confirm when you see the money.
