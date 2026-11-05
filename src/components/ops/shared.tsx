@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import { X, Minus, Plus, Phone, MessageCircle, LogIn, LogOut, AlertTriangle } from 'lucide-react';
 
 // ------------------------------------------------------------------
@@ -101,6 +102,20 @@ export function telLink(phone: string | null | undefined) {
 export function waLink(phone: string | null | undefined, text: string) {
     const d = phoneDigits(phone);
     return d ? `https://wa.me/${d}?text=${encodeURIComponent(text)}` : null;
+}
+
+// Open WhatsApp with a message ready to send (pick the chat there). Straight into the app on a phone:
+// the phone's general share sheet offered "Google" among its targets, which searched the message
+// instead of sending it. Falls back to WhatsApp's web link when the app is not installed.
+export function openWhatsApp(text: string, phone?: string | null) {
+    const d = phoneDigits(phone);
+    const q = `text=${encodeURIComponent(text)}${d ? `&phone=${d}` : ''}`;
+    const web = `https://api.whatsapp.com/send?${q}`;
+    const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (!mobile) { window.open(web, '_blank', 'noopener'); return; }
+    const t = setTimeout(() => { if (document.visibilityState === 'visible') window.location.href = web; }, 1500);
+    document.addEventListener('visibilitychange', () => clearTimeout(t), { once: true });
+    window.location.href = `whatsapp://send?${q}`;
 }
 
 // ------------------------------------------------------------------
@@ -433,4 +448,36 @@ export function fetchCached<T>(url: string): Promise<T> {
     }).finally(() => inflight.delete(url));
     inflight.set(url, p);
     return p;
+}
+
+// ------------------------------------------------------------------
+// Live updates: the database bumps one public row (ops_pulse) whenever a booking, a night or a payment
+// changes, and Supabase Realtime pushes that to every open screen. Screens then reload what they show,
+// so a booking made on another phone appears without anyone refreshing. One socket per tab, shared by
+// every screen; if the socket drops, the screens' own timers and focus refreshes still catch up.
+// ------------------------------------------------------------------
+const pulseListeners = new Set<() => void>();
+let pulseChannel: { unsubscribe: () => unknown } | null = null;
+function startPulse() {
+    if (pulseChannel || typeof window === 'undefined') return;
+    const supabase = createClient();
+    pulseChannel = supabase.channel('ops-pulse')
+        .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'ops_pulse' }, () => {
+            memCache.clear();                     // anything cached may now be out of date
+            pulseListeners.forEach(fn => fn());
+        })
+        .subscribe();
+}
+export function useLiveUpdates(onChange: () => void, enabled = true) {
+    const ref = useRef(onChange);
+    useEffect(() => { ref.current = onChange; }, [onChange]);
+    useEffect(() => {
+        if (!enabled) return;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        // several changes land together (booking + nights + payment): reload once
+        const fire = () => { if (timer) clearTimeout(timer); timer = setTimeout(() => ref.current(), 350); };
+        pulseListeners.add(fire);
+        startPulse();
+        return () => { pulseListeners.delete(fire); if (timer) clearTimeout(timer); };
+    }, [enabled]);
 }

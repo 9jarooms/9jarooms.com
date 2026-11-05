@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Share2, Copy, Check, Lock } from 'lucide-react';
 import {
     Sheet, BigButton, Field, Stepper, Chips, inputCls,
-    naira, shiftIso, fmtDay, unitLabel, unitPrice, groupAllUnits, waLink, LIVE_STATUSES, type OpsToday,
+    naira, shiftIso, fmtDay, unitLabel, unitPrice, groupAllUnits, openWhatsApp, LIVE_STATUSES, type OpsToday,
 } from './shared';
 
 const SOURCES = [
@@ -43,6 +43,9 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     const [copied, setCopied] = useState(false);
     const [guestName, setGuestName] = useState('');
     const [phone, setPhone] = useState('');
+    // guests we have hosted before: type part of a name or number and pick them
+    const [known, setKnown] = useState<{ name: string; phone: string | null; stays: number; last: string }[]>([]);
+    const [picked, setPicked] = useState(false);
     const [source, setSource] = useState(preset.mode === 'hold' ? 'whatsapp' : 'walk_in');
     const [price, setPrice] = useState('');      // '' = the standard price
     const [paidNow, setPaidNow] = useState('');
@@ -53,6 +56,17 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     const [error, setError] = useState<string | null>(null);
 
     const checkOut = shiftIso(checkIn, Math.max(nights, 1));
+
+    useEffect(() => {
+        const q = phone.replace(/\D/g, '').length >= 3 ? phone : guestName;
+        if (picked || q.trim().length < 2) { const t = setTimeout(() => setKnown([]), 0); return () => clearTimeout(t); }
+        const ctl = new AbortController();
+        const t = setTimeout(() => {
+            fetch(`/api/ops/guests?q=${encodeURIComponent(q.trim())}`, { signal: ctl.signal })
+                .then(r => r.json()).then(j => setKnown(j.guests || [])).catch(() => {});
+        }, 250);
+        return () => { clearTimeout(t); ctl.abort(); };
+    }, [guestName, phone, picked]);
     const groups = useMemo(() => groupAllUnits(data), [data]);
 
     // Free for the whole stay? Bookings and booking-held cells always block;
@@ -144,13 +158,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             `Hello ${guestName.trim()}, this is 9jaRooms. ${unitLabel(unit)} is held for you ` +
             `(${fmtDay(checkIn)} to ${fmtDay(checkOut)}, ${nights} night${nights === 1 ? '' : 's'}, ${naira(total)}). ` +
             `Please pay within ${hold.holdMinutes} minutes to confirm: ${link}`;
-        const wa = waLink(phone, payMessage);
-        const shareLink = async () => {
-            if (typeof navigator !== 'undefined' && navigator.share && !wa) {
-                try { await navigator.share({ text: payMessage }); return; } catch { /* cancelled */ }
-            }
-            window.open(wa || `https://wa.me/?text=${encodeURIComponent(payMessage)}`, '_blank', 'noopener');
-        };
+        const shareLink = () => openWhatsApp(payMessage, phone);   // the guest's chat when we have their number
         const copyLink = async () => {
             try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
         };
@@ -163,7 +171,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                     <p>Paying by transfer instead? Open the booking and tap <b>Record payment</b>.</p>
                 </div>
                 <BigButton onClick={shareLink} icon={<Share2 size={18} />} className="!bg-[#25D366]">
-                    {wa ? `Send link on WhatsApp` : 'Share payment link'}
+                    {phone.trim() ? `Send link to ${guestName.trim()} on WhatsApp` : 'Send link on WhatsApp'}
                 </BigButton>
                 <BigButton tone="secondary" onClick={copyLink} icon={copied ? <Check size={18} /> : <Copy size={18} />}>
                     {copied ? 'Copied' : 'Copy payment link'}
@@ -222,11 +230,27 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             {mode !== 'block' ? (
                 <>
                     <Field label="Guest name">
-                        <input className={inputCls} value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="e.g. Mr Okeke" autoFocus={!!preset.unitId} />
+                        <input className={inputCls} value={guestName} onChange={e => { setGuestName(e.target.value); setPicked(false); }} placeholder="Type a name to find a past guest" autoFocus={!!preset.unitId} autoComplete="off" />
                     </Field>
                     <Field label="Phone / WhatsApp">
-                        <input type="tel" inputMode="tel" className={inputCls} value={phone} onChange={e => setPhone(e.target.value)} placeholder="080…" />
+                        <input type="tel" inputMode="tel" className={inputCls} value={phone} onChange={e => { setPhone(e.target.value); setPicked(false); }} placeholder="080… (or type it to find them)" autoComplete="off" />
                     </Field>
+                    {known.length > 0 && (
+                        <div className="-mt-2 rounded-xl border border-green-100 bg-green-50/50 overflow-hidden">
+                            <p className="px-3 pt-2 text-[10.5px] font-semibold uppercase tracking-wide text-green-700">Stayed with us before: tap to fill</p>
+                            {known.map(g => (
+                                <button key={`${g.name}|${g.phone}`} type="button"
+                                    onClick={() => { setGuestName(g.name); setPhone(g.phone || ''); setPicked(true); setKnown([]); }}
+                                    className="w-full text-left px-3 py-2.5 flex items-center justify-between gap-3 border-t border-green-100 first-of-type:border-t-0 active:bg-green-100">
+                                    <span className="min-w-0">
+                                        <span className="block text-sm font-semibold text-gray-900 truncate">{g.name}</span>
+                                        <span className="block text-xs text-gray-500">{g.phone || 'no phone'} · {g.stays} stay{g.stays === 1 ? '' : 's'}, last {fmtDay(g.last)}</span>
+                                    </span>
+                                    <span className="text-xs font-semibold text-green-700 shrink-0">Use</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <Field label="How did they book?">
                         <Chips options={SOURCES} value={source} onChange={setSource} />
                     </Field>

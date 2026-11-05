@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Home, Search, Building2, UserCircle, LogOut, Smartphone, X, Layers, ClipboardList, GraduationCap } from 'lucide-react';
+import { Home, Search, Building2, UserCircle, LogOut, Smartphone, X, Layers, ClipboardList, GraduationCap, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 
@@ -12,6 +12,7 @@ const navItems = [
     { href: '/dashboard?tab=find', label: 'Find', icon: Search },
     { href: '/dashboard/rooms', label: 'Rooms', icon: Layers },
     { href: '/dashboard/log', label: 'Daily log', icon: ClipboardList },
+    { href: '/dashboard/earnings', label: 'Earnings', icon: Wallet },
 ];
 // the desktop sidebar also has property details and the account page
 const moreItems = [
@@ -173,7 +174,7 @@ export default function DashboardShell({ user, role = 'caretaker', caretakerName
 
             {/* Mobile bottom tabs */}
             <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-black/[0.06] safe-area-inset-bottom">
-                <div className="grid grid-cols-4 h-16">
+                <div className="grid grid-cols-5 h-16">
                     {navItems.map(item => {
                         const active = isActive(item.href);
                         const Icon = item.icon;

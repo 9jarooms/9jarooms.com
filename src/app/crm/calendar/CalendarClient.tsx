@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import BookingModal, { naira } from '../components/BookingModal';
+import { useLiveUpdates } from '@/components/ops/shared';
 
 const CELL_W = 44;
 const DAYS = 28;
@@ -105,6 +106,7 @@ export default function CalendarClient({ properties, initialPropertyId }: {
         const res = await fetch(`/api/crm/calendar?propertyId=${propertyId}&from=${from}&to=${to}`);
         if (res.ok) setData(await res.json());
     }, [propertyId, from, to]);
+    useLiveUpdates(load);   // someone else booked, paid or checked out: show it now
 
     useEffect(() => { load(); }, [load]);
 

@@ -408,7 +408,9 @@ export async function POST(request: NextRequest) {
                     paystack_reference: reference,
                     expires_at: initialStatus === 'pending' ? expiresAt.toISOString() : null,
                     notes: bookingNotes,
-                    booking_source: source
+                    booking_source: source,
+                    // the staff member who took it (their 1.5% commission); never for blocks or website guests
+                    created_by: isInternalBooking && bookingType !== 'maintenance' ? user.id : null,
                 })
                 .select()
                 .single();
@@ -615,7 +617,8 @@ export async function POST(request: NextRequest) {
                 paystack_reference: reference,
                 expires_at: initialStatus === 'pending' ? expiresAt.toISOString() : null,
                 notes: bookingNotes,
-                booking_source: source
+                booking_source: source,
+                created_by: isInternalBooking && bookingType !== 'maintenance' ? user.id : null,
             })
             .select()
             .single();

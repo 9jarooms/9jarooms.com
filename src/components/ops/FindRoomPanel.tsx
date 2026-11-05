@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Search, Share2, Lock, Copy, Check, MapPin } from 'lucide-react';
-import { Field, Stepper, inputCls, naira, fmtDay, shiftIso, isoToday, cacheGet, fetchCached, type OpsToday } from './shared';
+import { Field, Stepper, inputCls, naira, fmtDay, shiftIso, isoToday, cacheGet, fetchCached, openWhatsApp, type OpsToday } from './shared';
 import type { NewBookingPreset } from './NewBookingSheet';
 
 interface FreeUnit { id: string; label: string; perNight: number | null; total: number | null }
@@ -69,14 +69,8 @@ export default function FindRoomPanel({ data, onHold }: {
             `\n${g.link}`
         ).join('\n\n');
 
-    // Phone: the system share sheet (pick the WhatsApp chat). Desktop: WhatsApp's own picker.
-    const share = async (text: string, id: string) => {
-        if (typeof navigator !== 'undefined' && navigator.share) {
-            try { await navigator.share({ text }); return; } catch { /* cancelled or unsupported */ }
-        }
-        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
-        void id;
-    };
+    // straight into WhatsApp (pick the guest's chat there)
+    const share = (text: string) => openWhatsApp(text);
     const copy = async (text: string, id: string) => {
         try { await navigator.clipboard.writeText(text); setCopied(id); setTimeout(() => setCopied(null), 1500); } catch { /* ignore */ }
     };
@@ -109,7 +103,7 @@ export default function FindRoomPanel({ data, onHold }: {
                         <p className="font-semibold text-lg leading-snug mt-1">{free.length} options free for {stayLabel}</p>
                         <p className="text-white/70 text-sm mt-1">One message with every option and its booking link. Nothing is held until they pay.</p>
                     </div>
-                    <button type="button" onClick={() => share(messageForAll(free), 'all')}
+                    <button type="button" onClick={() => share(messageForAll(free))}
                         className="shrink-0 flex items-center justify-center gap-2 px-4 py-3 bg-white text-green-700 hover:bg-green-50 rounded-xl text-sm font-semibold transition-all shadow-sm">
                         <Share2 size={16} /> Share all on WhatsApp
                     </button>
@@ -151,7 +145,7 @@ export default function FindRoomPanel({ data, onHold }: {
                     <p className="mt-3 text-xs text-gray-400 truncate">Free units: {g.units.map(u => u.label).join(', ')}</p>
 
                     <div className="mt-4 grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => share(messageFor(g), g.key)}
+                        <button type="button" onClick={() => share(messageFor(g))}
                             className="h-11 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-sm btn-press">
                             <Share2 size={16} /> Share option
                         </button>

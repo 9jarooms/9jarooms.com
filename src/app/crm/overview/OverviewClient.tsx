@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { BedDouble, LogIn, LogOut, CheckSquare, Square, CalendarDays } from 'lucide-react';
+import { useLiveUpdates } from '@/components/ops/shared';
 
 function naira(n: number) {
     return '₦' + Math.round(Number(n || 0)).toLocaleString('en-NG');
@@ -37,6 +38,7 @@ export default function OverviewClient() {
         if (res.ok) setData((await res.json()).properties);
         setLoading(false);
     }, []);
+    useLiveUpdates(load);   // someone else booked, paid or checked out: show it now
 
     useEffect(() => {
         load();

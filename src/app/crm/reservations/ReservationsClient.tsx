@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import BookingModal, { naira } from '../components/BookingModal';
+import { useLiveUpdates } from '@/components/ops/shared';
 
 const STATUS_FILTERS = [
     { value: '', label: 'All' },
@@ -72,6 +73,7 @@ export default function ReservationsClient() {
         if (res.ok) setRows((await res.json()).bookings);
         setLoading(false);
     }, [q, status, view]);
+    useLiveUpdates(load);   // someone else booked, paid or checked out: show it now
 
     useEffect(() => {
         const t = setTimeout(load, q ? 300 : 0);

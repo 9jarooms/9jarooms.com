@@ -22,7 +22,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     const [busy, setBusy] = useState(false);
     const [panel, setPanel] = useState<Panel>('none');
     const [pay, setPay] = useState({ amount: '', method: 'Cash' });
-    const [stay, setStay] = useState({ unitId: '', checkIn: '', nights: 1, autoPrice: true });
+    const [stay, setStay] = useState({ unitId: '', checkIn: '', nights: 1, price: 'standard' as 'standard' | 'agreed' | 'keep', agreed: '' });
     const [guest, setGuest] = useState({ guestName: '', guestPhone: '', notes: '' });
 
     const load = useCallback(async () => {
@@ -31,7 +31,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
         if (!res.ok) { setError(json.error || 'Could not load booking'); return; }
         setData(json);
         const b = json.booking;
-        setStay({ unitId: b.room_id || '', checkIn: b.check_in || '', nights: b.nights || 1, autoPrice: true });
+        setStay({ unitId: b.room_id || '', checkIn: b.check_in || '', nights: b.nights || 1, price: 'standard', agreed: '' });
         setGuest({ guestName: b.guest_name || '', guestPhone: b.guest_phone || '', notes: b.notes || '' });
         const balance = Math.max(Number(b.total_amount) - Number(json.paid || 0), 0);
         setPay(p => ({ ...p, amount: balance > 0 ? String(balance) : '' }));
@@ -118,7 +118,12 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     const saveStay = async () => {
         if (!stay.checkIn || stayNights < 1) { setError('Pick a check-in date and at least 1 night'); return; }
         const payload: Record<string, unknown> = { roomId: stay.unitId, checkIn: stay.checkIn, checkOut: stayCheckOut };
-        if (stay.autoPrice) payload.totalAmount = autoTotal;
+        if (stay.price === 'standard') payload.totalAmount = autoTotal;
+        if (stay.price === 'agreed') {
+            const t = Number(stay.agreed);
+            if (!stay.agreed || !Number.isFinite(t) || t < 0) { setError('Type the new total the guest agreed to pay for the whole stay'); return; }
+            payload.totalAmount = Math.round(t);
+        }
         if (await patch(payload)) setPanel('none');
     };
     const saveGuest = async () => {
@@ -231,12 +236,20 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                             </Field>
                             <p className="text-[13px] text-gray-600">
                                 Check-out <b>{stayCheckOut ? fmtDay(stayCheckOut) : '—'}</b>
-                                {stay.autoPrice && stayNights > 0 && <> · new total <b>{naira(autoTotal)}</b></>}
                             </p>
-                            <label className="flex items-center gap-2 text-[13px] text-gray-600">
-                                <input type="checkbox" className="w-4 h-4" checked={stay.autoPrice} onChange={e => setStay({ ...stay, autoPrice: e.target.checked })} />
-                                Recalculate price ({naira(b.price_per_night)}/night)
-                            </label>
+                            <Field label="Price for the whole stay">
+                                <Chips value={stay.price} onChange={v => setStay({ ...stay, price: v as typeof stay.price })} options={[
+                                    { value: 'standard', label: `Standard ${naira(autoTotal)}` },
+                                    { value: 'agreed', label: 'Agreed / discount' },
+                                    { value: 'keep', label: `Keep ${naira(b.total_amount)}` },
+                                ]} />
+                            </Field>
+                            {stay.price === 'agreed' && (
+                                <Field label="New total for the whole stay (₦)" hint={`Standard would be ${naira(autoTotal)} (${naira(b.price_per_night)}/night × ${stayNights}). Already paid: ${naira(data.paid)}.`}>
+                                    <input type="number" inputMode="numeric" min={0} className={inputCls} value={stay.agreed} placeholder={String(autoTotal)}
+                                        onChange={e => setStay({ ...stay, agreed: e.target.value })} autoFocus />
+                                </Field>
+                            )}
                             <BigButton tone="dark" onClick={saveStay} busy={busy}>Save changes</BigButton>
                         </div>
                     )}

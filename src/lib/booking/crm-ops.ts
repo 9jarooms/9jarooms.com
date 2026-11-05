@@ -196,6 +196,8 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
         update.check_in = newCheckIn;
         update.check_out = newCheckOut;
         update.nights = newDates.length;
+        // the nightly rate follows an agreed total (discounts), so the daily log shows what they really pay
+        if (body.totalAmount !== undefined && newDates.length) update.price_per_night = Math.round(body.totalAmount / newDates.length);
 
         // keep room_type_id in sync when the unit changes
         if (newRoomId !== booking.room_id) {

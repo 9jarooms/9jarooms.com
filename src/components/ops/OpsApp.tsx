@@ -5,8 +5,7 @@ import { Plus, RefreshCw, Search, ChevronRight, Pencil, EyeOff, ImageOff } from 
 import {
     BookingCard, KindPill, isoToday, fmtDay, naira, balanceOf, owes, shiftIso, cacheGet, fetchCached,
     unitLabel, groupAllUnits, unitPrice, relDayLower,
-    type OpsToday, type OpsBooking, type UnitState,
-} from './shared';
+    type OpsToday, type OpsBooking, type UnitState, useLiveUpdates } from './shared';
 import BookingSheet from './BookingSheet';
 import NewBookingSheet, { type NewBookingPreset } from './NewBookingSheet';
 import UnitSheet from './UnitSheet';
@@ -76,6 +75,9 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
     }, [propertyId]);
 
     useEffect(() => { load(); }, [load]);
+    // live: a booking, payment or check-out made by anyone shows up here within a second
+    const loadSilent = useCallback(() => load(true), [load]);
+    useLiveUpdates(loadSilent);
     // the bottom nav links to ?tab=find; follow it when the page re-renders
     useEffect(() => { setTab(initialTab); }, [initialTab]);
 
@@ -119,7 +121,10 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
             inHouse: bs.filter(b => b.status === 'checked_in' && b.check_out > today).sort(byOut),
             // booked, never checked in, and the dates have passed
             missed: bs.filter(b => expected(b) && b.check_out <= today).sort(byIn),
-            upcoming: bs.filter(b => expected(b) && b.check_in > today).sort(byIn),
+            // tomorrow, so nobody gives those rooms away and leavers are asked about extending in time
+            arrivingTomorrow: bs.filter(b => expected(b) && b.check_in === shiftIso(today, 1)).sort(byIn),
+            leavingTomorrow: bs.filter(b => b.status === 'checked_in' && b.check_out === shiftIso(today, 1)).sort(byIn),
+            upcoming: bs.filter(b => expected(b) && b.check_in > shiftIso(today, 1)).sort(byIn),
         };
     }, [data, today]);
 
@@ -290,17 +295,35 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                         ))}
                     </Section>
 
+                    {lists.arrivingTomorrow.length > 0 && (
+                        <Section title="Arriving tomorrow · keep these rooms" count={lists.arrivingTomorrow.length} empty="">
+                            {lists.arrivingTomorrow.map(b => (
+                                <BookingCard key={b.id} b={b} today={today} unit={unitNameOf(b)}
+                                    onOpen={() => setOpenBooking(b.id)} />
+                            ))}
+                        </Section>
+                    )}
+
+                    {lists.leavingTomorrow.length > 0 && (
+                        <Section title="Leaving tomorrow · ask if they’ll extend" count={lists.leavingTomorrow.length} empty="">
+                            {lists.leavingTomorrow.map(b => (
+                                <BookingCard key={b.id} b={b} today={today} unit={unitNameOf(b)}
+                                    onOpen={() => setOpenBooking(b.id)} />
+                            ))}
+                        </Section>
+                    )}
+
                     <Section
                         title="Coming up"
                         count={lists.upcoming.length}
-                        empty="Nothing booked for the next 30 days"
-                        right={lists.upcoming.length > 5 && (
+                        empty="Nothing else booked for the next 30 days"
+                        right={lists.upcoming.length > 8 && (
                             <button type="button" onClick={() => setTab('bookings')} className="text-[13px] font-bold text-green-600 flex items-center gap-0.5">
                                 See all <ChevronRight size={14} />
                             </button>
                         )}
                     >
-                        {lists.upcoming.slice(0, 5).map(b => (
+                        {lists.upcoming.slice(0, 8).map(b => (
                             <BookingCard key={b.id} b={b} today={today} unit={unitNameOf(b)}
                                 onOpen={() => setOpenBooking(b.id)} />
                         ))}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Printer } from 'lucide-react';
-import { naira, fmtDay, shiftIso, isoToday } from './shared';
+import { naira, fmtDay, shiftIso, isoToday, useLiveUpdates } from './shared';
 
 interface Row { unitId: string; unit: string; group: string | null; status: string; guest?: string; phone?: string | null; rate?: number;
     checkIn?: string; checkOut?: string; nights?: number; total?: number; paid?: number; balance?: number }
@@ -29,6 +29,7 @@ export default function OccupancyLog() {
         if (res.ok) setLog(await res.json());
         setLoading(false);
     }, [date, prop]);
+    useLiveUpdates(load);
     useEffect(() => { load(); }, [load]);
 
     const t = log?.totals;
