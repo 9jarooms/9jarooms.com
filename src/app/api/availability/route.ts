@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stayDates } from '@/lib/booking/hold';
 import { createServerClient, createAdminClient } from '@/lib/supabase/server';
+import { isBlockedSlot } from '@/lib/booking/room-types';
 import type { RoomLite } from '@/lib/booking/options';
 import { getRoomTypeAvailability } from '@/lib/booking/room-types';
 
@@ -130,7 +131,7 @@ async function getApartmentAvailability(searchParams: URLSearchParams) {
 
         const { data: rawAvailability, error: availError } = await supabase
             .from('availability')
-            .select('*, booking:bookings(expires_at)')
+            .select('*, booking:bookings(expires_at, status)')
             .in('room_id', roomIds)
             .gte('date', from)
             .lt('date', to);
@@ -146,22 +147,11 @@ async function getApartmentAvailability(searchParams: URLSearchParams) {
             room_id: string;
             date: string;
             status: string;
-            booking?: { expires_at: string | null } | null;
+            booking?: { expires_at: string | null; status?: string | null } | null;
         }>) {
             if (!dateSet.has(slot.date)) continue;
 
-            let blocked = false;
-            if (slot.status === 'booked' || slot.status === 'cleaning' || slot.status === 'maintenance') {
-                blocked = true;
-            } else if (slot.status === 'held') {
-                const expiresAt = slot.booking?.expires_at ? new Date(slot.booking.expires_at) : null;
-                // Active hold (no expiry or expiry in the future) blocks; expired hold is available.
-                if (!expiresAt || expiresAt >= now) {
-                    blocked = true;
-                }
-            }
-
-            if (blocked) {
+            if (isBlockedSlot(slot, now)) {
                 unavailable.push(`${slot.room_id}|${slot.date}`);
             }
         }

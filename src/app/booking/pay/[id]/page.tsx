@@ -20,9 +20,8 @@ export default async function BookingPayPage({ params }: Props) {
 
     if (!booking) notFound();
 
-    if (booking.status === 'paid') {
-        redirect(`/booking/confirm?reference=${booking.paystack_reference}`);
-    }
+    // A paid booking only says so: a booking id alone must never lead to the guest's details
+    // (the guest already has their confirmation page and email).
     // only an unpaid lock that is still running can be paid here (no paying for a room that was let go)
     const active = booking.status === 'pending' && (!booking.expires_at || new Date(booking.expires_at).getTime() > Date.now());
 
@@ -78,7 +77,7 @@ export default async function BookingPayPage({ params }: Props) {
                             {!active ? (
                                 <div className="text-center text-gray-700 bg-gray-50 p-4 rounded-xl border border-gray-200">
                                     <p className="font-medium mb-1">This payment link is no longer active</p>
-                                    <p className="text-sm text-gray-500">{booking.status === 'confirmed' || booking.status === 'checked_in' || booking.status === 'completed'
+                                    <p className="text-sm text-gray-500">{['paid', 'confirmed', 'checked_in', 'completed'].includes(booking.status)
                                         ? 'This booking is already confirmed. Nothing more to pay here.'
                                         : 'The 15 minutes to pay have passed and the room was released. Please contact 9jaRooms on WhatsApp to book again.'}</p>
                                 </div>

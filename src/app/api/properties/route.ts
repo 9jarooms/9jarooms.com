@@ -8,7 +8,8 @@ export async function GET(request: NextRequest) {
     const checkIn = searchParams.get('check_in');
     const checkOut = searchParams.get('check_out');
     const type = searchParams.get('type');
-    const area = searchParams.get('area');
+    // characters that would change the search filter itself are dropped
+    const area = (searchParams.get('area') || '').replace(/[,()%*\\]/g, ' ').trim() || null;
     const minPrice = searchParams.get('min_price');
     const maxPrice = searchParams.get('max_price');
     const guests = searchParams.get('guests');
@@ -304,7 +305,11 @@ export async function GET(request: NextRequest) {
         });
 
         // Strip address from public response - address is only sent privately via email/whatsapp
-        const stripAddress = (p: any) => { const { address: _a, ...rest } = p; return rest; };
+        // and the arrival instructions and owner / payout details (only for paid guests and the team)
+        const stripAddress = (p: any) => {
+            const { address: _a, check_in_instructions: _ci, owner: _o, owner_id: _oi, caretaker_id: _c, ...rest } = p;
+            return rest;
+        };
 
         return NextResponse.json({
             data: filteredData.map(stripAddress),

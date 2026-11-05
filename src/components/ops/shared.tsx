@@ -33,6 +33,8 @@ export interface OpsToday {
     properties: OpsProperty[]; propertyId: string | null;
     roomTypes: OpsRoomType[]; units: OpsUnit[];
     bookings: OpsBooking[]; blocks: OpsBlock[]; held: OpsHeld[];
+    lapsed?: OpsBooking[];      // transfer locks that ran out in the last hour (money may still come)
+    serverNow?: number;
 }
 export type UnitKind = 'free' | 'occupied' | 'arriving' | 'cleaning' | 'maintenance';
 export interface UnitState { kind: UnitKind; booking?: OpsBooking }
@@ -349,7 +351,10 @@ export function ContactButtons({ phone, name, message, compact }: {
 // One booking as a card. Tap the body to open it; check-in / check-out are
 // one tap from the list so the common case never needs the full sheet.
 // "expires in 7 min" for an unpaid hold; null once it has lapsed or when there is no hold
-export function holdCountdown(b: { status: string; expires_at?: string | null }, now = Date.now()) {
+// phone clocks can be wrong: countdowns use the server time (set whenever Today loads)
+let clockSkew = 0;
+export function syncClock(serverNow?: number) { if (serverNow) clockSkew = serverNow - Date.now(); }
+export function holdCountdown(b: { status: string; expires_at?: string | null }, now = Date.now() + clockSkew) {
     if (b.status !== 'pending' || !b.expires_at) return null;
     const ms = new Date(b.expires_at).getTime() - now;
     if (ms <= 0) return 'hold expired';
@@ -477,8 +482,9 @@ function startPulse() {
         }
     });
 }
-// Reload when anyone changes a booking, payment or night. Also, as a safety net if live updates are
-// down: every minute while the screen is visible, and whenever the phone comes back to the app.
+// Reload when anyone changes a booking, payment or night, plus a quiet catch-up when the phone comes
+// back to the app (it may have missed updates while asleep). Never on a timer: data changes in place,
+// nothing reloads under someone's fingers, and forms keep what is being typed.
 export function useLiveUpdates(onChange: () => void, enabled = true) {
     const ref = useRef(onChange);
     useEffect(() => { ref.current = onChange; }, [onChange]);
@@ -490,11 +496,10 @@ export function useLiveUpdates(onChange: () => void, enabled = true) {
         pulseListeners.add(fire);
         startPulse();
         const visible = () => { if (document.visibilityState === 'visible') fire(); };
-        const tick = setInterval(visible, 60000);
         document.addEventListener('visibilitychange', visible);
         return () => {
             pulseListeners.delete(fire); if (timer) clearTimeout(timer);
-            clearInterval(tick); document.removeEventListener('visibilitychange', visible);
+            document.removeEventListener('visibilitychange', visible);
         };
     }, [enabled]);
 }

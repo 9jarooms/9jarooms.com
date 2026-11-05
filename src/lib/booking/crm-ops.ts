@@ -248,7 +248,6 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
         if (!count) {
             await supabase.from('booking_payments').insert({
                 booking_id: id, amount: Number(booking.total_amount), method: 'Paystack', note: 'Paid online', recorded_by: actorId || null,
-                paystack_reference: booking.paystack_reference || null,
             });
         }
         if (update.total_amount !== undefined && !update.status) update.status = 'confirmed';
@@ -289,6 +288,8 @@ export const paymentSchema = z.object({
     note: z.string().max(300).optional().nullable(),
     // same id on a retry = the same payment (lost signal, double tap)
     requestId: z.string().max(80).optional(),
+    // the bank's reference / session id for a transfer: one transfer can only ever be recorded once
+    reference: z.string().trim().max(80).optional().nullable(),
     // the person saw the warning (more than the balance / looks like a repeat) and wants it anyway
     force: z.boolean().optional(),
 });
@@ -305,14 +306,27 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
     if (input.amount < 0 && (input.method !== 'Refund' || !['admin', 'customer_rep'].includes(role || ''))) {
         return fail('Only an admin or customer rep can record a refund', 403);
     }
-    if (['cancelled', 'no_show'].includes(booking.status) && input.amount > 0) {
-        return fail('This booking is cancelled. Restore it (or make a new booking) before taking money for it.', 409);
-    }
-
     if (input.requestId) {
         const { data: same } = await supabase.from('booking_payments').select('*').eq('client_request_id', input.requestId).maybeSingle();
         if (same) return ok({ success: true, payment: same, paid: await ledgerSum(supabase, id) });
     }
+    const isTransfer = /transfer|moniepoint/i.test(input.method || '');
+    const reference = (input.reference || '').trim() || null;
+    if (isTransfer && input.amount > 0 && !reference) {
+        return fail('Type the transfer reference from the bank alert (it stops the same transfer being recorded twice).', 400);
+    }
+    if (reference) {
+        const { data: used } = await supabase.from('booking_payments').select('booking_id, amount, booking:bookings(guest_name)')
+            .ilike('reference', reference.replace(/[%_\\]/g, c => '\\' + c)).maybeSingle();
+        if (used) {
+            const who = (used as any).booking?.guest_name || 'another booking';
+            return fail(`This transfer (reference ${reference}) was already recorded${used.booking_id === id ? ' on this booking' : ` for ${who}`}. One transfer can only be recorded once.`, 409);
+        }
+    }
+    if (['cancelled', 'no_show'].includes(booking.status) && input.amount > 0) {
+        return fail('This booking is cancelled. Restore it (or make a new booking) before taking money for it.', 409);
+    }
+
 
     const { data: rows } = await supabase.from('booking_payments').select('amount, created_at').eq('booking_id', id);
     const already = (rows || []).reduce((t, r) => t + Number(r.amount), 0);
@@ -343,6 +357,7 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
             note: input.note || null,
             recorded_by: recordedBy,
             client_request_id: input.requestId || null,
+            reference,
         })
         .select()
         .single();

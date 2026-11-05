@@ -12,6 +12,7 @@ interface StaffRow extends CommissionSummary { name: string; username: string | 
 export default function CommissionDesk() {
     const [month, setMonth] = useState(thisMonth() < START_MONTH ? START_MONTH : thisMonth());
     const [staff, setStaff] = useState<StaffRow[] | null>(null);
+    const [pastDue, setPastDue] = useState<{ month: string; name: string; due: number; over: number }[]>([]);
     const [forbidden, setForbidden] = useState(false);
     const [open, setOpen] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -23,6 +24,7 @@ export default function CommissionDesk() {
         const json = await res.json();
         if (!res.ok) { setError(json.error || 'Could not load'); return; }
         setStaff(json.staff);
+        setPastDue(json.pastDue || []);
     }, [month]);
     useEffect(() => { load(); }, [load]);
     useLiveUpdates(load, !forbidden);
@@ -38,7 +40,9 @@ export default function CommissionDesk() {
         await load();
         return true;
     };
-    const check = (ids: string[], status: 'verified' | 'rejected' | null) => ids.length && call('PATCH', { bookingIds: ids, status });
+    // sends the totals on screen: if a booking changed since, the server refuses instead of verifying blind
+    const totalsOf = (ids: string[]) => Object.fromEntries((staff || []).flatMap(x => x.lines).filter(l => ids.includes(l.bookingId)).map(l => [l.bookingId, l.total]));
+    const check = (ids: string[], status: 'verified' | 'rejected' | null) => ids.length && call('PATCH', { bookingIds: ids, status, totals: totalsOf(ids) });
     const reassign = (bookingId: string, userId: string | null) => call('PUT', { bookingId, userId });
     const pay = (s: StaffRow, undo = false) => {
         if (!undo && !confirm(`Mark ${naira(s.due)} commission for ${monthName(month)} as paid to ${s.name}?`)) return;
@@ -63,6 +67,16 @@ export default function CommissionDesk() {
                 <Box label="Bookings to check" value={String(totals.toCheck)} />
             </div>
 
+            {pastDue.length > 0 && (
+                <div className="text-[13px] bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-3 py-2">
+                    <p className="font-semibold">Earlier months need attention:</p>
+                    {pastDue.map(p => (
+                        <button key={p.month + p.name} onClick={() => { setStaff(null); setMonth(p.month); }} className="block underline text-left">
+                            {monthName(p.month)} · {p.name}: {p.due > 0 ? `${naira(p.due)} still to pay` : `paid ${naira(p.over)} too much`}
+                        </button>
+                    ))}
+                </div>
+            )}
             {error && <p className="text-[13px] text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
             {!staff && <p className="text-stone-400 text-sm py-6 text-center">Loading…</p>}
 

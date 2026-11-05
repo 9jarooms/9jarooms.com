@@ -68,10 +68,16 @@ export async function claimDates(
         // past its expiry. A booked night of a live booking is never touched, whatever its status says.
         if (!cell.booking) return true;
         if (['expired', 'cancelled', 'no_show'].includes(cell.booking.status)) return true;
-        return cell.booking.status === 'pending' && !!cell.booking.expires_at && new Date(cell.booking.expires_at).getTime() < now;
+        // an overdue unpaid hold: only its still-"held" nights (a payment being confirmed turns them
+        // to "booked" first, and those are never taken from it)
+        return cell.status === 'held' && cell.booking.status === 'pending' && !!cell.booking.expires_at && new Date(cell.booking.expires_at).getTime() < now;
     });
     if (stale.length > 0) {
-        await supabase.from('availability').delete().in('id', stale.map(c => c.id));
+        const held = stale.filter(c => c.status === 'held').map(c => c.id);
+        const other = stale.filter(c => c.status !== 'held').map(c => c.id);
+        // re-checked at delete time: a hold confirmed a moment ago is "booked" now and is left alone
+        if (held.length) await supabase.from('availability').delete().in('id', held).eq('status', 'held');
+        if (other.length) await supabase.from('availability').delete().in('id', other).neq('status', 'booked');
     }
 
     // 2. Insert-only claim. Rows that already exist are left alone.
@@ -88,7 +94,16 @@ export async function claimDates(
         .in('room_id', roomIds)
         .in('date', dates);
 
-    return ((verify || []) as ConflictCell[]).filter(c => c.booking_id !== bookingId);
+    const cells = (verify || []) as ConflictCell[];
+    const conflicts = cells.filter(c => c.booking_id !== bookingId);
+    // every requested room-night must exist and be ours: one deleted mid-claim is a clash too
+    const have = new Set(cells.filter(c => c.booking_id === bookingId).map(c => `${c.room_id}|${c.date}`));
+    for (const room_id of roomIds) for (const date of dates) {
+        if (!have.has(`${room_id}|${date}`) && !conflicts.some(c => c.room_id === room_id && c.date === date)) {
+            conflicts.push({ room_id, date, booking_id: null, status: 'missing' });
+        }
+    }
+    return conflicts;
 }
 
 // Give back every cell a booking holds.
@@ -137,4 +152,15 @@ export async function reclaim(
 // Today's date in Lagos (UTC+1, no daylight saving), never the phone's clock
 export function lagosToday() {
     return new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+// Rooms with a guest still checked in after their check-out date: they are in the room tonight, so
+// nobody else can be put there tonight (the stay has no nights past check-out in the table).
+export async function overstayRooms(supabase: Db, roomIds?: string[]): Promise<Set<string>> {
+    let q = supabase.from('bookings').select('room_id, id').eq('status', 'checked_in').lte('check_out', lagosToday());
+    if (roomIds) q = q.in('room_id', roomIds);
+    const { data } = await q;
+    const ids = new Set<string>();
+    for (const b of data || []) for (const r of await roomsOfBooking(supabase, b as { id: string; room_id: string })) ids.add(r);
+    return ids;
 }

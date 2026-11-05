@@ -28,7 +28,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const SOURCES = ['website', 'whatsapp', 'phone', 'walk_in', 'referral', 'booking_com', 'airbnb', 'other'];
-const PAY_METHODS = ['Bank Transfer', 'POS', 'Moniepoint', 'Cash', 'Paystack', 'Other'];
+const PAY_METHODS = ['Bank Transfer', 'POS', 'Moniepoint', 'Cash', 'Other', 'Refund'];
 const ID_TYPES = ['NIN', 'National ID', "Driver's Licence", 'Passport', 'Voter Card', 'Other'];
 
 interface Props {
@@ -45,6 +45,7 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
     const [form, setForm] = useState<any>({});
     const [payAmount, setPayAmount] = useState('');
     const [payMethod, setPayMethod] = useState(PAY_METHODS[0]);
+    const [payRef, setPayRef] = useState('');
     // Stay editor: move unit, extend / change dates, optional price recalculation
     const [stay, setStay] = useState<{ unitId: string; checkIn: string; nights: number; autoPrice: boolean }>({
         unitId: '', checkIn: '', nights: 1, autoPrice: true,
@@ -84,7 +85,8 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
         const res = await fetch(`/api/crm/bookings/${bookingId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            // refused if someone changed this booking since it was opened here
+            body: JSON.stringify({ expectedStatus: data?.booking?.status, ...payload }),
         });
         const json = await res.json();
         setBusy(false);
@@ -123,18 +125,22 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
         totalAmount: Number(form.totalAmount) || 0,
     });
 
-    const addPayment = async () => {
-        const amount = Number(payAmount);
-        if (!amount || amount <= 0) return;
-        setBusy(true);
+    const addPayment = async (force = false): Promise<void> => {
+        const typed = Number(payAmount);
+        if (!typed || typed <= 0) return;
+        if (/transfer|moniepoint/i.test(payMethod) && !payRef.trim()) { setError('Type the transfer reference from the bank alert'); return; }
+        setBusy(true); setError(null);
         const res = await fetch(`/api/crm/bookings/${bookingId}/payments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount, method: payMethod }),
+            body: JSON.stringify({ amount: payMethod === 'Refund' ? -typed : typed, method: payMethod, reference: payRef.trim() || null,
+                requestId: `${bookingId}-${typed}-${payMethod}-${payRef.trim()}-${force ? 'f' : ''}`, force }),
         });
         setBusy(false);
-        if (res.ok) { setPayAmount(''); await load(); onChanged(); }
-        else setError((await res.json()).error);
+        if (res.ok) { setPayAmount(''); setPayRef(''); await load(); onChanged(); return; }
+        const j = await res.json();
+        if (!force && ['duplicate', 'overpay'].includes(j.details?.warning) && confirm(j.error)) return addPayment(true);
+        setError(j.error);
     };
 
     const deletePayment = async (paymentId: string) => {
@@ -353,7 +359,11 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
                                 className="border border-stone-300 rounded-md px-2 py-1.5 text-sm bg-white">
                                 {PAY_METHODS.map(m => <option key={m}>{m}</option>)}
                             </select>
-                            <button disabled={busy || !payAmount} onClick={addPayment}
+                            {/transfer|moniepoint|refund/i.test(payMethod) && (
+                                <input placeholder={payMethod === 'Refund' ? 'Refund reference (optional)' : 'Transfer reference'} value={payRef} onChange={e => setPayRef(e.target.value)}
+                                    className="flex-1 min-w-[140px] border border-stone-300 rounded-md px-2.5 py-2 text-sm" />
+                            )}
+                            <button disabled={busy || !payAmount} onClick={() => addPayment()}
                                 className="px-4 py-1.5 rounded-md bg-[#008737] text-white text-sm font-semibold disabled:opacity-50">
                                 Record payment
                             </button>

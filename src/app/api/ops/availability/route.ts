@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOps } from '@/lib/auth/require-ops';
 import { dateRange } from '@/lib/booking/crm-ops';
 import { isBlockedSlot } from '@/lib/booking/room-types';
+import { lagosToday, overstayRooms } from '@/lib/booking/hold';
 import { operatedInventory } from '@/lib/booking/occupancy';
 
 // "Find a room": every unit free for a stay, grouped the way guests buy
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
     const { data: slots } = unitIds.length
         ? await supabase
             .from('availability')
-            .select('room_id, status, booking:bookings(expires_at)')
+            .select('room_id, status, booking:bookings(expires_at, status)')
             .in('room_id', unitIds)
             .in('date', dates)
         : { data: [] };
@@ -69,6 +70,8 @@ export async function GET(request: NextRequest) {
     for (const slot of (slots || []) as unknown as Array<{ room_id: string; status: string; booking?: { expires_at: string | null } | null }>) {
         if (isBlockedSlot(slot, now)) blocked.add(slot.room_id);
     }
+    // a guest still checked in past their check-out is in the room tonight
+    if (dates.includes(lagosToday())) for (const id of await overstayRooms(supabase, unitIds)) blocked.add(id);
 
     // nightly total per room type: date-range overrides win over the base rate (same rule as priceRoomTypeStay)
     const { data: overrides } = await overridesP;

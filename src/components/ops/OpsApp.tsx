@@ -5,7 +5,7 @@ import { Plus, RefreshCw, Search, ChevronRight, Pencil, EyeOff, ImageOff } from 
 import {
     BookingCard, KindPill, isoToday, fmtDay, naira, balanceOf, owes, shiftIso, cacheGet, fetchCached,
     unitLabel, groupAllUnits, unitPrice, relDayLower,
-    type OpsToday, type OpsBooking, type UnitState, useLiveUpdates } from './shared';
+    type OpsToday, type OpsBooking, type UnitState, useLiveUpdates, syncClock } from './shared';
 import BookingSheet from './BookingSheet';
 import NewBookingSheet, { type NewBookingPreset } from './NewBookingSheet';
 import UnitSheet from './UnitSheet';
@@ -61,6 +61,7 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
         setError(null);
         try {
             const json = await fetchCached<OpsToday>(url);
+            syncClock(json.serverNow);
             setData(json);
             if (json.propertyId && json.propertyId !== propertyId) setPropertyId(json.propertyId);
             // warm the Find tab for tonight so it opens instantly
@@ -85,9 +86,8 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
     // phone comes back to the app.
     useEffect(() => {
         const tick = () => { if (document.visibilityState === 'visible') load(true); };
-        const timer = setInterval(tick, 60000);
         document.addEventListener('visibilitychange', tick);
-        return () => { clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
+        return () => document.removeEventListener('visibilitychange', tick);
     }, [load]);
 
     const selectProperty = (id: string) => {
@@ -170,10 +170,15 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
             setBusyId(null);
         }
     };
-    const checkIn = (b: OpsBooking) => quick(b.id, { status: 'checked_in' });
+    // expectedStatus: a card that is out of date (changed on another phone) is refused, not applied
+    const checkIn = (b: OpsBooking) => {
+        if (b.check_in > today && !confirm(`${b.guest_name} is arriving early. The stay will start today and the extra night(s) are added to the bill. Continue?`)) return;
+        quick(b.id, { status: 'checked_in', expectedStatus: b.status });
+    };
     const checkOut = (b: OpsBooking) => {
         if (owes(b) && !confirm(`${b.guest_name} still owes ${naira(balanceOf(b))}. Check out anyway?`)) return;
-        quick(b.id, { status: 'completed' });
+        if (b.check_out > today && !confirm(`${b.guest_name} is leaving before ${fmtDay(b.check_out)}. The room goes back on sale from tonight. Continue?`)) return;
+        quick(b.id, { status: 'completed', expectedStatus: b.status });
     };
 
     const property = data?.properties.find(p => p.id === data.propertyId) || null;
@@ -299,6 +304,15 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                                 onOpen={() => setOpenBooking(b.id)} />
                         ))}
                     </Section>
+
+                    {(data?.lapsed || []).length > 0 && (
+                        <Section title="Lock ran out · money may still come" count={data!.lapsed!.length} empty="">
+                            {data!.lapsed!.map(b => (
+                                <BookingCard key={b.id} b={b} today={today} unit={unitNameOf(b)}
+                                    onOpen={() => setOpenBooking(b.id)} />
+                            ))}
+                        </Section>
+                    )}
 
                     {lists.arrivingTomorrow.length > 0 && (
                         <Section title="Arriving tomorrow · keep these rooms" count={lists.arrivingTomorrow.length} empty="">

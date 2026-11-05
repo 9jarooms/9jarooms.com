@@ -4,7 +4,7 @@ import { initializePayment, generateReference } from '@/lib/paystack';
 import { z } from 'zod';
 import { computeOptions, groupDuplexes, freeDuplexes, type ApartmentLite, type RoomLite, type BookingOption } from '@/lib/booking/options';
 import { findFreeUnits, priceRoomTypeStay, isBlockedSlot } from '@/lib/booking/room-types';
-import { claimDates, releaseClaim, holdExpiry, stayDates, lagosToday, HOLD_MINUTES } from '@/lib/booking/hold';
+import { claimDates, releaseClaim, reclaim, holdExpiry, stayDates, lagosToday, overstayRooms, HOLD_MINUTES } from '@/lib/booking/hold';
 import { notifyCaretakersHold } from '@/lib/booking/notify-caretakers';
 
 const bookingSchema = z.object({
@@ -27,7 +27,7 @@ const bookingSchema = z.object({
     payBy: z.enum(['paystack', 'transfer']).optional(),
     // staff only: the price agreed with the guest (whole stay), money taken now, and a retry id
     totalAmount: z.number().min(0).optional().nullable(),
-    deposit: z.object({ amount: z.number().positive(), method: z.string().max(40).optional().nullable() }).optional().nullable(),
+    deposit: z.object({ amount: z.number().positive(), method: z.string().max(40).optional().nullable(), reference: z.string().trim().max(80).optional().nullable() }).optional().nullable(),
     requestId: z.string().max(80).optional().nullable(),
     bookingSource: z.string().optional().nullable(),
     bookingType: z.string().optional().nullable(),
@@ -77,9 +77,10 @@ async function paystackFailed(
 
 // A hold the guest pays by bank transfer: the nights are locked for HOLD_MINUTES and staff
 // tap Record payment when the money lands. No Paystack link is made.
-async function transferHoldResponse(supabase: AdminClient, bookingId: string, expiresAt: Date) {
+async function transferHoldResponse(supabase: AdminClient, bookingId: string, expiresAt: Date, extra: Record<string, unknown> = {}) {
     const { data } = await supabase.from('site_settings').select('value').eq('key', 'bank_transfer').maybeSingle();
     return NextResponse.json({
+        ...extra,
         success: true, bookingId, paystackUrl: null, payUrl: null, transfer: true,
         bank: (data?.value as { bankName?: string; accountNumber?: string; accountName?: string } | null) || null,
         expiresAt: expiresAt.toISOString(), holdMinutes: HOLD_MINUTES,
@@ -92,7 +93,8 @@ const rateLimitStore = new Map<string, { count: number, resetAt: number }>();
 export async function POST(request: NextRequest) {
     // Basic IP rate limiting for the public. Signed-in staff are never limited (a whole office or
     // many phones can share one network address).
-    const { data: { user: early } } = await (await createSessionClient()).auth.getUser();
+    const hasSession = request.cookies.getAll().some(c => c.name.startsWith('sb-'));
+    const early = hasSession ? (await (await createSessionClient()).auth.getUser()).data.user : null;
     let isStaffCaller = false;
     if (early) {
         const { data: r } = await createAdminClient().from('user_roles').select('role').eq('user_id', early.id)
@@ -126,7 +128,10 @@ export async function POST(request: NextRequest) {
         const body = validation.data;
         const { propertyId, mode, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
         const isHold = !!(isManualBooking && body.hold);
-        const transferHold = isHold && body.payBy === 'transfer';
+        // staff locks are paid by bank transfer and confirmed when the money is seen in the account.
+        // No Paystack link: Paystack money arrives a day later, too late to refund a guest who paid
+        // after the lock ran out.
+        const transferHold = isHold;
         let roomId = body.roomId;
 
         if (mode === 'single' && !roomId && !body.roomTypeId) {
@@ -175,13 +180,31 @@ export async function POST(request: NextRequest) {
 
         // the same request arriving twice (signal dropped, button tapped again) returns the first booking
         if (isInternalBooking && body.requestId) {
-            const { data: same } = await supabase.from('bookings').select('id, status, expires_at').eq('client_request_id', body.requestId).maybeSingle();
-            if (same) return NextResponse.json({ success: true, bookingId: same.id, duplicate: true, expiresAt: same.expires_at, holdMinutes: HOLD_MINUTES });
+            const { data: same } = await supabase.from('bookings').select('id, status, expires_at, room_id, total_amount').eq('client_request_id', body.requestId).maybeSingle();
+            if (same && ['cancelled', 'expired', 'no_show'].includes(same.status)) {
+                // the first try did not get the room: this retry is a fresh attempt
+                await supabase.from('bookings').update({ client_request_id: null }).eq('id', same.id);
+            } else if (same) {
+                if (isHold) return transferHoldResponse(supabase, same.id, new Date(same.expires_at || Date.now()), { duplicate: true, roomId: same.room_id, total: Number(same.total_amount) });
+                return NextResponse.json({ success: true, bookingId: same.id, duplicate: true, roomId: same.room_id, total: Number(same.total_amount) });
+            }
+        }
+        if (isInternalBooking && body.deposit && /transfer|moniepoint/i.test(body.deposit.method || '') && !body.deposit.reference) {
+            return NextResponse.json({ error: 'Type the transfer reference from the bank alert' }, { status: 400 });
+        }
+        if (isInternalBooking && body.deposit?.reference) {
+            const { data: used } = await supabase.from('booking_payments').select('id').ilike('reference', body.deposit.reference.replace(/[%_\\]/g, c => '\\' + c)).maybeSingle();
+            if (used) return NextResponse.json({ error: `This transfer (reference ${body.deposit.reference}) was already recorded. One transfer can only be recorded once.` }, { status: 409 });
         }
         if (!isInternalBooking) {
             if (checkIn < lagosToday()) return NextResponse.json({ error: 'Check-in date is in the past' }, { status: 400 });
             // one guest cannot keep many rooms locked without paying
-            const who = [guestEmail ? `guest_email.eq.${guestEmail.replace(/[,()]/g, '')}` : '', guestPhone ? `guest_phone.eq.${guestPhone.replace(/[,()]/g, '')}` : ''].filter(Boolean);
+            const who = [guestEmail ? `guest_email.eq.${guestEmail.replace(/[,()]/g, '')}` : '', guestPhone ? `guest_phone.eq.${guestPhone.replace(/[,()]/g, '')}` : '',
+                user ? `user_id.eq.${user.id}` : ''].filter(Boolean);
+            // nobody can lock up a whole property with fake details: at most 6 unpaid website checkouts at once
+            const { count: open } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
+                .eq('property_id', propertyId).eq('status', 'pending').is('created_by', null).gt('expires_at', new Date().toISOString());
+            if ((open || 0) >= 6) return NextResponse.json({ error: 'Many guests are checking out this property right now. Please try again in a few minutes.' }, { status: 429 });
             if (who.length) {
                 const { count } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
                     .eq('status', 'pending').gt('expires_at', new Date().toISOString()).or(who.join(','));
@@ -262,6 +285,9 @@ export async function POST(request: NextRequest) {
         // Single-room bookings skip this entirely and use the path below.
         // ============================================================
         if (mode === 'two_bed' || mode === 'whole') {
+            if (body.totalAmount != null || body.deposit) {
+                return NextResponse.json({ error: 'For a whole flat, book at the listed price, then change the price or record the payment on the booking.' }, { status: 400 });
+            }
             // 1. Load the property bundle config + ALL its active rooms.
             const { data: propertyRow } = await supabase
                 .from('properties')
@@ -320,7 +346,7 @@ export async function POST(request: NextRequest) {
             const roomIds = rooms.map(r => r.id);
             const { data: rawAvailability } = await supabase
                 .from('availability')
-                .select('room_id, date, status, booking:bookings(expires_at)')
+                .select('room_id, date, status, booking:bookings(expires_at, status)')
                 .in('room_id', roomIds)
                 .in('date', dates);
 
@@ -330,16 +356,13 @@ export async function POST(request: NextRequest) {
                 room_id: string;
                 date: string;
                 status: string;
-                booking?: { expires_at: string | null } | null;
+                booking?: { expires_at: string | null; status?: string | null } | null;
             }>) {
-                let blocked = false;
-                if (slot.status === 'booked' || slot.status === 'cleaning' || slot.status === 'maintenance') {
-                    blocked = true;
-                } else if (slot.status === 'held') {
-                    const expiresAt = slot.booking?.expires_at ? new Date(slot.booking.expires_at) : null;
-                    if (!expiresAt || expiresAt >= now) blocked = true;
-                }
-                if (blocked) unavailableSet.add(`${slot.room_id}|${slot.date}`);
+                if (isBlockedSlot(slot, now)) unavailableSet.add(`${slot.room_id}|${slot.date}`);
+            }
+            // a guest still checked in past their check-out is in that room tonight
+            if (dates.includes(lagosToday())) {
+                for (const id of await overstayRooms(supabase, roomIds)) unavailableSet.add(`${id}|${lagosToday()}`);
             }
 
             // 3. Resolve the requested bundle to a concrete option.
@@ -482,7 +505,7 @@ export async function POST(request: NextRequest) {
             }));
             await supabase.from('booking_rooms').insert(bookingRoomRows);
 
-            if (transferHold) return transferHoldResponse(supabase, booking.id, expiresAt);
+            if (transferHold) return transferHoldResponse(supabase, booking.id, expiresAt, { total: totalAmount, roomId: option.roomIds[0] });
             // 7. Payment — same branch logic as the single path, bundle total.
             if (!isInternalBooking || bookingSource === 'operator' || isHold) {
                 try {
@@ -547,7 +570,7 @@ export async function POST(request: NextRequest) {
         // Expired holds do not count, exactly as the calendar shows them.
         const { data: slots } = await supabase
             .from('availability')
-            .select('date, status, booking:bookings(expires_at)')
+            .select('date, status, booking:bookings(expires_at, status)')
             .eq('room_id', roomId)
             .in('date', dates);
         const preNow = new Date();
@@ -575,7 +598,9 @@ export async function POST(request: NextRequest) {
         if (dates.includes(today)) {
             const { count: overstay } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
                 .eq('room_id', roomId).eq('status', 'checked_in').lte('check_out', today);
-            if (overstay) return NextResponse.json({ error: 'A guest is still checked in to this room past their check-out. Check them out (or extend them) first.' }, { status: 409 });
+            if (overstay) return NextResponse.json({ error: isInternalBooking
+                ? 'A guest is still checked in to this room past their check-out. Check them out (or extend them) first.'
+                : 'Sorry, this room is not free tonight. Please pick another room or date.' }, { status: 409 });
         }
 
         const property = (room as any).property;
@@ -616,6 +641,7 @@ export async function POST(request: NextRequest) {
         if (bookingType === 'maintenance') {
             totalAmount = 0;
         }
+        const standardTotal = totalAmount;
         // staff: the price agreed with the guest is the price (and what a Paystack link charges)
         if (isInternalBooking && body.totalAmount != null && bookingType !== 'maintenance') totalAmount = Math.round(body.totalAmount);
 
@@ -696,6 +722,21 @@ export async function POST(request: NextRequest) {
         // different booking_id
         const conflictDates = await claimDates(supabase, [roomId as string], dates, availabilityStatus, booking.id);
 
+        if (conflictDates.length > 0 && resolvedRoomTypeId) {
+            // same room type, another unit: the guest does not care which identical room they get
+            await releaseClaim(supabase, booking.id);
+            const others = (await findFreeUnits(supabase, resolvedRoomTypeId, dates)).filter(u => u.id !== roomId);
+            for (const u of others) {
+                const c = await reclaim(supabase, booking.id, [u.id], dates, availabilityStatus);
+                if (c.length === 0) {
+                    roomId = u.id;
+                    await supabase.from('bookings').update({ room_id: u.id }).eq('id', booking.id);
+                    await supabase.from('booking_rooms').update({ room_id: u.id }).eq('booking_id', booking.id);
+                    conflictDates.length = 0;
+                    break;
+                }
+            }
+        }
         if (conflictDates.length > 0) {
             // RACE LOST: Another booking claimed some dates first
             // Roll back: delete our availability rows and cancel booking
@@ -709,12 +750,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        if (isInternalBooking && body.totalAmount != null && Math.round(body.totalAmount) !== standardTotal) {
+            await supabase.from('audit_log').insert({ actor: user.id, booking_id: booking.id, action: 'agreed_price', detail: { standard: standardTotal, agreed: Math.round(body.totalAmount) } });
+        }
         if (isInternalBooking && !isHold && body.deposit && bookingType !== 'maintenance') {
             await supabase.from('booking_payments').insert({
                 booking_id: booking.id, amount: body.deposit.amount, method: body.deposit.method || null, note: 'At booking', recorded_by: user.id,
+                reference: body.deposit.reference || null,
             });
         }
-        if (transferHold) return transferHoldResponse(supabase, booking.id, expiresAt);
+        if (transferHold) return transferHoldResponse(supabase, booking.id, expiresAt, { total: totalAmount, roomId });
         // 6. Initialize Paystack for public bookings AND operator bookings (operator sends link to client)
         if (!isInternalBooking || bookingSource === 'operator' || isHold) {
             try {
@@ -772,6 +817,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({
                 success: true,
                 bookingId: booking.id,
+                roomId,
+                total: totalAmount,
                 message: 'Booking confirmed successfully (Manual Block)',
             });
         }

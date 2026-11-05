@@ -105,5 +105,13 @@ export async function DELETE(request: NextRequest) {
         .eq('user_id', userId)
         .eq('role', role);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // no staff role left: the login stops working and they stop getting guest WhatsApp alerts
+    const { count } = await supabase.from('user_roles').select('user_id', { count: 'exact', head: true }).eq('user_id', userId);
+    if (!count) {
+        await supabase.auth.admin.updateUserById(userId, { ban_duration: '876000h' });
+        await supabase.from('properties').update({ caretaker_id: null }).eq('caretaker_id', userId);
+        await supabase.from('caretakers').update({ phone: null }).eq('id', userId);
+    }
     return NextResponse.json({ success: true });
 }

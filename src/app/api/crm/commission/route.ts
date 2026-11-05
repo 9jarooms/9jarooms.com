@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireCrm } from '@/lib/auth/require-crm';
-import { commissionMonth, currentMonth, isMonth, payableFor } from '@/lib/commission';
+import { commissionMonth, currentMonth, isMonth, payableFor, COMMISSION_START as START_MONTH } from '@/lib/commission';
+
+const nextMonth = (m: string) => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo, 1)).toISOString().slice(0, 7); };
 import { staffDirectory, displayName, usernameOf } from '@/lib/staff-names';
 import { audit } from '@/lib/booking/crm-ops';
 
@@ -30,11 +32,19 @@ export async function GET(request: NextRequest) {
         return { ...s, name: displayName(u), username: usernameOf(u?.email), roles: dir.roles.filter(r => r.user_id === id).map(r => r.role), banned: !!(u as any)?.banned_until };
     }).filter(s => s.lines.length || (!s.banned && s.roles.length))
         .sort((a, b) => b.calculated - a.calculated || a.name.localeCompare(b.name));
-    return NextResponse.json({ month, staff });
+    const pastDue: { month: string; name: string; due: number; over: number }[] = [];
+    for (let m = START_MONTH; m < currentMonth(); m = nextMonth(m)) {
+        for (const x of await commissionMonth(supabase, m)) {
+            const paidAmt = x.paidOut?.amount || 0;
+            if (x.due > 0 || paidAmt > x.payable + 1) pastDue.push({ month: m, name: displayName(dir.byId.get(x.userId)), due: x.due, over: Math.max(paidAmt - x.payable, 0) });
+        }
+    }
+    return NextResponse.json({ month, staff, pastDue });
 }
 
 // verify / reject / un-check booking lines
-const checkSchema = z.object({ bookingIds: z.array(z.string().uuid()).min(1).max(500), status: z.enum(['verified', 'rejected']).nullable() });
+// totals = the stay total each line showed on the admin's screen: a line changed since is not verified blind
+const checkSchema = z.object({ bookingIds: z.array(z.string().uuid()).min(1).max(500), status: z.enum(['verified', 'rejected']).nullable(), totals: z.record(z.string(), z.number()).optional() });
 export async function PATCH(request: NextRequest) {
     const { auth, res } = await admin();
     if (!auth) return res;
@@ -43,7 +53,13 @@ export async function PATCH(request: NextRequest) {
     const { bookingIds, status } = parsed.data;
     const supabase = auth.adminClient!;
     // the amount verified is saved with the check: a later change to the stay resets the check
-    const { data: rows } = await supabase.from('bookings').select('id, total_amount').in('id', bookingIds);
+    const { data: rows } = await supabase.from('bookings').select('id, total_amount, created_by').in('id', bookingIds);
+    // nobody approves their own commission: another admin does
+    if ((rows || []).some(r => r.created_by === auth.user!.id)) {
+        return NextResponse.json({ error: 'These include your own bookings. Another admin has to check your commission.' }, { status: 403 });
+    }
+    const changed = (rows || []).filter(r => parsed.data.totals && parsed.data.totals[r.id] != null && Math.round(parsed.data.totals[r.id]) !== Math.round(Number(r.total_amount)));
+    if (changed.length) return NextResponse.json({ error: 'A booking changed since you opened this page. Reload and check again.' }, { status: 409 });
     for (const r of rows || []) {
         const { error } = await supabase.from('bookings').update({
             commission_status: status, commission_checked_by: status ? auth.user!.id : null, commission_checked_at: status ? new Date().toISOString() : null,
@@ -86,6 +102,7 @@ export async function POST(request: NextRequest) {
     const parsed = payoutSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
     const { userId, month, undo } = parsed.data;
+    if (userId === auth.user!.id) return NextResponse.json({ error: 'Another admin has to pay out your own commission.' }, { status: 403 });
     if (undo) {
         // undo the most recent payment only; earlier ones stay on record
         const { data: last } = await supabase.from('commission_payouts').select('id, amount').eq('user_id', userId).eq('month', month).order('paid_at', { ascending: false }).limit(1).maybeSingle();

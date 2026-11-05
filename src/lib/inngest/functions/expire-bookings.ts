@@ -1,5 +1,7 @@
 import { inngest } from '../client';
 import { createAdminClient } from '@/lib/supabase/server';
+import { verifyPayment } from '@/lib/paystack';
+import { confirmPaidBooking } from '@/lib/booking/payment-confirmed';
 
 // Cron: Expire unpaid bookings and holds once expires_at passes (HOLD_MINUTES)
 export const expirePendingBookings = (inngest as any).createFunction(
@@ -15,12 +17,38 @@ export const expirePendingBookings = (inngest as any).createFunction(
         const expiredBookings = await step.run('find-expired', async () => {
             const { data, error } = await supabase
                 .from('bookings')
-                .select('id, room_id, paystack_reference')
+                .select('id, room_id, paystack_reference, paystack_access_code, created_at, hold_extended_at')
                 .eq('status', 'pending')
                 .lt('expires_at', new Date().toISOString());
 
             if (error) throw new Error(`Failed to find expired bookings: ${error.message}`);
             return data || [];
+        });
+
+        // Website card payments: before letting the room go, ask Paystack. A payment that went through
+        // (webhook missed) is confirmed now; one still in progress (bank transfer / USSD inside Paystack)
+        // gets 10 more minutes, up to 45 minutes in all. Only abandoned ones are released.
+        const keep = await step.run('check-paystack', async () => {
+            const kept: string[] = [];
+            for (const b of expiredBookings as any[]) {
+                if (!b.paystack_access_code || !b.paystack_reference) continue;
+                try {
+                    const v = await verifyPayment(b.paystack_reference);
+                    const st = v?.data?.status;
+                    if (st === 'success') {
+                        await confirmPaidBooking(supabase, { reference: b.paystack_reference, amountKobo: v.data.amount, raw: v.data });
+                        kept.push(b.id);
+                    } else if (['ongoing', 'pending', 'processing', 'queued'].includes(String(st)) &&
+                        Date.now() - new Date(b.created_at).getTime() < 45 * 60 * 1000) {
+                        await supabase.from('bookings').update({ expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), hold_extended_at: new Date().toISOString() })
+                            .eq('id', b.id).eq('status', 'pending');
+                        kept.push(b.id);
+                    }
+                } catch (e: any) {
+                    console.warn('[expire] Paystack check failed for', b.paystack_reference, e?.message);
+                }
+            }
+            return kept;
         });
 
         if (expiredBookings.length === 0) {
@@ -30,7 +58,8 @@ export const expirePendingBookings = (inngest as any).createFunction(
         // Step 2: expire them, but only those still unpaid and overdue now (a payment may have
         // landed since step 1), and release the held nights of exactly those.
         const released = await step.run('mark-expired-and-release', async () => {
-            const ids = expiredBookings.map((b: any) => b.id);
+            const ids = expiredBookings.map((b: any) => b.id).filter((id: string) => !keep.includes(id));
+            if (!ids.length) return 0;
             const { data, error } = await supabase
                 .from('bookings')
                 .update({ status: 'expired' })

@@ -157,9 +157,9 @@ export default function FindRoomPanel({ data, onHold }: {
                             <Lock size={16} /> Lock 15 min
                         </button>
                     </div>
-                    <button type="button" onClick={() => copy(g.link, g.key)}
+                    <button type="button" disabled={g.hidden} onClick={() => copy(g.link, g.key)}
                         className="mt-2 h-9 w-full rounded-full border border-gray-200 bg-white text-gray-600 text-xs font-medium flex items-center justify-center gap-1.5 hover:border-gray-900 transition-colors">
-                        {copied === g.key ? <><Check size={14} /> Link copied</> : <><Copy size={14} /> Copy booking link</>}
+                        {g.hidden ? 'Not on the website: lock it for the guest instead' : copied === g.key ? <><Check size={14} /> Link copied</> : <><Copy size={14} /> Copy booking link</>}
                     </button>
                 </div>
             ))}

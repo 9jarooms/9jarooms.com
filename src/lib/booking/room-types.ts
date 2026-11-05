@@ -25,9 +25,11 @@ export interface UnitRow {
 // A cell is blocked if booked/cleaning/maintenance, or held with an
 // unexpired hold. Mirrors the rule used across the public site.
 export function isBlockedSlot(
-    slot: { status: string; booking?: { expires_at: string | null } | null },
+    slot: { status: string; booking?: { expires_at: string | null; status?: string | null } | null },
     now: Date
 ): boolean {
+    // a night still listed under a cancelled / expired / no-show booking does not hold the room
+    if (slot.booking?.status && ['cancelled', 'expired', 'no_show'].includes(slot.booking.status)) return false;
     if (slot.status === 'booked' || slot.status === 'cleaning' || slot.status === 'maintenance') {
         return true;
     }
@@ -84,7 +86,7 @@ export async function getRoomTypeAvailability(
     if (unitIds.length > 0 && dates.length > 0) {
         const { data: slots } = await supabase
             .from('availability')
-            .select('room_id, date, status, booking:bookings(expires_at)')
+            .select('room_id, date, status, booking:bookings(expires_at, status)')
             .in('room_id', unitIds)
             .in('date', dates);
 
@@ -139,7 +141,7 @@ export async function findFreeUnits(
 
     const { data: slots } = await supabase
         .from('availability')
-        .select('room_id, date, status, booking:bookings(expires_at)')
+        .select('room_id, date, status, booking:bookings(expires_at, status)')
         .in('room_id', units.map(u => u.id))
         .in('date', dates);
 
@@ -147,10 +149,14 @@ export async function findFreeUnits(
     const blocked = new Set<string>();
     for (const slot of (slots || []) as unknown as Array<{
         room_id: string; date: string; status: string;
-        booking?: { expires_at: string | null } | null;
+        booking?: { expires_at: string | null; status?: string | null } | null;
     }>) {
         if (isBlockedSlot(slot, now)) blocked.add(slot.room_id);
     }
+
+    // a guest still in the room past their check-out makes it unavailable tonight
+    const { lagosToday, overstayRooms } = await import('@/lib/booking/hold');
+    if (dates.includes(lagosToday())) for (const id of await overstayRooms(supabase, units.map(u => u.id))) blocked.add(id);
 
     return units.filter(u => !blocked.has(u.id));
 }

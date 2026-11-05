@@ -21,23 +21,26 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [panel, setPanel] = useState<Panel>('none');
-    const [pay, setPay] = useState({ amount: '', method: 'Cash' });
+    const [pay, setPay] = useState({ amount: '', method: 'Cash', reference: '' });
     const [stay, setStay] = useState({ unitId: '', checkIn: '', nights: 1, price: 'standard' as 'standard' | 'agreed' | 'keep', agreed: '' });
     const [guest, setGuest] = useState({ guestName: '', guestPhone: '', notes: '' });
 
-    const load = useCallback(async () => {
+    // fill = reset the forms from the booking: only when it opens or after this person saves. A live
+    // update from someone else refreshes the figures but never wipes what is being typed.
+    const load = useCallback(async (fill = false) => {
         const res = await fetch(`/api/ops/bookings/${bookingId}`, { cache: 'no-store' });
         const json = await res.json();
         if (!res.ok) { setError(json.error || 'Could not load booking'); return; }
         setData(json);
+        if (!fill) return;
         const b = json.booking;
         setStay({ unitId: b.room_id || '', checkIn: b.check_in || '', nights: b.nights || 1, price: 'keep', agreed: '' });
         setGuest({ guestName: b.guest_name || '', guestPhone: b.guest_phone || '', notes: b.notes || '' });
         const balance = Math.max(Number(b.total_amount) - Number(json.paid || 0), 0);
-        setPay(p => ({ ...p, amount: balance > 0 ? String(balance) : '' }));
+        setPay(p => ({ ...p, amount: balance > 0 ? String(balance) : '', reference: '' }));
     }, [bookingId]);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => { load(true); }, [load]);
     // someone else paid, checked in or changed this booking: show it here too
     useLiveUpdates(load);
     const payRequest = useRef('');
@@ -51,7 +54,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
             });
             const json = await res.json();
             if (!res.ok) { setError(json.error || 'Failed'); return false; }
-            await load();
+            await load(true);
             onChanged();
             return true;
         } catch {
@@ -63,15 +66,17 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     };
 
     const addPayment = async (force = false) => {
-        const amount = Number(pay.amount);
-        if (!amount || amount <= 0) { setError('Enter the amount received'); return; }
+        const refund = pay.method === 'Refund';
+        const amount = Number(pay.amount) * (refund ? -1 : 1);
+        if (!Number(pay.amount) || Number(pay.amount) <= 0) { setError(refund ? 'Enter the amount given back' : 'Enter the amount received'); return; }
+        if (isTransferPay && !pay.reference.trim()) { setError('Type the transfer reference from the bank alert'); return; }
         if (!payRequest.current) payRequest.current = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
         setBusy(true); setError(null);
         try {
             const res = await fetch(`/api/ops/bookings/${bookingId}/payments`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 // the same id on a retry: lost signal or a double tap never records the money twice
-                body: JSON.stringify({ amount, method: pay.method, requestId: payRequest.current, force }),
+                body: JSON.stringify({ amount, method: pay.method, reference: pay.reference.trim() || null, requestId: payRequest.current, force }),
             });
             const json = await res.json();
             if (!res.ok) {
@@ -85,7 +90,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
             }
             payRequest.current = '';
             setPanel('none');
-            await load();
+            await load(true);
             onChanged();
         } catch {
             setError('Network error — check your connection and try again');
@@ -120,6 +125,11 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     const canCheckIn = ['pending', 'confirmed', 'paid'].includes(b.status);
     const canCheckOut = b.status === 'checked_in';
     const closed = ['completed', 'cancelled', 'no_show', 'expired'].includes(b.status);
+    // a transfer lock that ran out can still take the money: the server checks the room is still free
+    const lapsedLock = b.status === 'expired' || (b.status === 'pending' && !!b.expires_at && new Date(b.expires_at).getTime() < Date.now());
+    const canRefund = role === 'admin' || role === 'customer_rep';
+    const overpaid = Number(data.paid) - Number(b.total_amount);
+    const isTransferPay = /transfer|moniepoint/i.test(pay.method);
     const stayNights = Math.max(Number(stay.nights) || 0, 0);
     const stayCheckOut = stay.checkIn ? shiftIso(stay.checkIn, stayNights) : '';
     const autoTotal = Math.round(Number(b.price_per_night || 0) * stayNights);
@@ -176,10 +186,17 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                     <p className="text-[10.5px] uppercase tracking-wide text-gray-400 font-bold">Paid</p>
                     <p className="font-bold text-[15px] text-green-600">{naira(data.paid)}</p>
                 </div>
-                <div className={`py-3 ${owing ? 'bg-red-50' : ''}`}>
-                    <p className="text-[10.5px] uppercase tracking-wide text-gray-400 font-bold">Balance</p>
-                    <p className={`font-bold text-[15px] ${owing ? 'text-red-600' : 'text-gray-500'}`}>{naira(balance)}</p>
-                </div>
+                {overpaid > 1 ? (
+                    <div className="py-3 bg-amber-50">
+                        <p className="text-[10.5px] uppercase tracking-wide text-amber-700 font-bold">Refund due</p>
+                        <p className="font-bold text-[15px] text-amber-700">{naira(overpaid)}</p>
+                    </div>
+                ) : (
+                    <div className={`py-3 ${owing ? 'bg-red-50' : ''}`}>
+                        <p className="text-[10.5px] uppercase tracking-wide text-gray-400 font-bold">Balance</p>
+                        <p className={`font-bold text-[15px] ${owing ? 'text-red-600' : 'text-gray-500'}`}>{naira(balance)}</p>
+                    </div>
+                )}
             </div>
 
             <ContactButtons
@@ -222,20 +239,34 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                         Check out{owing ? ` · ${naira(balance)} owing` : ''}
                     </BigButton>
                 )}
-                {owing && !closed && (
-                    <BigButton tone="amber" onClick={() => toggle('pay')} icon={<Banknote size={18} />}>Record payment</BigButton>
+                {(owing || (lapsedLock && balance > 0)) && (!closed || lapsedLock) && (
+                    <BigButton tone="amber" onClick={() => toggle('pay')} icon={<Banknote size={18} />}>
+                        {lapsedLock ? 'Payment received (lock ran out)' : 'Record payment'}
+                    </BigButton>
+                )}
+                {canRefund && Number(data.paid) > 0 && (overpaid > 1 || ['cancelled', 'no_show'].includes(b.status)) && (
+                    <BigButton tone="secondary" onClick={() => { setPay({ amount: String(Math.max(overpaid, 0) || data.paid), method: 'Refund', reference: '' }); setPanel('pay'); }} icon={<Banknote size={18} />}>
+                        Record a refund
+                    </BigButton>
                 )}
             </div>
 
             {panel === 'pay' && (
                 <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 space-y-3">
-                    <Field label="Amount received (₦)">
+                    {lapsedLock && <p className="text-[13px] text-amber-800">The 15-minute lock ran out. Saving checks the room is still free; if another guest took it, you will be told before anything is recorded.</p>}
+                    <Field label={pay.method === 'Refund' ? 'Amount given back (₦)' : 'Amount received (₦)'}>
                         <input type="number" inputMode="numeric" min={0} className={inputCls} value={pay.amount}
-                            onChange={e => setPay({ ...pay, amount: e.target.value })} autoFocus />
+                            onChange={e => { payRequest.current = ''; setPay({ ...pay, amount: e.target.value }); }} autoFocus />
                     </Field>
                     <Field label="How was it paid?">
-                        <Chips options={PAY_METHODS.map(m => ({ value: m, label: m }))} value={pay.method} onChange={m => setPay({ ...pay, method: m })} />
+                        <Chips options={[...PAY_METHODS, ...(canRefund ? ['Refund'] : [])].map(m => ({ value: m, label: m }))} value={pay.method}
+                            onChange={m => { payRequest.current = ''; setPay({ ...pay, method: m }); }} />
                     </Field>
+                    {(isTransferPay || pay.method === 'Refund') && (
+                        <Field label={pay.method === 'Refund' ? 'Refund reference (optional)' : 'Transfer reference'} hint={isTransferPay ? 'From the bank alert. The same transfer can never be recorded twice.' : undefined}>
+                            <input className={inputCls} value={pay.reference} onChange={e => { payRequest.current = ''; setPay({ ...pay, reference: e.target.value }); }} autoComplete="off" />
+                        </Field>
+                    )}
                     <BigButton tone="amber" onClick={() => addPayment()} busy={busy}>Save payment</BigButton>
                 </div>
             )}

@@ -77,8 +77,9 @@ export default async function PropertyPage({ params }: Props) {
     if (property.merged_into) redirect(`/property/${property.merged_into}`);
     if (property.is_deleted) notFound();
 
-    // Strip address before passing to client — address is only sent privately via email/whatsapp
-    const { address: _addr, ...safeProperty } = property;
+    // Strip private fields before passing to the browser: the address, arrival instructions and owner
+    // details are only sent to a guest privately once they have paid
+    const { address: _addr, check_in_instructions: _ci, owner: _owner, ...safeProperty } = property as any;
 
     let { data: rooms } = await supabase
         .from('rooms')
@@ -88,9 +89,10 @@ export default async function PropertyPage({ params }: Props) {
 
     // Get availability for all rooms (next 90 days), joining bookings to check expiration
     const roomIds = rooms?.map((r) => r.id) || [];
-    const { data: rawAvailability } = await supabase
+    const { createAdminClient: adminClient } = await import('@/lib/supabase/server');
+    const { data: rawAvailability } = await adminClient()
         .from('availability')
-        .select('*, booking:bookings(expires_at)')
+        .select('room_id, date, status, booking:bookings(expires_at, status)')
         .in('room_id', roomIds)
         .gte('date', new Date().toISOString().split('T')[0]);
 
@@ -104,7 +106,9 @@ export default async function PropertyPage({ params }: Props) {
             }
         }
         return true; // Keep active holds and 'booked' slots
-    });
+    }).filter((slot: any) => !(slot.booking?.status && ['cancelled', 'expired', 'no_show'].includes(slot.booking.status)))
+        // only what the calendar needs (never booking ids, which lead to guest details)
+        .map((slot: any) => ({ id: `${slot.room_id}:${slot.date}`, room_id: slot.room_id, date: slot.date, status: slot.status, booking_id: null }));
 
     // POOLED ROOM TYPES: when the property sells room types (e.g. Kaura's 3
     // types x 8 units), the guest sees one card per type. A date only blocks

@@ -102,8 +102,16 @@ export async function GET(request: NextRequest) {
             .not('booking_id', 'is', null)
         : Promise.resolve({ data: [] as any[] });
 
-    const [{ data: windowBookings }, { data: overdue }, { data: blocks }, { data: heldRaw }, { data: missed }] =
-        await Promise.all([windowBookingsP, overdueP, blocksP, heldP, missedP]);
+    // transfer locks that ran out in the last hour: the money may still arrive (bank transfers are slow)
+    const lapsedP = supabase.from('bookings')
+        .select(BOOKING_COLS)
+        .in('property_id', propertyIds)
+        .in('status', ['pending', 'expired'])
+        .lt('expires_at', new Date().toISOString())
+        .gt('expires_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+        .not('created_by', 'is', null);
+    const [{ data: windowBookings }, { data: overdue }, { data: blocks }, { data: heldRaw }, { data: missed }, { data: lapsedRaw }] =
+        await Promise.all([windowBookingsP, overdueP, blocksP, heldP, missedP, lapsedP]);
 
     const now = Date.now();
     // an unpaid lock past its 15 minutes no longer holds the room (the expiry job may not have run yet)
@@ -129,5 +137,7 @@ export async function GET(request: NextRequest) {
         bookings: rows.map(b => ({ ...b, paid: paid[b.id] || 0 })),
         blocks: blocks || [],
         held: held || [],
+        lapsed: (lapsedRaw || []).map(b => ({ ...b, paid: 0 })),
+        serverNow: Date.now(),
     });
 }

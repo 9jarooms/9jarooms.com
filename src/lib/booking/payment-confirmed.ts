@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import type { createAdminClient } from '@/lib/supabase/server';
-import { reclaim, roomsOfBooking, stayDates } from '@/lib/booking/hold';
+import { reclaim, releaseClaim, roomsOfBooking, stayDates } from '@/lib/booking/hold';
+import { findFreeUnits } from '@/lib/booking/room-types';
 
 // Everything that must happen when Paystack says a booking is paid.
 // Called directly from the Paystack webhook and from /api/bookings/verify
@@ -21,6 +22,10 @@ function naira(n: number | string | null | undefined) {
 }
 function esc(s: unknown) {
     return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+}
+
+export class BookingNotFound extends Error {
+    constructor(ref: string) { super(`Booking not found for ${ref}`); }
 }
 
 export interface PaidBookingResult {
@@ -48,23 +53,42 @@ export async function confirmPaidBooking(supabase: Db, input: {
         const { data: byId } = await supabase.from('bookings').select(select).eq('id', input.bookingId).maybeSingle();
         if (byId && (!byId.paystack_reference || byId.paystack_reference === input.reference)) booking = byId;
     }
-    if (!booking) throw new Error(`Booking not found for ${input.reference}`);
+    if (!booking) throw new BookingNotFound(input.reference);
 
     // each Paystack payment is processed once: a replay (webhook retry, the guest reopening the
     // confirm page later, even after a cancel and refund) changes nothing
     const { data: existingTx } = await supabase.from('transactions').select('id')
         .eq('paystack_reference', input.reference).eq('paystack_event', 'charge.success').maybeSingle();
-    if (existingTx || ['paid', 'checked_in', 'completed'].includes(booking.status)) {
-        return { booking, alreadyPaid: true };
-    }
+    if (existingTx) return { booking, alreadyPaid: true };
 
     const amount = input.amountKobo != null ? input.amountKobo / 100 : Number(booking.total_amount);
+    const done = ['paid', 'checked_in', 'completed'].includes(booking.status);
 
     // Whatever the status, the nights must be ours before calling it paid: a hold can run out while
-    // the guest is on Paystack and the room can be taken. Lost them: log the money, flag a refund.
-    const roomIds = await roomsOfBooking(supabase, booking);
-    const conflicts = await reclaim(supabase, booking.id, roomIds, stayDates(booking.check_in, booking.check_out), 'booked');
-    const refundNeeded = conflicts.length > 0;
+    // the guest is on Paystack and the room can be taken.
+    let refundNeeded = false;
+    let movedTo: string | null = null;
+    if (!done) {
+        const roomIds = await roomsOfBooking(supabase, booking);
+        const dates = stayDates(booking.check_in, booking.check_out);
+        const conflicts = await reclaim(supabase, booking.id, roomIds, dates, 'booked');
+        if (conflicts.length > 0) {
+            // the room went, but an identical room of the same type may be free: give them that one
+            // instead (they booked the type, not the unit) rather than a refund
+            if (booking.room_type_id && roomIds.length === 1) {
+                for (const u of await findFreeUnits(supabase, booking.room_type_id, dates)) {
+                    if ((await reclaim(supabase, booking.id, [u.id], dates, 'booked')).length === 0) { movedTo = u.id; break; }
+                }
+            }
+            if (movedTo) {
+                await supabase.from('bookings').update({ room_id: movedTo }).eq('id', booking.id);
+                await supabase.from('booking_rooms').update({ room_id: movedTo }).eq('booking_id', booking.id);
+            } else {
+                refundNeeded = true;
+                await releaseClaim(supabase, booking.id);   // no leftover nights blocking the room
+            }
+        }
+    }
 
     // the money, in the ledger once (unique per Paystack reference)
     const { error: ledgerErr } = await supabase.from('booking_payments').insert({
@@ -76,11 +100,15 @@ export async function confirmPaidBooking(supabase: Db, input: {
     const total = Number(booking.total_amount);
 
     const notes: string[] = [];
+    if (movedTo) notes.push(`PAID AFTER THE LOCK RAN OUT (${input.reference}): first room was taken, moved to another identical room. Tell the guest their room number.`);
+    if (done) notes.push(`PAID ONLINE AGAIN (${input.reference}) on a booking that was already paid / checked in: refund ₦${Math.round(amount).toLocaleString('en-NG')} unless agreed otherwise.`);
     if (booking.status === 'cancelled') notes.push(`PAID ONLINE AFTER THE BOOKING WAS CANCELLED (${input.reference}): check with the guest.`);
     if (paidSoFar > total + 1) notes.push(`OVERPAID by ₦${Math.round(paidSoFar - total).toLocaleString('en-NG')} (${input.reference}): refund the difference.`);
     if (paidSoFar + 1 < total) notes.push(`PART-PAID online: ₦${Math.round(amount).toLocaleString('en-NG')} of ₦${Math.round(total).toLocaleString('en-NG')} (${input.reference}).`);
 
-    if (refundNeeded) {
+    if (done) {
+        await supabase.from('bookings').update({ notes: [booking.notes, ...notes].filter(Boolean).join('\n') }).eq('id', booking.id);
+    } else if (refundNeeded) {
         notes.unshift(`PAID AFTER HOLD EXPIRED (${input.reference}): unit no longer free, refund or move the guest.`);
         await supabase.from('bookings')
             .update({ status: 'cancelled', expires_at: null, notes: [booking.notes, ...notes].filter(Boolean).join('\n') })
@@ -95,13 +123,15 @@ export async function confirmPaidBooking(supabase: Db, input: {
     }
 
     // logged last: if anything above failed, a retry processes the payment again
+    // (unique per reference: if two confirmations raced, the second insert is refused harmlessly)
     await supabase.from('transactions').insert({
         paystack_reference: input.reference, paystack_event: 'charge.success', amount, currency: 'NGN',
         status: 'success', booking_id: booking.id, raw_payload: input.raw ?? null,
     });
 
     if (refundNeeded) return { booking: { ...booking, status: 'cancelled' }, alreadyPaid: false, refundNeeded: true };
-    return { booking, alreadyPaid: false };
+    // an extra payment on a finished booking: no "new booking" emails, the note flags the refund
+    return { booking, alreadyPaid: done };
 }
 
 function resendClient() {
