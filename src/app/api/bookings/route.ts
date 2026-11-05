@@ -195,15 +195,11 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ success: true, bookingId: same.id, ...first });
             }
         }
-        if (isInternalBooking && body.deposit && /transfer|moniepoint|pos/i.test(body.deposit.method || '') && !body.deposit.reference) {
-            return NextResponse.json({ error: 'Type the transfer reference from the bank alert' }, { status: 400 });
-        }
         if (isInternalBooking && body.deposit && body.totalAmount != null && body.deposit.amount > body.totalAmount + 1) {
             return NextResponse.json({ error: 'The amount paid is more than the price of the stay. Check both.' }, { status: 400 });
         }
-        if (isInternalBooking && body.deposit?.reference && (body.deposit.reference.trim().length < 6 || !/\d/.test(body.deposit.reference))) {
-            return NextResponse.json({ error: 'That does not look like a bank or POS reference. Copy it from the alert or slip (letters and numbers).' }, { status: 400 });
-        }
+        // the deposit reference is optional; only a real one (length + digits) is checked for repeats
+        if (body.deposit?.reference && (body.deposit.reference.trim().length < 6 || !/\d/.test(body.deposit.reference))) body.deposit.reference = null;
         if (isInternalBooking && body.deposit?.reference) {
             const { data: used } = await supabase.from('booking_payments').select('id').ilike('reference', body.deposit.reference.replace(/[%_\\]/g, c => '\\' + c)).maybeSingle();
             if (used) return NextResponse.json({ error: `This transfer (reference ${body.deposit.reference}) was already recorded. One transfer can only be recorded once.` }, { status: 409 });

@@ -303,6 +303,8 @@ export const paymentSchema = z.object({
     requestId: z.string().max(80).optional(),
     // the bank's reference / session id for a transfer: one transfer can only ever be recorded once
     reference: z.string().trim().max(80).optional().nullable(),
+    // optional photo of the receipt (path in the private receipts bucket)
+    receiptPath: z.string().max(200).regex(/^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(jpg|png|pdf)$/i).optional().nullable(),
     // the person saw the warning (more than the balance / looks like a repeat) and wants it anyway
     force: z.boolean().optional(),
 });
@@ -327,15 +329,13 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
     const isRefund = input.method === 'Refund';
     const typed = (input.reference || '').trim();
     if (!input.method) return fail('Pick how it was paid', 400);
-    if (isTransfer && input.amount > 0 && !typed) {
-        return fail('Type the reference from the bank alert or POS slip (it stops the same payment being recorded twice).', 400);
-    }
-    // a real reference has digits and some length; "transfer", "-" or a name are not references
-    if (isTransfer && typed && (typed.length < 6 || !/\d/.test(typed))) {
-        return fail('That does not look like a bank reference. Copy the reference / session ID from the bank alert (letters and numbers).', 400);
-    }
+    void isTransfer;
+    // the reference and the receipt photo are optional. A real reference (some length, with digits)
+    // is checked so the same transfer cannot be recorded twice; anything else is kept as a note.
+    const realRef = typed.length >= 6 && /\d/.test(typed);
+    if (typed && !realRef) input = { ...input, note: [input.note, `Ref: ${typed}`].filter(Boolean).join(' · ') };
     // a refund quotes a reference in its note; only incoming money is checked for repeats
-    const reference = isRefund ? null : (typed || null);
+    const reference = isRefund || !realRef ? null : typed;
     if (isRefund && typed) input = { ...input, note: [input.note, `Refund ref: ${typed}`].filter(Boolean).join(' · ') };
     if (reference) {
         const { data: used } = await supabase.from('booking_payments').select('booking_id, amount, booking:bookings(guest_name)')
@@ -380,6 +380,7 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
             recorded_by: recordedBy,
             client_request_id: input.requestId || null,
             reference,
+            receipt_path: input.receiptPath || null,
         })
         .select()
         .single();

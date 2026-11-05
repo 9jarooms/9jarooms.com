@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { X, MessageCircle, Trash2 } from 'lucide-react';
+import { ReceiptPicker, receiptLink } from '@/components/ops/shared';
 
 export function naira(n: number) {
     return '₦' + Number(n || 0).toLocaleString('en-NG');
@@ -48,6 +49,7 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
     const [payRef, setPayRef] = useState('');
     // one id per payment attempt (same id on a retry, a new one when anything is changed)
     const payAttempt = useRef('');
+    const [payReceipt, setPayReceipt] = useState<{ path: string; name: string } | null>(null);
     // Stay editor: move unit, extend / change dates, optional price recalculation
     const [stay, setStay] = useState<{ unitId: string; checkIn: string; nights: number; autoPrice: boolean }>({
         unitId: '', checkIn: '', nights: 1, autoPrice: true,
@@ -131,17 +133,17 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
         const typed = Number(payAmount);
         if (!typed || typed <= 0) return;
         if (!payMethod) { setError('Pick how it was paid'); return; }
-        if (/transfer|moniepoint|pos/i.test(payMethod) && !payRef.trim()) { setError('Type the reference from the bank alert or POS slip'); return; }
+
         if (!payAttempt.current) payAttempt.current = crypto.randomUUID();
         setBusy(true); setError(null);
         const res = await fetch(`/api/crm/bookings/${bookingId}/payments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: payMethod === 'Refund' ? -typed : typed, method: payMethod, reference: payRef.trim() || null,
+            body: JSON.stringify({ amount: payMethod === 'Refund' ? -typed : typed, method: payMethod, reference: payRef.trim() || null, receiptPath: payReceipt?.path || null,
                 requestId: payAttempt.current, force }),
         });
         setBusy(false);
-        if (res.ok) { payAttempt.current = ''; setPayAmount(''); setPayRef(''); await load(); onChanged(); return; }
+        if (res.ok) { payAttempt.current = ''; setPayAmount(''); setPayRef(''); setPayReceipt(null); await load(); onChanged(); return; }
         const j = await res.json();
         if (!force && ['duplicate', 'overpay'].includes(j.details?.warning)) { payAttempt.current = ''; if (confirm(j.error)) return addPayment(true); }
         setError(j.error);
@@ -351,7 +353,8 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
                         <ul className="divide-y divide-stone-100 mb-4">
                             {(data.payments || []).map((p: any) => (
                                 <li key={p.id} className="flex items-center justify-between py-2 text-sm">
-                                    <span>{naira(p.amount)} <span className="text-stone-400">· {p.method || '—'} · {new Date(p.created_at).toLocaleDateString()}</span></span>
+                                    <span>{naira(p.amount)} <span className="text-stone-400">· {p.method || '—'} · {new Date(p.created_at).toLocaleDateString()}{p.reference ? ` · ref ${p.reference}` : ''}</span>
+                                        {p.receipt_path && <a href={receiptLink(p.receipt_path)} target="_blank" rel="noopener noreferrer" className="ml-2 text-[#008737] underline">receipt</a>}</span>
                                     <button onClick={() => deletePayment(p.id)} className="text-stone-300 hover:text-[#c75146]"><Trash2 size={14} /></button>
                                 </li>
                             ))}
@@ -365,9 +368,10 @@ export default function BookingModal({ bookingId, onClose, onChanged }: Props) {
                                 {PAY_METHODS.map(m => <option key={m}>{m}</option>)}
                             </select>
                             {/transfer|moniepoint|pos|refund/i.test(payMethod) && (
-                                <input placeholder={payMethod === 'Refund' ? 'Refund reference (optional)' : 'Transfer reference'} value={payRef} onChange={e => { payAttempt.current = ''; setPayRef(e.target.value); }}
+                                <input placeholder="Reference (optional)" value={payRef} onChange={e => { payAttempt.current = ''; setPayRef(e.target.value); }}
                                     className="flex-1 min-w-[140px] border border-stone-300 rounded-md px-2.5 py-2 text-sm" />
                             )}
+                            <ReceiptPicker bookingId={bookingId} receipt={payReceipt} onChange={r => { payAttempt.current = ''; setPayReceipt(r); }} />
                             <button disabled={busy || !payAmount} onClick={() => addPayment()}
                                 className="px-4 py-1.5 rounded-md bg-[#008737] text-white text-sm font-semibold disabled:opacity-50">
                                 Record payment

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { X, Minus, Plus, Phone, MessageCircle, LogIn, LogOut, AlertTriangle } from 'lucide-react';
 
@@ -511,4 +511,58 @@ export function useLiveUpdates(onChange: () => void, enabled = true) {
 export function clearOpsCache() {
     memCache.clear();
     try { Object.keys(sessionStorage).filter(k => k.startsWith('swr:')).forEach(k => sessionStorage.removeItem(k)); } catch { /* ignore */ }
+}
+
+// Optional receipt photo for a payment: phone photos are shrunk (max 1600px, JPEG) before upload so
+// it works on slow data. Returns the stored path, or throws with a message to show.
+export async function uploadReceipt(file: File, bookingId: string): Promise<string> {
+    let blob: Blob = file;
+    if (file.type.startsWith('image/') && file.type !== 'image/gif') {
+        try {
+            const bmp = await createImageBitmap(file);
+            const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
+            canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+            blob = await new Promise<Blob>((ok, no) => canvas.toBlob(b => b ? ok(b) : no(new Error('x')), 'image/jpeg', 0.8));
+        } catch { blob = file; }
+    }
+    const form = new FormData();
+    form.append('file', new File([blob], 'receipt', { type: blob.type || file.type }));
+    form.append('bookingId', bookingId);
+    const res = await fetch('/api/ops/receipts', { method: 'POST', body: form }).catch(() => null);
+    if (!res) throw new Error('No connection: the receipt was not attached. Try again, or save without it.');
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || 'Could not attach the receipt');
+    return j.path as string;
+}
+export const receiptLink = (path: string) => `/api/ops/receipts?path=${encodeURIComponent(path)}`;
+
+export function ReceiptPicker({ bookingId, receipt, onChange }: {
+    bookingId: string; receipt: { path: string; name: string } | null; onChange: (r: { path: string; name: string } | null) => void;
+}) {
+    const [state, setState] = useState<'idle' | 'busy'>('idle');
+    const [err, setErr] = useState<string | null>(null);
+    const pick = async (f: File | undefined) => {
+        if (!f) return;
+        setState('busy'); setErr(null);
+        try { onChange({ path: await uploadReceipt(f, bookingId), name: f.name }); }
+        catch (e: any) { setErr(e?.message || 'Could not attach'); }
+        finally { setState('idle'); }
+    };
+    return (
+        <div className="text-[13px]">
+            {receipt ? (
+                <p className="flex items-center gap-2 text-green-700">Receipt attached
+                    <a href={receiptLink(receipt.path)} target="_blank" rel="noopener noreferrer" className="underline">view</a>
+                    <button type="button" className="text-gray-500 underline" onClick={() => onChange(null)}>remove</button></p>
+            ) : (
+                <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-gray-300 text-gray-600 cursor-pointer bg-white">
+                    {state === 'busy' ? 'Attaching…' : 'Add receipt photo (optional)'}
+                    <input type="file" accept="image/*,application/pdf" className="hidden" disabled={state === 'busy'} onChange={e => pick(e.target.files?.[0])} />
+                </label>
+            )}
+            {err && <p className="mt-1 text-red-600">{err}</p>}
+        </div>
+    );
 }

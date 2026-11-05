@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { LogIn, LogOut, Banknote, CalendarDays, Pencil, ChevronDown, ChevronUp, Trash2, Ban, UserX, Share2, Unlock } from 'lucide-react';
 import {
     Sheet, StatusPill, BigButton, Field, Stepper, Chips, ContactButtons, inputCls,
-    naira, balanceOf, owes, fmtDay, shiftIso, unitLabel, waLink, holdCountdown, useLiveUpdates, serverNow, type OpsRole,
+    naira, balanceOf, owes, fmtDay, shiftIso, unitLabel, waLink, holdCountdown, useLiveUpdates, serverNow, ReceiptPicker, receiptLink, type OpsRole,
 } from './shared';
 
 const PAY_METHODS = ['Cash', 'Bank Transfer', 'POS', 'Moniepoint', 'Other'];
@@ -58,6 +58,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
     // someone else paid, checked in or changed this booking: show it here too
     useLiveUpdates(load);
     const payRequest = useRef('');
+    const [receipt, setReceipt] = useState<{ path: string; name: string } | null>(null);
     // the booking as it was when a panel was opened, to spot a colleague's change before saving over it
     const filledFrom = useRef<Record<string, any>>({});
 
@@ -86,14 +87,14 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
         const amount = Number(pay.amount) * (refund ? -1 : 1);
         if (!Number(pay.amount) || Number(pay.amount) <= 0) { setError(refund ? 'Enter the amount given back' : 'Enter the amount received'); return; }
         if (!pay.method) { setError('Pick how it was paid'); return; }
-        if (isTransferPay && !pay.reference.trim()) { setError('Type the reference from the bank alert or POS slip'); return; }
+
         if (!payRequest.current) payRequest.current = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
         setBusy(true); setError(null);
         try {
             const res = await fetch(`/api/ops/bookings/${bookingId}/payments`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 // the same id on a retry: lost signal or a double tap never records the money twice
-                body: JSON.stringify({ amount, method: pay.method, reference: pay.reference.trim() || null, requestId: payRequest.current, force }),
+                body: JSON.stringify({ amount, method: pay.method, reference: pay.reference.trim() || null, receiptPath: receipt?.path || null, requestId: payRequest.current, force }),
             });
             const json = await res.json();
             if (!res.ok) {
@@ -106,6 +107,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                 setError(json.error || 'Failed to record payment'); return;
             }
             payRequest.current = '';
+            setReceipt(null);
             setPanel('none');
             await load(true);
             onChanged();
@@ -301,10 +303,11 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                             onChange={m => { payRequest.current = ''; setPay({ ...pay, method: m }); }} />
                     </Field>
                     {(isTransferPay || pay.method === 'Refund') && (
-                        <Field label={pay.method === 'Refund' ? 'Refund reference (optional)' : 'Reference'} hint={isTransferPay ? 'From the bank alert or POS slip (letters and numbers). The same payment can never be recorded twice.' : undefined}>
+                        <Field label="Reference (optional)" hint={isTransferPay ? 'From the bank alert or POS slip, if you have it. It stops the same payment being recorded twice.' : undefined}>
                             <input className={inputCls} value={pay.reference} onChange={e => { payRequest.current = ''; setPay({ ...pay, reference: e.target.value }); }} autoComplete="off" />
                         </Field>
                     )}
+                    <ReceiptPicker bookingId={bookingId} receipt={receipt} onChange={r => { payRequest.current = ''; setReceipt(r); }} />
                     <BigButton tone="amber" onClick={() => addPayment()} busy={busy}>Save payment</BigButton>
                 </div>
             )}
@@ -391,6 +394,8 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                                 <span>
                                     <b>{naira(p.amount)}</b>
                                     <span className="text-gray-400"> · {p.method || '—'} · {new Date(p.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                                    {p.reference && <span className="block text-[11.5px] text-gray-400">Ref {p.reference}</span>}
+                                    {p.receipt_path && <a href={receiptLink(p.receipt_path)} target="_blank" rel="noopener noreferrer" className="block text-[12px] font-semibold text-green-700 underline">View receipt</a>}
                                 </span>
                                 {role !== 'caretaker' && (
                                     <button type="button" onClick={() => removePayment(p.id)} className="p-2 -mr-2 text-gray-300 hover:text-red-600" aria-label="Remove payment">

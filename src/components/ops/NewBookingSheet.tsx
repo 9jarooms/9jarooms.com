@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Share2, Copy, Check, Lock } from 'lucide-react';
 import {
     Sheet, BigButton, Field, Stepper, Chips, inputCls,
-    naira, shiftIso, fmtDay, unitLabel, unitPrice, groupAllUnits, openWhatsApp, serverNow, newRequestId, LIVE_STATUSES, type OpsToday,
+    naira, shiftIso, fmtDay, unitLabel, unitPrice, groupAllUnits, openWhatsApp, serverNow, newRequestId, ReceiptPicker, LIVE_STATUSES, type OpsToday,
 } from './shared';
 
 const SOURCES = [
@@ -52,6 +52,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     const [depositRef, setDepositRef] = useState('');
     const payAttempt = useRef('');
     const [lockMethod, setLockMethod] = useState('Bank Transfer');
+    const [lockReceipt, setLockReceipt] = useState<{ path: string; name: string } | null>(null);
     const [copied, setCopied] = useState(false);
     const [guestName, setGuestName] = useState('');
     const [phone, setPhone] = useState('');
@@ -156,8 +157,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
 
             if (guestName.trim().length < 2) throw new Error('Enter the guest name');
             if (!unknownAttempt.current && mode === 'booking' && deposit > 0 && !payMethod) throw new Error('Pick how they paid');
-            if (mode === 'booking' && deposit > 0 && isTransferMethod && !depositRef.trim()) throw new Error('Type the transfer reference from the bank alert');
-            const send = () => fetch('/api/bookings', {
+                const send = () => fetch('/api/bookings', {
                 method: 'POST', headers,
                 body: JSON.stringify({
                     roomId: unit.id, propertyId: unit.property_id || data.propertyId, mode: 'single',
@@ -260,13 +260,12 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
         // the money is in the account: record it with the bank's reference, which confirms the booking
         const confirmPaid = async (force = false) => {
             if (amount <= 0) { setError('Type the amount that came in'); return; }
-            const needsRef = /transfer|moniepoint|pos/i.test(lockMethod);
-            if (needsRef && !transferRef.trim()) { setError('Type the reference from the bank alert or POS slip'); return; }
+
             setBusy(true); setError(null);
             try {
                 const send = () => fetch(`/api/ops/bookings/${hold.bookingId}/payments`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ amount, method: lockMethod, reference: /transfer|moniepoint|pos/i.test(lockMethod) ? transferRef.trim() : null, note: 'Payment for a locked room', requestId: payAttempt.current, force }),
+                    body: JSON.stringify({ amount, method: lockMethod, reference: transferRef.trim() || null, receiptPath: lockReceipt?.path || null, note: 'Payment for a locked room', requestId: payAttempt.current, force }),
                 }).catch(() => null);
                 let res = await send();
                 if (!res) { await new Promise(r => setTimeout(r, 2500)); res = await send(); }
@@ -307,7 +306,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                     <p className="font-bold flex items-center gap-1.5"><Lock size={15} /> {lapsed ? `The lock ended at ${until}` : `Nobody else can book it until ${until}`}</p>
                     <p>{lapsed
                         ? 'The money can still be recorded: the app checks the room is still free first. If someone else took it, it tells you.'
-                        : `Send ${guestName.trim()} the message with the account number. Only when you SEE the money in the account, type the amount and the reference from the bank alert and tap Payment received.`}</p>
+                        : `Send ${guestName.trim()} the message with the account number. When you see the money in the account, check the amount and tap Payment received. Adding the reference or a receipt photo is optional.`}</p>
                 </div>
                 {!account && <p className="text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">No bank account is set yet, so the message does not include one. An admin can add it in Settings → Bank account for transfers.</p>}
                 <BigButton onClick={() => openWhatsApp(lockMessage, phone)} icon={<Share2 size={18} />} className="!bg-[#25D366]">
@@ -321,10 +320,11 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                     <Field label="Amount received (₦)">
                         <input type="number" inputMode="numeric" min={0} className={inputCls} value={paidAmount} onChange={e => { payAttempt.current = ''; setPaidAmount(e.target.value); }} />
                     </Field>
-                    <Field label={/transfer|moniepoint|pos/i.test(lockMethod) ? 'Reference' : 'Reference (not needed for cash)'}>
+                    <Field label="Reference (optional)">
                         <input className={inputCls} value={transferRef} onChange={e => { payAttempt.current = ''; setTransferRef(e.target.value); }} placeholder="from the bank alert" autoComplete="off" />
                     </Field>
                 </div>
+                <ReceiptPicker bookingId={hold.bookingId} receipt={lockReceipt} onChange={r => { payAttempt.current = ''; setLockReceipt(r); }} />
                 <BigButton onClick={() => confirmPaid()} busy={busy} icon={<Check size={18} />}>Payment received: {naira(amount)}</BigButton>
                 <BigButton tone="secondary" onClick={onClose}>Done (pay later)</BigButton>
             </Sheet>
@@ -435,7 +435,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                         </Field>
                     )}
                     {deposit > 0 && isTransferMethod && (
-                        <Field label="Reference" hint="From the bank alert or POS slip. Stops the same payment being recorded twice.">
+                        <Field label="Reference (optional)" hint="From the bank alert or POS slip, if you have it.">
                             <input className={inputCls} value={depositRef} onChange={e => setDepositRef(e.target.value)} autoComplete="off" />
                         </Field>
                     )}

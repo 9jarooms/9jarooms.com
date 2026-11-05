@@ -64,8 +64,8 @@ export const LESSONS: Lesson[] = [
         steps: [
             'In Find, tap Lock 15 min on the room they chose (the button was called Hold a unit in the video).',
             'The unit and dates are filled in. Add the guest name and WhatsApp number.',
-            'Pick how they will pay. Bank transfer: tap Lock unit for 15 minutes, then Tell them on WhatsApp. The message has the account number and the time the lock ends.',
-            'When the transfer shows in the account, tap Payment received. The booking is confirmed and counts for your commission.',
+            'Tap Lock unit for 15 minutes, then Tell them on WhatsApp. The message has the account number and the time the lock ends.',
+            'When the money shows in the account, check the amount and tap Payment received. Adding the bank reference or a photo of the receipt is optional. The booking is confirmed and counts for your commission.',
             'Card instead? Pick Paystack link: the guest pays the link and the booking confirms itself.',
             'Guest changed their mind? Open the booking and tap Release hold. If nobody pays, the room frees itself after 15 minutes.',
         ],
