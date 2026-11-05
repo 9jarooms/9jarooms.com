@@ -27,7 +27,7 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
         <div className={`${manrope.className} min-h-screen bg-[#f4f5f1] md:flex text-stone-800 antialiased [font-feature-settings:'ss01'] [&_input]:font-[inherit] [&_select]:font-[inherit] [&_button]:font-[inherit] [&_textarea]:font-[inherit]`}>
             <aside className="hidden md:flex w-60 shrink-0 bg-gradient-to-b from-[#03471f] to-[#02351a] text-white flex-col sticky top-0 h-screen">
                 <div className="px-6 pt-6 pb-5 border-b border-white/[0.08]">
-                    <Link href="/crm/overview" className="text-[19px] font-extrabold tracking-tight">
+                    <Link href="/crm/activity" className="text-[19px] font-extrabold tracking-tight">
                         9ja<span className="text-[#7ed957]">Rooms</span>
                     </Link>
                     <p className="text-[10.5px] font-semibold tracking-[0.18em] uppercase text-white/40 mt-1.5">

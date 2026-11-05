@@ -146,6 +146,15 @@ export default function SettingsClient() {
                 </div>
             </div>
 
+            <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] mb-5">
+                <h2 className="px-5 py-3.5 text-sm font-bold text-stone-700 border-b border-stone-200">More tools</h2>
+                <div className="px-5 py-4 flex flex-wrap gap-2 text-sm">
+                    {[['/crm/properties', 'Property details (descriptions, address, rules)'], ['/crm/reports', 'Reports'], ['/crm/overview', 'Overview'], ['/crm/guests', 'Guest list'], ['/admin/owners', 'Owners']].map(([href, label]) => (
+                        <a key={href} href={href} className="px-3 py-1.5 rounded-full border border-stone-300 text-stone-700 hover:border-stone-800">{label}</a>
+                    ))}
+                </div>
+            </div>
+
             <div className="bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
                 <h2 className="px-5 py-3.5 text-sm font-bold text-stone-700 border-b border-stone-200">How roles work now</h2>
                 <div className="px-5 py-4 text-sm text-stone-600 space-y-2">

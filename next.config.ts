@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
   // Only owner management still lives there, at /admin/owners.
   async redirects() {
     return [
-      { source: "/admin", destination: "/crm/overview", permanent: false },
+      { source: "/admin", destination: "/crm/activity", permanent: false },
       { source: "/admin/bookings/:path*", destination: "/crm/reservations", permanent: false },
       { source: "/admin/properties/:path*", destination: "/crm/properties", permanent: false },
       { source: "/admin/:page(admins|caretakers|operators|settings)/:path*", destination: "/crm/settings", permanent: false },

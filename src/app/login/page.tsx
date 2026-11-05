@@ -55,7 +55,7 @@ export default function LoginPage() {
                 case 'customer_rep':
                     // full page load so the fresh session cookie reaches the
                     // CRM server components immediately; phones get the Today app
-                    window.location.href = window.matchMedia('(min-width: 1024px)').matches ? '/crm/calendar' : '/dashboard';
+                    window.location.href = window.matchMedia('(min-width: 1024px)').matches ? '/crm/activity' : '/dashboard';
                     break;
                 case 'owner':
                     window.location.href = '/owner';

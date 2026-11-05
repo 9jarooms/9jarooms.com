@@ -27,7 +27,7 @@ export default function MobileNav({ role, email }: { role: string; email: string
     return (
         <>
             <header className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 bg-gradient-to-r from-[#03471f] to-[#02351a] text-white shadow-sm">
-                <Link href="/crm/overview" className="text-[17px] font-extrabold tracking-tight">
+                <Link href="/crm/activity" className="text-[17px] font-extrabold tracking-tight">
                     9ja<span className="text-[#7ed957]">Rooms</span>
                 </Link>
                 <span className="text-[13px] font-semibold capitalize text-white/70">{current.replace('-', ' ')}</span>
