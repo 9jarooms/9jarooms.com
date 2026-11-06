@@ -56,6 +56,18 @@ export default function RoomGroups() {
         return [...m.entries()].sort((a, b) => b[0] - a[0]);
     }, [shown]);
 
+    const renameProperty = async () => {
+        if (!prop) return;
+        const name = prompt(`New name for "${prop.name}":${prop.live ? ' (guests see this name on the website)' : ''}`, prop.name)?.trim();
+        if (!name || name === prop.name) return;
+        if (name.length < 3) { setError('A property name needs at least 3 letters'); return; }
+        setBusy(true); setError(null);
+        const res = await fetch('/api/crm/properties', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId: prop.id, name }) });
+        const j = await res.json().catch(() => ({}));
+        setBusy(false);
+        if (!res.ok) { setError(j.error || 'Could not rename'); return; }
+        load();
+    };
     const renameSelected = async () => {
         const id = [...sel][0];
         const p = propOfUnit.get(id);
@@ -140,6 +152,10 @@ export default function RoomGroups() {
                     <option value="all">All rooms (every property)</option>
                     {data.map(p => <option key={p.id} value={p.id}>{p.name}{p.live ? '' : ' — not on website'}</option>)}
                 </select>
+                {prop && (
+                    <button type="button" onClick={renameProperty} disabled={busy} aria-label="Rename this property" title="Rename this property"
+                        className="w-12 h-12 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-900 hover:text-white transition-all shrink-0"><Pencil size={17} /></button>
+                )}
                 <button type="button" onClick={load} aria-label="Refresh" className="w-12 h-12 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-900 hover:text-white transition-all shrink-0"><RefreshCw size={18} /></button>
             </div>
             {/* one even row of three, never squeezed next to other things */}

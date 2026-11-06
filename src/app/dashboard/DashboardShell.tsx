@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { clearOpsCache } from '@/components/ops/shared';
-import LiveAlerts from '@/components/ops/LiveAlerts';
+import LiveAlerts, { InstallApp } from '@/components/ops/LiveAlerts';
 import { Home, Search, Building2, UserCircle, LogOut, Smartphone, X, Layers, ClipboardList, GraduationCap, Wallet, Menu as MenuIcon, Monitor } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
@@ -96,7 +96,7 @@ export default function DashboardShell({ user, role = 'caretaker', caretakerName
                 </div>
                 {menu && (
                     <div className="absolute top-14 right-3 w-60 rounded-2xl bg-white border border-gray-200 shadow-xl py-2 text-[15px]" onClick={() => setMenu(false)}>
-                        <Link href="/dashboard/account" className="flex items-center gap-3 px-4 py-3 text-gray-800"><UserCircle size={18} className="text-gray-400" /> My account & password</Link>
+                        <Link href="/dashboard/account" className="flex items-center gap-3 px-4 py-3 text-gray-800"><UserCircle size={18} className="text-gray-400" /> Account, app & notifications</Link>
                         <Link href="/dashboard/training" className="flex items-center gap-3 px-4 py-3 text-gray-800"><GraduationCap size={18} className="text-gray-400" /> Training</Link>
                         {role !== 'caretaker' && <Link href="/crm/activity" className="flex items-center gap-3 px-4 py-3 text-gray-800"><Monitor size={18} className="text-gray-400" /> {ROLE_NAME[role]} console</Link>}
                         <button type="button" onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-600 border-t border-gray-100 mt-1"><LogOut size={18} /> Sign out</button>
@@ -161,7 +161,7 @@ export default function DashboardShell({ user, role = 'caretaker', caretakerName
                 {showInstall && (
                     <div className="lg:hidden mx-4 mt-3 flex items-center gap-2 text-[12.5px] text-gray-500">
                         <Smartphone size={15} className="shrink-0 text-gray-400" />
-                        <span className="flex-1">{platform === 'ios' ? 'Tip: Share → “Add to Home Screen” to open this like an app.' : 'Tip: ⋮ menu → “Add to Home screen” to open this like an app.'}</span>
+                        <span className="flex-1">{platform === 'ios' ? 'Tip: Share → “Add to Home Screen” to open this like an app.' : <>Add 9jaRooms to your home screen to open it like an app. <InstallApp compact /></>}</span>
                         <button type="button" onClick={dismissInstall} aria-label="Dismiss" className="p-1 text-gray-400"><X size={15} /></button>
                     </div>
                 )}

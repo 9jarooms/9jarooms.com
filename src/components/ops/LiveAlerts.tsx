@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BellRing, X } from 'lucide-react';
+import { BellRing, Smartphone, X } from 'lucide-react';
 import { useLiveUpdates } from './shared';
 
 // A pop-up (with a short sound and a buzz) the moment someone else books, locks a room or money
@@ -20,6 +20,43 @@ function chime() {
         o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.36);
     } catch { /* no sound available */ }
     try { navigator.vibrate?.([120, 60, 120]); } catch { /* ignore */ }
+}
+
+// Chrome offers "install" once, early, as an event: keep it so a button can use it any time later.
+let installEvent: any = null;
+const installListeners = new Set<() => void>();
+if (typeof window !== 'undefined') {
+    window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; installListeners.forEach(f => f()); });
+    window.addEventListener('appinstalled', () => { installEvent = null; installListeners.forEach(f => f()); });
+}
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+
+// "Add to home screen": one tap on Android, the steps on iPhone. Hidden once it is installed.
+export function InstallApp({ compact = false }: { compact?: boolean }) {
+    const [, tick] = useState(0);
+    const [state, setState] = useState<'unknown' | 'installed' | 'ios' | 'other'>('unknown');
+    useEffect(() => {
+        const f = () => tick(n => n + 1);
+        installListeners.add(f);
+        const t = setTimeout(() => setState(isStandalone() ? 'installed' : /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'ios' : 'other'), 0);
+        return () => { installListeners.delete(f); clearTimeout(t); };
+    }, []);
+    const install = async () => {
+        if (!installEvent) return;
+        installEvent.prompt();
+        await installEvent.userChoice.catch(() => null);
+        installEvent = null; tick(n => n + 1);
+    };
+    if (state === 'unknown' || state === 'installed') {
+        return compact || state === 'unknown' ? null : <p className="text-sm text-green-700 font-semibold">Installed: you are using the app.</p>;
+    }
+    if (installEvent) {
+        return <button type="button" onClick={install} className={compact ? 'font-semibold text-green-700 underline' : 'px-4 py-2.5 rounded-xl bg-green-600 text-white font-semibold text-sm'}>{compact ? 'Install' : 'Add to home screen'}</button>;
+    }
+    if (compact) return null;
+    return <p className="text-sm text-gray-600">{state === 'ios'
+        ? 'In Safari: tap Share, then “Add to Home Screen”, then open 9jaRooms from the new icon.'
+        : 'In Chrome: tap the ⋮ menu at the top right, then “Add to Home screen” (or “Install app”).'}</p>;
 }
 
 // Phone notifications (even with the app closed): register this device with the server.
@@ -47,6 +84,7 @@ export default function LiveAlerts({ href }: { href: string }) {
     useEffect(() => {
         const t = setTimeout(() => {
             try { setAskAlerts('Notification' in window && Notification.permission === 'default' && localStorage.getItem('alerts-asked') !== '1'); } catch { /* ignore */ }
+            if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
             // already allowed on this device: make sure the server still knows it (keys can change)
             subscribeDevice().catch(() => {});
         }, 0);
@@ -129,6 +167,10 @@ export function NotificationsSetting() {
     };
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h2 className="font-semibold text-gray-900 flex items-center gap-2"><Smartphone size={17} className="text-green-600" /> App on your home screen</h2>
+            <p className="text-sm text-gray-500 mt-1 mb-3">Opens like a normal app, straight to Today.</p>
+            <InstallApp />
+            <div className="border-t border-gray-100 my-5" />
             <h2 className="font-semibold text-gray-900 flex items-center gap-2"><BellRing size={17} className="text-green-600" /> Phone notifications</h2>
             <p className="text-sm text-gray-500 mt-1">A notification on this phone for every new booking, room lock and payment, even when the app is closed.</p>
             <div className="mt-4 text-sm">
