@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireCrm } from '@/lib/auth/require-crm';
+import { audit, logPrice } from '@/lib/booking/crm-ops';
 import { z } from 'zod';
 
 // Group units into one room type ("group"): the units share one name, one price and one set of photos,
@@ -24,17 +25,19 @@ export async function POST(request: NextRequest) {
     const body = parsed.data;
 
     const { data: units } = await supabase
-        .from('rooms').select('id, property_id, room_type_id').in('id', body.unitIds);
+        .from('rooms').select('id, property_id, room_type_id, unit_code, name, price_per_night').in('id', body.unitIds);
     if (!units || units.length !== body.unitIds.length || units.some(u => u.property_id !== body.propertyId)) {
         return NextResponse.json({ error: 'Those rooms are not all in this property' }, { status: 400 });
     }
 
     let typeId = body.roomTypeId;
     let price: number;
+    let groupName = body.name || 'a group';
     if (typeId) {
-        const { data: t } = await supabase.from('room_types').select('id, property_id, price_per_night').eq('id', typeId).single();
+        const { data: t } = await supabase.from('room_types').select('id, name, property_id, price_per_night').eq('id', typeId).single();
         if (!t || t.property_id !== body.propertyId) return NextResponse.json({ error: 'Group not found in this property' }, { status: 404 });
         price = Number(t.price_per_night);
+        groupName = t.name;
     } else {
         const { data: last } = await supabase.from('room_types').select('sort_order')
             .eq('property_id', body.propertyId).order('sort_order', { ascending: false }).limit(1);
@@ -49,6 +52,11 @@ export async function POST(request: NextRequest) {
     const { error: moveErr } = await supabase.from('rooms')
         .update({ room_type_id: typeId, price_per_night: price }).in('id', body.unitIds);
     if (moveErr) return NextResponse.json({ error: moveErr.message }, { status: 500 });
+
+    // moving a room into a group changes what it sells for: same trail as any price change
+    const label = (u: { unit_code: string | null; name: string }) => u.unit_code || u.name;
+    await audit(supabase, auth.user!.id, null, 'rooms_grouped', { rooms: units.map(label).join(', '), group: groupName });
+    for (const u of units) await logPrice(supabase, auth.user!.id, label(u), Number(u.price_per_night), price);
 
     // tidy groups that were emptied by this move
     const old = [...new Set(units.map(u => u.room_type_id).filter((x): x is string => !!x && x !== typeId))];

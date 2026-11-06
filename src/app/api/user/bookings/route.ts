@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase
         .from('bookings')
         .select(`
-            *,
+            id, property_id, check_in, check_out, nights, status, total_amount, created_at,
             property:properties(name, city, area, thumbnail),
             room:rooms(name)
         `)
@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
         .order('created_at', { ascending: false });
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error('User bookings error:', error.message);
+        return NextResponse.json({ error: 'Could not load your bookings' }, { status: 500 });
     }
 
     return NextResponse.json({ data });

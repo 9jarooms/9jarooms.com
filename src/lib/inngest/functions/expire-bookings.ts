@@ -36,7 +36,7 @@ export const expirePendingBookings = (inngest as any).createFunction(
                     const v = await verifyPayment(b.paystack_reference);
                     const st = v?.data?.status;
                     if (st === 'success') {
-                        const r = await confirmPaidBooking(supabase, { reference: b.paystack_reference, amountKobo: v.data.amount, raw: v.data });
+                        const r = await confirmPaidBooking(supabase, { reference: b.paystack_reference, amountKobo: v.data.amount, currency: v.data.currency, raw: v.data });
                         await announcePayment(supabase, r);   // same messages as the webhook (it will find this already done)
                         kept.push(b.id);
                     } else if (['ongoing', 'pending', 'processing', 'queued'].includes(String(st)) && !b.hold_extended_at &&

@@ -36,7 +36,7 @@ export default async function PropertyManagePage({ params }: Props) {
     const { createAdminClient } = await import('@/lib/supabase/server');
     const { data: bookings } = await createAdminClient()
         .from('bookings')
-        .select('*, room:rooms(name)')
+        .select('id, guest_name, guest_phone, check_in, check_out, status, notes, room:rooms(name)')
         .eq('property_id', id)
         .eq('status', 'paid')
         .order('check_in', { ascending: true });
@@ -46,7 +46,7 @@ export default async function PropertyManagePage({ params }: Props) {
             property={property}
             rooms={rooms || []}
             availability={(availability || []).map(a => ({ ...a, booking_id: null }))}
-            bookings={bookings || []}
+            bookings={(bookings || []) as any}
         />
     );
 }

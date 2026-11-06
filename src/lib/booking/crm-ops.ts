@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { createAdminClient } from '@/lib/supabase/server';
 import { reclaim, roomsOfBooking, stayDates, lagosToday, overstayRooms } from '@/lib/booking/hold';
 import { pushToAdmins } from '@/lib/push';
+import { displayName } from '@/lib/staff-names';
 
 // Booking operations shared by the CRM (/api/crm/*) and the mobile
 // operations surface (/api/ops/*). Routes handle auth + scoping and
@@ -50,7 +51,18 @@ export async function paidByBooking(supabase: Db, bookings: { id: string; status
 }
 
 export async function audit(supabase: Db, actor: string | null | undefined, bookingId: string | null, action: string, detail?: unknown) {
-    await supabase.from('audit_log').insert({ actor: actor || null, booking_id: bookingId, action, detail: detail ?? null });
+    const { error } = await supabase.from('audit_log').insert({ actor: actor || null, booking_id: bookingId, action, detail: detail ?? null });
+    if (error) console.error('[audit] could not log', action, error.message);
+}
+
+const nairaText = (x: unknown) => `₦${Math.round(Number(x || 0)).toLocaleString('en-NG')}`;
+
+// A nightly price set or changed, on any screen: it leaves a trail and the owner is told.
+// from = null means the price is new (a new room, group or property).
+export async function logPrice(supabase: Db, actor: string | null | undefined, what: string, from: number | null, to: number) {
+    if (from != null && Number(from) === Number(to)) return;
+    await audit(supabase, actor, null, 'price_changed', { what, from: from ?? 0, to });
+    await pushToAdmins(supabase, from == null ? 'New price set' : 'Price changed', `${what}: ${from == null ? '' : `${nairaText(from)} → `}${nairaText(to)} a night`, actor);
 }
 
 // ------------------------------------------------------------------
@@ -138,7 +150,7 @@ export async function getBookingDetail(supabase: Db, id: string): Promise<OpsRes
     const names = new Map<string, string>();
     for (const actor of [...new Set((log || []).map(l => l.actor).filter(Boolean))] as string[]) {
         const { data: u } = await supabase.auth.admin.getUserById(actor);
-        names.set(actor, u?.user?.user_metadata?.name || (u?.user?.email || '').split('@')[0] || 'someone');
+        names.set(actor, u?.user ? displayName(u.user) : 'someone');
     }
     const history = (log || []).map(l => ({ at: l.at, who: l.actor ? names.get(l.actor) || 'someone' : 'system', action: l.action, detail: l.detail }));
     return ok({ booking, payments: payments || [], paid, units: units || [], history });
@@ -158,11 +170,11 @@ export const bookingUpdateSchema = z.object({
     children: z.number().int().min(0).max(20).optional(),
     notes: z.string().max(1000).optional().nullable(),
     bookingSource: z.string().max(40).optional().nullable(),
-    totalAmount: z.number().min(0).optional(),
+    totalAmount: z.number().min(0).max(100_000_000).optional(),
     // moving / resizing the stay
     roomId: z.string().uuid().optional(),
-    checkIn: z.string().optional(),
-    checkOut: z.string().optional(),
+    checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     // the status the person saw: if someone else changed the booking since, refuse instead of overwriting
     expectedStatus: z.string().optional(),
 });
@@ -170,6 +182,7 @@ export type BookingUpdate = z.infer<typeof bookingUpdateSchema>;
 
 const LIVE_STATUSES = ['pending', 'confirmed', 'paid', 'checked_in'];
 const DEAD = ['cancelled', 'no_show', 'expired', 'completed'];
+const BOOKING_SOURCES = ['website', 'whatsapp', 'phone', 'walk_in', 'referral', 'booking_com', 'airbnb', 'other', 'caretaker', 'operator', 'maintenance'];
 
 export async function updateBooking(supabase: Db, id: string, body: BookingUpdate, actorId?: string, role?: string): Promise<OpsResult<{ success: true; booking?: any; unchanged?: boolean }>> {
     const { data: booking } = await supabase.from('bookings').select('*').eq('id', id).single();
@@ -179,6 +192,8 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
     }
     // "paid" means Paystack confirmed it; by hand only an admin may say so
     if (body.status === 'paid' && role !== 'admin') return fail('Only online payments mark a booking Paid. Record the payment instead.', 403);
+    // a hold comes from a new lock, not by hand (it would reopen an old Paystack link)
+    if (body.status === 'pending' && booking.status !== 'pending' && role !== 'admin') return fail('A booking cannot be put back on hold by hand. Make a new lock instead.', 403);
 
     const update: Record<string, unknown> = {};
     if (body.guestName !== undefined) update.guest_name = body.guestName;
@@ -189,7 +204,13 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
     if (body.adults !== undefined) update.adults = body.adults;
     if (body.children !== undefined) update.children = body.children;
     if (body.notes !== undefined) update.notes = body.notes;
-    if (body.bookingSource !== undefined) update.booking_source = body.bookingSource;
+    const sourceChanged = body.bookingSource !== undefined && (body.bookingSource || 'website') !== (booking.booking_source || 'website');
+    if (sourceChanged) {
+        // "maintenance" hides a stay from the activity, guest and commission screens: admins only
+        if ((body.bookingSource === 'maintenance' || booking.booking_source === 'maintenance') && role !== 'admin') return fail('Only an admin can change a maintenance block into a booking or the other way round.', 403);
+        if (!BOOKING_SOURCES.includes(body.bookingSource || 'website')) return fail('Pick where the booking came from', 400);
+        update.booking_source = body.bookingSource;
+    }
     if (body.totalAmount !== undefined && body.totalAmount !== Number(booking.total_amount)) update.total_amount = body.totalAmount;
 
     const rooms = await roomsOfBooking(supabase, booking);
@@ -210,6 +231,12 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
         checkOut = body.checkOut || booking.check_out;
         const dates = dateRange(checkIn, checkOut);
         if (dates.length === 0) return fail('Check-out must be after check-in', 400);
+        if (role !== 'admin') {
+            // the same limits as a new booking: no quiet backdating, no absurd stays
+            const earliest = new Date(Date.parse(`${today}T00:00:00Z`) - 2 * 86_400_000).toISOString().slice(0, 10);
+            if (body.checkIn && body.checkIn !== booking.check_in && checkIn < earliest) return fail('A stay that started more than 2 days ago can only be entered by an admin.', 403);
+            if (dates.length > 365 && dates.length > Number(booking.nights)) return fail('A stay this long can only be entered by an admin.', 403);
+        }
         if (roomId !== booking.room_id) {
             const { data: room } = await supabase.from('rooms').select('property_id, is_active, room_type_id').eq('id', roomId).single();
             if (!room || room.property_id !== booking.property_id || room.is_active === false) return fail('That unit is not in this property', 400);
@@ -279,8 +306,19 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
     }
     if (update.total_amount !== undefined) {
         await audit(supabase, actorId, id, 'total_changed', { from: Number(booking.total_amount), to: update.total_amount });
-        if (Number(update.total_amount) < Number(booking.total_amount)) {
-            await pushToAdmins(supabase, 'Price lowered', `${booking.guest_name}: ₦${Math.round(Number(booking.total_amount)).toLocaleString('en-NG')} → ₦${Math.round(Number(update.total_amount)).toLocaleString('en-NG')}`, actorId);
+        const before = Number(booking.total_amount), after = Number(update.total_amount);
+        const oldRate = before / (Number(booking.nights) || 1), newRate = after / (Number(update.nights ?? booking.nights) || 1);
+        // judged per night, so adding one naira to a long extension does not slip past
+        if (after < before) await pushToAdmins(supabase, 'Price lowered', `${booking.guest_name}: ${nairaText(before)} → ${nairaText(after)}`, actorId);
+        else if (oldRate > 0 && newRate < oldRate * 0.7) await pushToAdmins(supabase, 'Much lower nightly price', `${booking.guest_name}: ${nairaText(oldRate)} → ${nairaText(newRate)} a night`, actorId);
+        else if (oldRate > 0 && newRate > oldRate * 1.5) await pushToAdmins(supabase, 'Unusual price on a booking', `${booking.guest_name}: ${nairaText(before)} → ${nairaText(after)}`, actorId);
+    }
+    if (sourceChanged) await audit(supabase, actorId, id, 'source_changed', { from: booking.booking_source || 'website', to: body.bookingSource });
+    if (update.status && !['cancelled', 'no_show'].includes(String(update.status))) {
+        await audit(supabase, actorId, id, 'status_changed', { from: booking.status, to: update.status });
+        // the room is given over with nothing paid: the owner sees it (part-payments stay in the feed only)
+        if (['confirmed', 'checked_in'].includes(String(update.status)) && booking.status !== 'paid' && (await ledgerSum(supabase, id)) <= 0) {
+            await pushToAdmins(supabase, update.status === 'checked_in' ? 'Checked in with nothing paid' : 'Confirmed with nothing paid', `${booking.guest_name}: ${nairaText(update.total_amount ?? booking.total_amount)}`, actorId);
         }
     }
     if (moving) {
@@ -337,6 +375,7 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
     if (input.amount < 0 && (input.method !== 'Refund' || !['admin', 'customer_rep'].includes(role || ''))) {
         return fail('Only an admin or customer rep can record a refund', 403);
     }
+    if (input.method === 'Refund' && input.amount > 0) return fail('A refund is money going out: enter it as a negative amount.', 400);
     if (input.requestId) {
         const { data: same } = await supabase.from('booking_payments').select('*').eq('client_request_id', input.requestId).maybeSingle();
         if (same) return ok({ success: true, payment: same, paid: await ledgerSum(supabase, id) });

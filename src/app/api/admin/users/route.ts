@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/require-admin';
+import { audit } from '@/lib/booking/crm-ops';
+import { pushToAdmins } from '@/lib/push';
 
-// Create a new user (owner or caretaker) via Supabase Admin API
+// Create a new owner via Supabase Admin API (staff logins are made on the console's Settings page)
 export async function POST(request: NextRequest) {
     try {
-        const { adminClient, error: reqError, status } = await requireAdmin();
+        const { adminClient, user: actor, error: reqError, status } = await requireAdmin();
         if (reqError || !adminClient) return NextResponse.json({ error: reqError }, { status });
         const supabase = adminClient;
         const body = await request.json();
@@ -15,13 +17,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        if (!['admin', 'owner', 'caretaker', 'call_operator'].includes(role)) {
-            return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+        if (role !== 'owner') {
+            return NextResponse.json({ error: 'Only owner logins are made here. Staff logins are made in Settings.' }, { status: 400 });
+        }
+        if (typeof password !== 'string' || password.length < 12 || password.length > 72) {
+            return NextResponse.json({ error: 'Password must be at least 12 characters' }, { status: 400 });
         }
 
-        // Operators log in with their real email — generate username from it if not provided
-        const isOperator = role === 'call_operator' || role === 'admin';
-        if (!isOperator && !rawUsername) {
+        if (!rawUsername) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
@@ -33,7 +36,6 @@ export async function POST(request: NextRequest) {
         // Sanitise username
         const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, '');
 
-        // Operators use their real email for auth; caretakers/owners use fake internal email
         // Anyone given an email signs in with it (caretakers included); otherwise the username
         // maps to an internal address.
         const authEmail = realEmail ? String(realEmail).trim().toLowerCase() : `${cleanUsername}@9jarooms.internal`;
@@ -42,11 +44,11 @@ export async function POST(request: NextRequest) {
         const { data: existingUsers } = await supabase.auth.admin.listUsers();
         const taken = existingUsers?.users?.some(u => u.email?.toLowerCase() === authEmail.toLowerCase());
         if (taken) {
-            return NextResponse.json({ error: isOperator ? 'That email address is already registered.' : 'Username is already taken.' }, { status: 400 });
+            return NextResponse.json({ error: 'Username is already taken.' }, { status: 400 });
         }
 
-        // For non-operators: also check real_email metadata
-        if (!isOperator && realEmail) {
+        // also check real_email metadata
+        if (realEmail) {
             const realEmailTaken = existingUsers?.users?.some(
                 u => u.user_metadata?.real_email?.toLowerCase() === realEmail.toLowerCase()
             );
@@ -61,6 +63,7 @@ export async function POST(request: NextRequest) {
             password,
             email_confirm: true,
             user_metadata: { name, phone, username: cleanUsername, real_email: realEmail || null },
+            app_metadata: { name },
         });
 
         if (authError) {
@@ -91,6 +94,8 @@ export async function POST(request: NextRequest) {
             });
         }
 
+        await audit(supabase, actor?.id, null, 'owner_added', { username: cleanUsername });
+        await pushToAdmins(supabase, 'New owner login created', cleanUsername, actor?.id);
         return NextResponse.json({ success: true, userId, role });
     } catch (error) {
         console.error('User creation error:', error);
@@ -166,7 +171,7 @@ export async function GET(request: NextRequest) {
 // Update user details (profile fields + paystack for owners)
 export async function PATCH(request: NextRequest) {
     try {
-        const { adminClient, error: reqError, status } = await requireAdmin();
+        const { adminClient, user: actor, error: reqError, status } = await requireAdmin();
         if (reqError || !adminClient) return NextResponse.json({ error: reqError }, { status });
         const supabase = adminClient;
         const body = await request.json();
@@ -184,6 +189,8 @@ export async function PATCH(request: NextRequest) {
                 .update({ paystack_subaccount_code })
                 .eq('id', targetId);
             if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+            // where an owner's money is paid out: never changed silently
+            await pushToAdmins(supabase, "Owner's payout account changed", String(name || targetId), actor?.id);
         }
 
         // Update profile fields in the role-specific table
@@ -221,6 +228,7 @@ export async function PATCH(request: NextRequest) {
             }
         }
 
+        await audit(supabase, actor?.id, null, 'owner_changed', { name: name || null, payout: paystack_subaccount_code !== undefined });
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('User update error:', error);

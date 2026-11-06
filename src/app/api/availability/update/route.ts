@@ -6,6 +6,7 @@ import { setBlock } from '@/lib/booking/crm-ops';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(body.date))) return NextResponse.json({ error: 'Pick a valid date' }, { status: 400 });
         const roomId = body.roomId as string;
         const date = body.date as string;
         const status = body.status as string;
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        const { adminClient, error: authError, status: authStatus } = await requireRoomAccess(roomId);
+        const { adminClient, user, error: authError, status: authStatus } = await requireRoomAccess(roomId);
         if (authError || !adminClient) return NextResponse.json({ error: authError }, { status: authStatus || 401 });
 
         const supabase = adminClient;
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
         // One night at a time through the same rule as every other block: a night that belongs to a
         // booking is never overwritten (that used to free booked nights and allow double bookings).
         const next = new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10) + 1)).toISOString().slice(0, 10);
-        const r = await setBlock(supabase, { roomId, from: date, to: next, status: status as 'available' | 'cleaning' | 'maintenance' });
+        const r = await setBlock(supabase, { roomId, from: date, to: next, status: status as 'available' | 'cleaning' | 'maintenance' }, user?.id);
         if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
 
         return NextResponse.json({ success: true });

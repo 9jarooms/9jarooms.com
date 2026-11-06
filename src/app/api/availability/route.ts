@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
         const { data, error } = await query;
 
         if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
+            return NextResponse.json({ error: 'Failed to fetch availability' }, { status: 500 });
         }
 
         return NextResponse.json({ availability: data || [] });
@@ -115,7 +115,7 @@ async function getApartmentAvailability(searchParams: URLSearchParams) {
             .eq('is_active', true);
 
         if (roomsError) {
-            return NextResponse.json({ error: roomsError.message }, { status: 500 });
+            return NextResponse.json({ error: 'Failed to fetch availability' }, { status: 500 });
         }
 
         const rooms: RoomLite[] = roomsData || [];
@@ -137,7 +137,7 @@ async function getApartmentAvailability(searchParams: URLSearchParams) {
             .lt('date', to);
 
         if (availError) {
-            return NextResponse.json({ error: availError.message }, { status: 500 });
+            return NextResponse.json({ error: 'Failed to fetch availability' }, { status: 500 });
         }
 
         // Mirror property page: expired holds are treated as available.

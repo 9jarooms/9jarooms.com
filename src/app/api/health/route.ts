@@ -12,7 +12,7 @@ export async function GET() {
 
         if (error) {
             return NextResponse.json(
-                { status: 'error', message: error.message },
+                { status: 'error', message: 'Database unavailable' },
                 { status: 500 }
             );
         }

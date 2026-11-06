@@ -1,3 +1,4 @@
+import 'server-only';
 // Paystack API helpers for 9jaRooms
 
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY!;

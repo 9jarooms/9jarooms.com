@@ -11,9 +11,16 @@ import { pushBooking } from '@/lib/push';
 // already done so (whichever arrives first wins; the other is a no-op).
 // The confirm page is reachable by anyone holding a reference, so it gets only what it shows:
 // dates, the guest's own email and the property details for arrival. No phone, ID or internal fields.
+// Once the stay is over the reference opens nothing private: old references may have been passed to
+// ad trackers before they were removed from the address.
 function publicView(b: any) {
     if (!b) return b;
     const p = b.property || {};
+    const lagosToday = new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 10);
+    if (String(b.check_out).slice(0, 10) < lagosToday) {
+        return { id: b.id, status: b.status, check_in: b.check_in, check_out: b.check_out, nights: b.nights, room: null,
+            property: { name: p.name, area: p.area, city: p.city } };
+    }
     return {
         id: b.id, status: b.status, check_in: b.check_in, check_out: b.check_out, nights: b.nights, total_amount: b.total_amount,
         guest_name: b.guest_name, guest_email: b.guest_email, paystack_reference: b.paystack_reference,
@@ -23,12 +30,26 @@ function publicView(b: any) {
     };
 }
 
+const tries = new Map<string, { count: number; resetAt: number }>();
+
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const reference = searchParams.get('reference');
 
-    if (!reference) {
+    if (!reference || !/^[A-Za-z0-9_-]{6,100}$/.test(reference)) {
         return NextResponse.json({ error: 'Missing payment reference' }, { status: 400 });
+    }
+
+    // the page checks every 2 seconds while Paystack finishes: this leaves room for that, not for guessing
+    const ip = (request.headers.get('x-forwarded-for') || 'local').split(',')[0].trim();
+    const now = Date.now();
+    if (tries.size > 5000) tries.clear();
+    const seen = tries.get(ip);
+    if (seen && seen.resetAt > now) {
+        if (seen.count >= 60) return NextResponse.json({ error: 'Too many checks. Please try again in a few minutes.' }, { status: 429 });
+        seen.count++;
+    } else {
+        tries.set(ip, { count: 1, resetAt: now + 10 * 60 * 1000 });
     }
 
     try {
@@ -73,11 +94,11 @@ export async function GET(request: NextRequest) {
                 notifyCaretakersPaid(supabase, confirmed.id),
                 pushBooking(supabase, confirmed.id),
             ]);
-            console.log(`[Verify] ${reference} confirmed · team email: ${team.sent ? team.to?.join(',') : team.reason} · guest email: ${guest.sent ? 'sent' : guest.reason}`);
+            console.log(`[Verify] ${reference} confirmed · team email: ${team.sent ? 'sent' : team.reason} · guest email: ${guest.sent ? 'sent' : guest.reason}`);
             try {
                 await inngest.send({
                     name: 'payment/confirmed',
-                    data: { reference, amount: verification.data.amount, paystackData: verification.data },
+                    data: { reference, amount: verification.data.amount },
                 });
             } catch (inngestErr: any) {
                 console.warn('[Verify API] Inngest event failed (non-blocking):', inngestErr?.message);
@@ -97,6 +118,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ status: 'success', booking: publicView(updatedBooking) });
     } catch (error: any) {
         console.error('API /bookings/verify Error:', error);
-        return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+        return NextResponse.json({ error: 'Could not check this payment right now. Please try again.' }, { status: 500 });
     }
 }

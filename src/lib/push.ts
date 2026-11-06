@@ -47,7 +47,7 @@ export async function pushBooking(supabase: Db, bookingId: string) {
     let who = 'Website';
     if (b.created_by) {
         const { data: u } = await supabase.auth.admin.getUserById(b.created_by);
-        who = u?.user?.user_metadata?.name || (u?.user?.email || '').split('@')[0] || 'Staff';
+        who = u?.user?.app_metadata?.name || (u?.user?.email || '').split('@')[0] || 'Staff';
     }
     const lock = b.status === 'pending';
     await pushToStaff(supabase, {

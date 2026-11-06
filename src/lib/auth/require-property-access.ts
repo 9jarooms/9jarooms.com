@@ -10,39 +10,30 @@ export async function requirePropertyAccess(propertyId: string) {
 
     const adminClient = createAdminClient();
     
-    // Check if admin or operator (both have full property access)
+    // Admins have full property access
     const { data: roleData } = await adminClient
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
-        .in('role', ['admin', 'call_operator'])
-        .single();
+        .eq('role', 'admin')
+        .maybeSingle();
         
-    if (roleData) return { authorized: true, adminClient, isAdmin: true };
+    if (roleData) return { authorized: true, adminClient, isAdmin: true, user };
 
     // Fetch property to check ownership/caretaker
     const { data: property } = await adminClient
         .from('properties')
-        .select('owner_id, caretaker_id')
+        .select('caretaker_id')
         .eq('id', propertyId)
         .single();
 
     if (!property) return { error: 'Property not found', status: 404 };
 
     if (property.caretaker_id === user.id) {
-        return { authorized: true, adminClient };
+        return { authorized: true, adminClient, user };
     }
 
-    // Check if owner
-    const { data: owner } = await adminClient
-        .from('owners')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-        
-    if (owner && property.owner_id === owner.id) {
-        return { authorized: true, adminClient };
-    }
+    // owners only read: listings, prices and arrival instructions are changed by the team
 
     return { error: 'Forbidden: You do not have access to this property', status: 403 };
 }

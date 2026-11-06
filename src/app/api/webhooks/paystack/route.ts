@@ -52,13 +52,13 @@ export async function POST(request: NextRequest) {
                 notifyCaretakersPaid(supabase, booking.id).catch(() => null),
                 pushBooking(supabase, booking.id),
             ]);
-            console.log(`[Paystack] ${reference} confirmed · team email: ${team.sent ? team.to?.join(',') : team.reason} · guest email: ${guest.sent ? 'sent' : guest.reason}`);
+            console.log(`[Paystack] ${reference} confirmed · team email: ${team.sent ? 'sent' : team.reason} · guest email: ${guest.sent ? 'sent' : guest.reason}`);
 
             // WhatsApp confirmations still run through Inngest when it is configured
             try {
                 await inngest.send({
                     name: 'payment/confirmed',
-                    data: { reference, amount, metadata, paystackData: event.data },
+                    data: { reference, amount, metadata },
                 });
             } catch (e: any) {
                 console.warn('[Paystack] Inngest not available (non-blocking):', e?.message);

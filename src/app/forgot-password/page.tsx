@@ -12,6 +12,12 @@ export default function ForgotPasswordPage() {
 
     const handleReset = async (e: React.FormEvent) => {
         e.preventDefault();
+        // staff usernames map to an internal address that can't receive mail
+        if (email.trim().toLowerCase().endsWith('@9jarooms.internal')) {
+            setStatus('error');
+            setMessage('That is a staff sign-in. Ask an admin to set a new password in Settings.');
+            return;
+        }
         setStatus('loading');
         setMessage('');
 

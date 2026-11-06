@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     const searchParams = request.nextUrl.searchParams;
+    // only stays that can still clash with a search: not every booking a room has ever had
+    const pastCutoff = new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 10);
 
     const checkIn = searchParams.get('check_in');
     const checkOut = searchParams.get('check_out');
@@ -28,7 +30,7 @@ export async function GET(request: NextRequest) {
                 bookings(check_in, check_out, status)
             )
         `)
-        .eq('is_active', true).neq('is_deleted', true);
+        .eq('is_active', true).neq('is_deleted', true).gte('rooms.bookings.check_out', pastCutoff);
 
     if (type) {
         query = query.eq('type', type);
@@ -70,7 +72,7 @@ export async function GET(request: NextRequest) {
 
         if (error) {
             console.error('Supabase Query Error:', error);
-            return NextResponse.json({ error: error.message }, { status: 500 });
+            return NextResponse.json({ error: 'Could not load properties' }, { status: 500 });
         }
 
         console.log(`[Search] Found ${rawData?.length} properties in database for initial criteria.`);
@@ -170,7 +172,7 @@ export async function GET(request: NextRequest) {
                                 bookings(check_in, check_out, status)
                             )
                         `)
-                        .eq('is_active', true).neq('is_deleted', true)
+                        .eq('is_active', true).neq('is_deleted', true).gte('rooms.bookings.check_out', pastCutoff)
                         .or(`area.ilike.%${area}%,city.ilike.%${area}%`);
 
                     if (areaProperties && areaProperties.length > 0) {
@@ -235,7 +237,7 @@ export async function GET(request: NextRequest) {
                                 bookings(check_in, check_out, status)
                             )
                         `)
-                        .eq('is_active', true).neq('is_deleted', true)
+                        .eq('is_active', true).neq('is_deleted', true).gte('rooms.bookings.check_out', pastCutoff)
                         .eq('city', city)
                         .not('area', 'ilike', `%${area}%`)
                         .limit(10);
@@ -266,7 +268,7 @@ export async function GET(request: NextRequest) {
                             bookings(check_in, check_out, status)
                         )
                     `)
-                    .eq('is_active', true).neq('is_deleted', true)
+                    .eq('is_active', true).neq('is_deleted', true).gte('rooms.bookings.check_out', pastCutoff)
                     .limit(20);
 
                 if (type) {
@@ -323,6 +325,6 @@ export async function GET(request: NextRequest) {
 
     } catch (err: any) {
         console.error('API Route Critical Error:', err);
-        return NextResponse.json({ error: 'Internal Server Error', details: err.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

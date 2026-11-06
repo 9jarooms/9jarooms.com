@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireCrm } from '@/lib/auth/require-crm';
+import { audit, logPrice } from '@/lib/booking/crm-ops';
+import { pushToAdmins } from '@/lib/push';
 import { operatedInventory } from '@/lib/booking/occupancy';
 
 // Every property staff operate, with its units and groups (room types), for the "Rooms & prices" screen.
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest) {
     const { propertyId, roomTypeId, pricePerNight } = parsed.data;
     const codes = [...new Set(parsed.data.codes.map(c => c.toUpperCase().replace(/\s+/g, ' ')))];
 
-    const { data: prop } = await supabase.from('properties').select('id, max_guests').eq('id', propertyId).eq('is_deleted', false).single();
+    const { data: prop } = await supabase.from('properties').select('id, name, max_guests').eq('id', propertyId).eq('is_deleted', false).single();
     if (!prop) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
 
     let price = pricePerNight ?? 0;
@@ -84,6 +86,8 @@ export async function POST(request: NextRequest) {
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
         added.push(code);
     }
+    await audit(supabase, auth.user!.id, null, 'rooms_added', { rooms: added.join(', '), property: prop.name });
+    await logPrice(supabase, auth.user!.id, `${added.join(', ')}, ${prop.name}`, null, price);
     return NextResponse.json({ success: true, added });
 }
 
@@ -123,5 +127,8 @@ export async function DELETE(request: NextRequest) {
         if (used) await supabase.from('room_types').update({ is_active: false }).eq('id', typeId);   // old bookings point at it: hide
         else await supabase.from('room_types').delete().eq('id', typeId);
     }
-    return NextResponse.json({ success: true, removed: (rooms || []).map(r => r.unit_code || r.name) });
+    const removed = (rooms || []).map(r => r.unit_code || r.name);
+    await audit(supabase, auth.user!.id, null, 'rooms_removed', { rooms: removed.join(', ') });
+    await pushToAdmins(supabase, 'Rooms removed from use', removed.join(', '), auth.user!.id);
+    return NextResponse.json({ success: true, removed });
 }

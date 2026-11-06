@@ -20,13 +20,7 @@ import { useState } from 'react';
 
 const navItems = [
     { href: '/admin', label: 'Overview', icon: LayoutDashboard },
-    { href: '/admin/admins', label: 'System Admins', icon: Shield },
     { href: '/admin/owners', label: 'Owners', icon: Users },
-    { href: '/admin/caretakers', label: 'Caretakers', icon: UserCog },
-    { href: '/admin/operators', label: 'Call Operators', icon: PhoneCall },
-    { href: '/admin/properties', label: 'Properties', icon: Building2 },
-    { href: '/admin/bookings', label: 'Bookings', icon: CalendarDays },
-    { href: '/admin/settings', label: 'Settings', icon: Settings2 },
 ];
 
 export default function AdminShell({ children, userName }: { children: React.ReactNode; userName?: string }) {

@@ -169,7 +169,7 @@ export default function SignUpPage() {
                                     className="w-full px-5 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium text-gray-900 placeholder-gray-400"
                                     placeholder="••••••••"
                                     required
-                                    minLength={6}
+                                    minLength={10}
                                 />
                             </div>
 

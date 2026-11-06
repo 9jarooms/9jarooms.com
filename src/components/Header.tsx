@@ -74,7 +74,7 @@ export default function Header() {
                                 </a>
                             </div>
 
-                            <Link
+                            <a
                                 href="/account"
                                 className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-700 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all duration-150 btn-press"
                             >
@@ -82,7 +82,7 @@ export default function Header() {
                                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                                     <circle cx="12" cy="7" r="4" />
                                 </svg>
-                            </Link>
+                            </a>
 
                             {/* Mobile hamburger */}
                             <button

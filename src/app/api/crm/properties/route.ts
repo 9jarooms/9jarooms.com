@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireCrm } from '@/lib/auth/require-crm';
 import { audit } from '@/lib/booking/crm-ops';
 import { pushToAdmins } from '@/lib/push';
+import { ownImage } from '@/lib/own-image';
 import { z } from 'zod';
 
 // List all live properties with room types + unit counts
@@ -49,15 +50,15 @@ const createSchema = z.object({
     pricePerNight: z.number().positive(),
     maxGuests: z.number().int().min(1).max(30).default(2),
     ownerId: z.string().uuid().optional().nullable(),
-    images: z.array(z.string().url()).max(40).optional(),
-    thumbnail: z.string().url().optional().nullable(),
+    images: z.array(ownImage).max(40).optional(),
+    thumbnail: ownImage.optional().nullable(),
     // optional room types created alongside, each with N pooled units
     roomTypes: z.array(z.object({
         name: z.string().trim().min(2).max(80),
         description: z.string().max(500).optional().nullable(),
         pricePerNight: z.number().positive(),
         units: z.number().int().min(1).max(50),
-        images: z.array(z.string().url()).max(30).optional(),
+        images: z.array(ownImage).max(30).optional(),
     })).optional(),
 });
 
@@ -145,6 +146,8 @@ export async function POST(request: NextRequest) {
         });
     }
 
+    await audit(supabase, auth.user!.id, null, 'property_added', { what: body.name });
+    await pushToAdmins(supabase, 'New property added', `${body.name} at ₦${Math.round(body.pricePerNight).toLocaleString('en-NG')} a night`, auth.user!.id);
     return NextResponse.json({ success: true, property });
 }
 
@@ -158,8 +161,8 @@ const patchSchema = z.object({
     maxGuests: z.number().int().min(1).max(30).optional(),
     pricePerNight: z.number().positive().optional(),
     description: z.string().max(3000).optional().nullable(),
-    images: z.array(z.string().url()).max(40).optional(),
-    thumbnail: z.string().url().optional().nullable(),
+    images: z.array(ownImage).max(40).optional(),
+    thumbnail: ownImage.optional().nullable(),
     wholeApartmentPrice: z.number().positive().nullable().optional(),
     twoBedPrice: z.number().positive().nullable().optional(),
 });
@@ -183,6 +186,8 @@ export async function PATCH(request: NextRequest) {
                 await pushToAdmins(supabase, 'Price changed', `${before.name} ${label}: ₦${Math.round(Number(from ?? 0)).toLocaleString('en-NG')} → ₦${Math.round(Number(to ?? 0)).toLocaleString('en-NG')}`, auth.user!.id);
             }
         }
+        const edited = [body.name !== undefined && 'the name', body.description !== undefined && 'the description', body.address !== undefined && 'the address', body.images !== undefined && 'the photos'].filter(Boolean);
+        if (edited.length) await audit(supabase, auth.user!.id, null, 'listing_text_changed', { what: before.name, fields: edited.join(', ') });
         if (body.isActive !== undefined && before.is_active !== body.isActive) {
             await audit(supabase, auth.user!.id, null, 'listing_changed', { what: before.name, live: body.isActive });
             await pushToAdmins(supabase, body.isActive ? 'Property put on the website' : 'Property taken off the website', before.name, auth.user!.id);
@@ -234,11 +239,13 @@ export async function DELETE(request: NextRequest) {
         }, { status: 409 });
     }
 
+    const { data: gone } = await supabase.from('properties').select('name').eq('id', propertyId).maybeSingle();
     const { error } = await supabase
         .from('properties')
         .update({ is_active: false, is_deleted: true })
         .eq('id', propertyId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await audit(supabase, auth.user!.id, null, 'property_removed', { what: gone?.name || propertyId });
 
     return NextResponse.json({ success: true });
 }

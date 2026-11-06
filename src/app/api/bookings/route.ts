@@ -7,6 +7,7 @@ import { findFreeUnits, priceRoomTypeStay, isBlockedSlot } from '@/lib/booking/r
 import { claimDates, releaseClaim, reclaim, holdExpiry, stayDates, lagosToday, overstayRooms, HOLD_MINUTES, MAX_LOCK_MINUTES, WEBSITE_HOLD_MINUTES } from '@/lib/booking/hold';
 import { notifyCaretakersHold } from '@/lib/booking/notify-caretakers';
 import { pushBooking, pushToAdmins } from '@/lib/push';
+import { audit } from '@/lib/booking/crm-ops';
 
 const bookingSchema = z.object({
     roomId: z.string().uuid().optional(),
@@ -40,6 +41,54 @@ const bookingSchema = z.object({
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 // Undo a claim that lost the race: give back the cells and cancel the booking.
+// The network a public request comes from: the address, or for IPv6 its /64 (a phone can rotate
+// through many addresses inside it). Written out in full so every spelling gives the same key.
+function networkKey(forwarded: string | null) {
+    const ip = (forwarded || '').split(',')[0].trim();
+    if (!ip) return null;
+    if (ip.includes('.')) return ip.split(':').pop() || ip;   // IPv4, including ::ffff:1.2.3.4
+    const [head, tail = ''] = ip.split('::');
+    const h = head ? head.split(':') : [], t = tail ? tail.split(':') : [];
+    const full = [...h, ...Array(Math.max(8 - h.length - t.length, 0)).fill('0'), ...t];
+    return `${full.slice(0, 4).map(x => (parseInt(x, 16) || 0).toString(16)).join(':')}::/64`;
+}
+
+// Limits on unpaid website checkouts, kept in the database so they hold across every server:
+// one network at most 6 open and 2 whole flats, 20 attempts in 15 minutes (generous: Nigerian mobile
+// networks put many real guests behind one address); one guest at most 2 open.
+// Called before the booking is made, and again after (placed = true, it now counts itself), because
+// a burst of requests at the same instant all pass the first check.
+const WAITING_MESSAGE = 'Several rooms are already waiting for payment from your connection or details. Finish paying for those, or try again in a few minutes.';
+async function overHoldLimit(supabase: AdminClient, net: string | null, mode: string, guest: { email?: string | null; phone?: string | null; userId?: string | null }, placed = false) {
+    const nowIso = new Date().toISOString();
+    const extra = placed ? 1 : 0;
+    if (net) {
+        const { data: mine } = await supabase.from('bookings').select('status, expires_at, booking_mode, created_at')
+            .eq('client_ip', net).gte('created_at', new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()).limit(200);
+        const open = (mine || []).filter(b => b.status === 'pending' && (b.expires_at || '') > nowIso);
+        const whole = open.filter(b => b.booking_mode !== 'single').length;
+        const recentTries = (mine || []).filter(b => Date.now() - new Date(b.created_at).getTime() < 15 * 60 * 1000).length;
+        if (recentTries >= 20 + extra || open.length >= 6 + extra || (mode !== 'single' && whole >= 2 + extra)) return true;
+    }
+    const phone10 = (guest.phone || '').replace(/\D/g, '').slice(-10);
+    const who = [guest.email ? `guest_email.ilike.${guest.email.trim().toLowerCase().replace(/[,()%_*]/g, '')}` : '', phone10.length === 10 ? `guest_phone.ilike.%${phone10}` : '',
+        guest.userId ? `user_id.eq.${guest.userId}` : ''].filter(Boolean);
+    if (!who.length) return false;
+    const { count } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
+        .eq('status', 'pending').gt('expires_at', nowIso).or(who.join(','));
+    return (count || 0) >= 2 + extra;
+}
+
+// Maintenance blocks leave the same trail as any other room taken off sale: the stay is not visible
+// as a booking on the staff feeds, and no commission or money is attached to it.
+async function logMaintenance(supabase: AdminClient, actor: string | undefined, roomId: string, propertyId: string, from: string, to: string, nights: number) {
+    const { data: unit } = await supabase.from('rooms').select('unit_code, name').eq('id', roomId).maybeSingle();
+    const { data: prop } = await supabase.from('properties').select('name').eq('id', propertyId).maybeSingle();
+    const label = `${unit?.unit_code || unit?.name || 'A room'}${prop?.name ? `, ${prop.name}` : ''}`;
+    await audit(supabase, actor, null, 'maintenance_booking', { room: label, from, to, nights });
+    await pushToAdmins(supabase, 'Room taken off sale', `${label}: maintenance for ${nights} night${nights === 1 ? '' : 's'}`, actor);
+}
+
 async function rollbackReservation(supabase: AdminClient, bookingId: string) {
     await releaseClaim(supabase, bookingId);
     await supabase
@@ -104,7 +153,7 @@ export async function POST(request: NextRequest) {
     let isStaffCaller = false;
     if (early) {
         const { data: r } = await createAdminClient().from('user_roles').select('role').eq('user_id', early.id)
-            .in('role', ['admin', 'customer_rep', 'call_operator', 'caretaker']).limit(1).maybeSingle();
+            .in('role', ['admin', 'customer_rep', 'caretaker']).limit(1).maybeSingle();
         isStaffCaller = !!r;
     }
     if (!isStaffCaller) {
@@ -135,7 +184,7 @@ export async function POST(request: NextRequest) {
         const { propertyId, mode, guestName, guestEmail, guestPhone, checkIn, checkOut, userId, isManualBooking } = body;
         let { whatsappUserPhone, bookingSource } = body;
         const isHold = !!(isManualBooking && body.hold);
-        const clientIp = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null;
+        const clientNet = networkKey(request.headers.get('x-forwarded-for'));
         // staff locks are paid by bank transfer and confirmed when the money is seen in the account.
         // No Paystack link: Paystack money arrives a day later, too late to refund a guest who paid
         // after the lock ran out.
@@ -164,22 +213,20 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ error: 'Unauthorized: User not logged in' }, { status: 401 });
             }
 
-            console.log(`Manual Booking Request by User: ${user.id} (${user.email})`);
-
             // Manual bookings: CRM roles and caretakers (who take walk-in /
             // phone bookings from the Today screen).
             const { data: staffRole } = await supabase
                 .from('user_roles')
                 .select('role')
                 .eq('user_id', user.id)
-                .in('role', ['admin', 'customer_rep', 'call_operator', 'caretaker'])
+                .in('role', ['admin', 'customer_rep', 'caretaker'])
                 .limit(1)
                 .maybeSingle();
 
             if (staffRole) {
                 isInternalBooking = true;
             } else {
-                console.warn(`Unauthorized Manual Booking Attempt: ${user.email} has no staff role.`);
+                console.warn(`Unauthorized manual booking attempt by ${user.id}`);
                 return NextResponse.json({
                     error: 'Unauthorized: manual bookings are for 9jaRooms staff.'
                 }, { status: 403 });
@@ -191,6 +238,12 @@ export async function POST(request: NextRequest) {
         if (!isInternalBooking) {
             bookingSource = null; whatsappUserPhone = null;
             body.bookingType = null; body.notes = null; body.totalAmount = null; body.deposit = null;
+        } else {
+            if (bookingSource && !['website', 'whatsapp', 'phone', 'walk_in', 'referral', 'booking_com', 'airbnb', 'other', 'caretaker', 'operator', 'maintenance'].includes(bookingSource)) {
+                return NextResponse.json({ error: 'Pick where the booking came from' }, { status: 400 });
+            }
+            // a block is a block however it is labelled: type and source always agree, so it is logged as one
+            if (bookingSource === 'maintenance' || body.bookingType === 'maintenance') { bookingSource = 'maintenance'; body.bookingType = 'maintenance'; }
         }
 
         // the same request arriving twice (signal dropped, button tapped again) returns the first booking
@@ -216,7 +269,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'The amount paid is more than the price of the stay. Check both.' }, { status: 400 });
         }
         // the deposit reference is optional; only a real one (length + digits) is checked for repeats
-        if (body.deposit?.reference && (body.deposit.reference.trim().length < 6 || !/\d/.test(body.deposit.reference))) body.deposit.reference = null;
+        if (body.deposit?.reference) {
+            // the same form the payments ledger keeps ("123-456" = "123456"), so a repeat is caught either way
+            const plain = body.deposit.reference.replace(/[^a-z0-9]/gi, '').toUpperCase();
+            body.deposit.reference = plain.length >= 6 && /\d/.test(plain) ? plain : null;
+        }
         if (isInternalBooking && body.deposit?.reference) {
             const { data: used } = await supabase.from('booking_payments').select('id').ilike('reference', body.deposit.reference.replace(/[%_\\]/g, c => '\\' + c)).maybeSingle();
             if (used) return NextResponse.json({ error: `This transfer (reference ${body.deposit.reference}) was already recorded. One transfer can only be recorded once.` }, { status: 409 });
@@ -227,29 +284,26 @@ export async function POST(request: NextRequest) {
             if (stayNights > 90) return NextResponse.json({ error: 'For stays longer than 90 nights, please contact us on WhatsApp.' }, { status: 400 });
             if (checkIn > shiftDate(lagosToday(), 365)) return NextResponse.json({ error: 'Bookings open up to one year ahead.' }, { status: 400 });
 
-            // limits kept in the database (they hold across all servers):
-            // one network: at most 6 unpaid checkouts, 1 whole flat, 20 attempts in 15 minutes
-            // (generous: Nigerian mobile networks put many real guests behind one address)
-            if (clientIp) {
-                const nowIso = new Date().toISOString();
-                const ipKey = clientIp.includes(':') ? clientIp.split(':').slice(0, 4).join(':') : clientIp;   // IPv6: the /64, not one address
-                const { data: mine } = await supabase.from('bookings').select('status, expires_at, booking_mode, created_at')
-                    .ilike('client_ip', `${ipKey}%`).gte('created_at', new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()).limit(200);
-                const open = (mine || []).filter(b => b.status === 'pending' && (b.expires_at || '') > nowIso);
-                const recentTries = (mine || []).filter(b => Date.now() - new Date(b.created_at).getTime() < 15 * 60 * 1000);
-                if (recentTries.length >= 20 || open.length >= 6 || (mode !== 'single' && open.some(b => b.booking_mode !== 'single'))) {
-                    return NextResponse.json({ error: 'You already have rooms waiting for payment. Finish or wait for those first.' }, { status: 429 });
+            // the same guest trying again from the same connection (a failed card, the back button):
+            // they go back to the checkout they already have, instead of being locked out by their own hold
+            const retryEmail = (guestEmail || user?.email || '').trim().toLowerCase();
+            if (clientNet && retryEmail) {
+                const { data: same } = await supabase.from('bookings')
+                    .select('id, room_id, room_type_id, booking_mode, expires_at, paystack_reference, paystack_authorization_url')
+                    .eq('status', 'pending').eq('property_id', propertyId).eq('check_in', checkIn).eq('check_out', checkOut)
+                    .eq('guest_email', retryEmail).eq('client_ip', clientNet).gt('expires_at', new Date().toISOString())
+                    .not('paystack_authorization_url', 'is', null).limit(5);
+                const match = (same || []).find(b => b.booking_mode === mode && (mode !== 'single' || (body.roomTypeId ? b.room_type_id === body.roomTypeId : b.room_id === roomId)));
+                if (match) {
+                    return NextResponse.json({
+                        success: true, bookingId: match.id, paystackUrl: match.paystack_authorization_url,
+                        payUrl: `${request.nextUrl.origin}/booking/pay/${match.id}`, reference: match.paystack_reference, expiresAt: match.expires_at,
+                        holdMinutes: Math.max(Math.round((new Date(match.expires_at).getTime() - Date.now()) / 60000), 1),
+                    });
                 }
             }
-            // one guest: at most 2 unpaid checkouts (same email in any capitals, same phone in any format)
-            const phone10 = (guestPhone || '').replace(/\D/g, '').slice(-10);
-            const who = [guestEmail ? `guest_email.ilike.${guestEmail.trim().toLowerCase().replace(/[,()%_*]/g, '')}` : '', phone10.length === 10 ? `guest_phone.ilike.%${phone10}` : '',
-                user ? `user_id.eq.${user.id}` : ''].filter(Boolean);
-            if (who.length) {
-                const { count } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
-                    .eq('status', 'pending').gt('expires_at', new Date().toISOString()).or(who.join(','));
-                if ((count || 0) >= 2) return NextResponse.json({ error: 'You already have rooms waiting for payment. Finish or wait for those first.' }, { status: 429 });
-            }
+            const guestKey = { email: guestEmail, phone: guestPhone, userId: user?.id };
+            if (await overHoldLimit(supabase, clientNet, mode, guestKey)) return NextResponse.json({ error: WAITING_MESSAGE }, { status: 429 });
             // only live listings can be booked by the public
             const { data: listing } = await supabase.from('properties').select('is_active, is_deleted').eq('id', propertyId).maybeSingle();
             if (!listing || !listing.is_active || listing.is_deleted) return NextResponse.json({ error: 'This property is not available.' }, { status: 404 });
@@ -258,6 +312,9 @@ export async function POST(request: NextRequest) {
             // staff cannot quietly backdate a stay (an admin can, for corrections)
             const { data: mine } = await supabase.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
             if (!mine) return NextResponse.json({ error: 'A stay that started more than 2 days ago can only be entered by an admin.' }, { status: 403 });
+        }
+        if (isInternalBooking && stayDates(checkIn, checkOut).length > 365) {
+            return NextResponse.json({ error: 'A stay can be at most a year. Make a second booking for the rest.' }, { status: 400 });
         }
 
         // guestEmail is required for guest bookings, unless they are logged in OR manual
@@ -521,12 +578,17 @@ export async function POST(request: NextRequest) {
                     booking_source: source,
                     // the staff member who took it (their 1.5% commission); never for blocks or website guests
                     created_by: isInternalBooking && bookingType !== 'maintenance' ? user.id : null,
-                    client_ip: isInternalBooking ? null : clientIp,
+                    client_ip: isInternalBooking ? null : clientNet,
+                    link_amount: isInternalBooking ? null : totalAmount,
                 })
                 .select()
                 .single();
 
             if (bookingError) throw new Error(bookingError.message);
+            if (!isInternalBooking && await overHoldLimit(supabase, clientNet, mode, { email: guestEmail, phone: guestPhone, userId: user?.id }, true)) {
+                await rollbackReservation(supabase, booking.id);
+                return NextResponse.json({ error: WAITING_MESSAGE }, { status: 429 });
+            }
 
             // 5. Atomic reservation across ALL consumed rooms (sold + locked).
             const availabilityStatus: 'held' | 'booked' = initialStatus === 'pending' ? 'held' : 'booked';
@@ -607,6 +669,7 @@ export async function POST(request: NextRequest) {
                 }
             } else {
                 if (bookingType !== 'maintenance') await pushBooking(supabase, booking.id);
+                else await logMaintenance(supabase, user?.id, option.roomIds[0], propertyId, checkIn, checkOut, nightCount);
                 return NextResponse.json({
                     success: true,
                     bookingId: booking.id,
@@ -753,13 +816,18 @@ export async function POST(request: NextRequest) {
                 booking_source: source,
                 created_by: isInternalBooking && bookingType !== 'maintenance' ? user.id : null,
                 client_request_id: isInternalBooking ? body.requestId || null : null,
-                client_ip: isInternalBooking ? null : clientIp,
+                client_ip: isInternalBooking ? null : clientNet,
+                link_amount: isInternalBooking ? null : totalAmount,
                 ...(isInternalBooking && body.totalAmount != null ? { price_per_night: Math.round(totalAmount / Math.max(nightCount, 1)) } : {}),
             })
             .select()
             .single();
 
         if (bookingError) throw new Error(bookingError.message);
+        if (!isInternalBooking && await overHoldLimit(supabase, clientNet, mode, { email: guestEmail, phone: guestPhone, userId: user?.id }, true)) {
+            await rollbackReservation(supabase, booking.id);
+            return NextResponse.json({ error: WAITING_MESSAGE }, { status: 429 });
+        }
 
         // Record the single room in booking_rooms (mirrors the bundle path).
         await supabase.from('booking_rooms').insert({
@@ -882,6 +950,7 @@ export async function POST(request: NextRequest) {
         } else {
             // Return success for internal booking immediately
             if (bookingType !== 'maintenance') await pushBooking(supabase, booking.id);
+            else await logMaintenance(supabase, user?.id, roomId as string, propertyId, checkIn, checkOut, nightCount);
             return NextResponse.json({
                 success: true,
                 bookingId: booking.id,

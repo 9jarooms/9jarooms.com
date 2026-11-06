@@ -46,7 +46,7 @@ function BookingConfirmContent() {
     useEffect(() => {
         if (!reference) {
             setStatus('error');
-            setErrorMsg('No payment reference provided');
+            setErrorMsg('Your booking details are in your confirmation email. If you cannot find it, message us on WhatsApp.');
             return;
         }
 
@@ -56,7 +56,7 @@ function BookingConfirmContent() {
 
         const verifyBooking = async () => {
             try {
-                const res = await fetch(`/api/bookings/verify?reference=${reference}`);
+                const res = await fetch(`/api/bookings/verify?reference=${encodeURIComponent(reference)}`);
                 const result = await res.json();
 
                 if (!isMounted) return;
@@ -128,12 +128,12 @@ function BookingConfirmContent() {
                                 <div>
                                     <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 sm:mb-4">What's Next?</h2>
                                     <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-4">
-                                        We've sent a confirmation email to <strong>{booking.guest_email}</strong> with all the details.
+                                        We've sent a confirmation email{booking.guest_email ? <> to <strong>{booking.guest_email}</strong></> : null} with all the details.
                                     </p>
                                     <div className="bg-green-50 rounded-xl p-3 sm:p-4 border border-green-100">
                                         <h3 className="text-sm sm:text-base font-semibold text-green-900 mb-1 sm:mb-2">Check-in Instructions</h3>
                                         <p className="text-xs sm:text-sm text-green-800 leading-relaxed whitespace-pre-wrap">
-                                            {booking.property?.check_in_instructions || 'Please contact the caretaker on arrival to get your keys.'}
+                                            {booking.property?.check_in_instructions || (booking.guest_email ? 'Please contact the caretaker on arrival to get your keys.' : 'This stay has ended.')}
                                         </p>
                                     </div>
                                 </div>
@@ -160,8 +160,8 @@ function BookingConfirmContent() {
                                                     {fmtStayDate(booking.check_in)} — {fmtStayDate(booking.check_out)}
                                                 </p>
                                                 <div className="text-[11px] sm:text-sm text-gray-500 mt-1 flex flex-col sm:flex-row sm:flex-wrap gap-x-4 gap-y-0.5 sm:gap-y-1">
-                                                    <span>Check-in: {booking.property?.check_in_time}</span>
-                                                    <span>Check-out: {booking.property?.check_out_time}</span>
+                                                    {booking.property?.check_in_time && <span>Check-in: {booking.property.check_in_time}</span>}
+                                                    {booking.property?.check_out_time && <span>Check-out: {booking.property.check_out_time}</span>}
                                                 </div>
                                             </div>
                                         </div>

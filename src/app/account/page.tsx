@@ -338,9 +338,9 @@ function AccountSettingsForm({ user }: { user: any }) {
     const handleUpdatePassword = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (password.length < 6) {
+        if (password.length < 10) {
             setSecurityStatus('error');
-            setMessage({ text: 'Password must be at least 6 characters.', type: 'error' });
+            setMessage({ text: 'Password must be at least 10 characters.', type: 'error' });
             return;
         }
 
@@ -467,9 +467,9 @@ function AccountSettingsForm({ user }: { user: any }) {
                                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all font-medium text-gray-900 placeholder-gray-400"
                                 placeholder="••••••••"
                                 required
-                                minLength={6}
+                                minLength={10}
                             />
-                            <p className="text-xs text-gray-500 ml-1 mt-1">Must be at least 6 characters long.</p>
+                            <p className="text-xs text-gray-500 ml-1 mt-1">Must be at least 10 characters long.</p>
                         </div>
 
                         <div className="pt-2">

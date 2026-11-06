@@ -31,9 +31,10 @@ export default async function HomePage() {
     ]);
 
     // public page: never ship the address, arrival instructions or owner fields to the browser
-    const allProperties = (propertiesRes.data || []).map(({ address: _a, check_in_instructions: _c, owner_id: _o, caretaker_id: _k, ...p }: any) => p);
+    const bookingCount = new Map<string, number>((propertiesRes.data || []).map((p: any) => [p.id, p.bookings?.[0]?.count || 0]));
+    const allProperties = (propertiesRes.data || []).map(({ address: _a, check_in_instructions: _c, owner_id: _o, caretaker_id: _k, bookings: _b, ...p }: any) => p);
     const featuredProperties = allProperties.filter((p: any) => p.is_featured);
-    const byBookings = (a: any, b: any) => (b.bookings?.[0]?.count || 0) - (a.bookings?.[0]?.count || 0);
+    const byBookings = (a: any, b: any) => (bookingCount.get(b.id) || 0) - (bookingCount.get(a.id) || 0);
     const top4Properties = (
         featuredProperties.length > 0
             ? [
@@ -239,10 +240,10 @@ export default async function HomePage() {
                         <Search size={22} strokeWidth={1.5} />
                         <span className="text-[10px] font-medium">Search</span>
                     </Link>
-                    <Link href="/account" className="flex flex-col items-center gap-0.5 px-6 py-1.5 text-gray-400 hover:text-green-600 transition-colors">
+                    <a href="/account" className="flex flex-col items-center gap-0.5 px-6 py-1.5 text-gray-400 hover:text-green-600 transition-colors">
                         <User size={22} strokeWidth={1.5} />
                         <span className="text-[10px] font-medium">Account</span>
-                    </Link>
+                    </a>
                 </div>
             </nav>
 

@@ -1,11 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
-    const router = useRouter();
     const [loginId, setLoginId] = useState(''); // email or username
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -42,7 +40,7 @@ export default function LoginPage() {
                     return;
                 }
                 console.warn('Defaulting to dashboard due to role fetch failure');
-                router.push('/dashboard');
+                window.location.href = '/dashboard';
                 return;
             }
 
@@ -62,19 +60,10 @@ export default function LoginPage() {
                     break;
                 case 'caretaker':
                     // phone -> the Today app; computer -> the full console
-                    if (window.matchMedia('(min-width: 1024px)').matches) {
-                        window.location.href = '/crm/calendar';
-                    } else {
-                        router.refresh();
-                        router.push('/dashboard');
-                    }
-                    break;
-                case 'call_operator':
-                    router.refresh();
-                    router.push('/operator');
+                    window.location.href = window.matchMedia('(min-width: 1024px)').matches ? '/crm/calendar' : '/dashboard';
                     break;
                 default:
-                    router.push('/account'); // default to customer dashboard
+                    window.location.href = '/account'; // default to customer dashboard
             }
         } catch (err) {
             // a network hiccup is not "you are a customer": let the next attempt decide

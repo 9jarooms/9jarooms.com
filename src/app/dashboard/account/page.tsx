@@ -74,8 +74,8 @@ export default function AccountPage() {
         e.preventDefault();
         setPwMsg(null);
 
-        if (newPassword.length < 8) {
-            setPwMsg({ type: 'error', text: 'New password must be at least 8 characters.' });
+        if (newPassword.length < 12) {
+            setPwMsg({ type: 'error', text: 'New password must be at least 12 characters.' });
             return;
         }
         if (newPassword !== confirmPassword) {
@@ -206,7 +206,7 @@ export default function AccountPage() {
             <div className="bg-white rounded-2xl border border-gray-100">
                 <div className="p-6 border-b border-gray-50">
                     <h2 className="font-semibold text-gray-900">Change Password</h2>
-                    <p className="text-sm text-gray-400 mt-0.5">Must be at least 8 characters.</p>
+                    <p className="text-sm text-gray-400 mt-0.5">Must be at least 12 characters.</p>
                 </div>
                 <form onSubmit={handlePasswordChange} className="p-6 space-y-4">
                     {pwMsg && <Alert type={pwMsg.type} message={pwMsg.text} />}

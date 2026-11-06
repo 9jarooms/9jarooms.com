@@ -48,7 +48,7 @@ export default function SettingsClient() {
     };
 
     const resetPassword = async (userId: string, who: string) => {
-        const password = prompt(`New password for ${who} (at least 8 characters):`);
+        const password = prompt(`New password for ${who} (at least 12 characters):`);
         if (!password) return;
         setError(null); setOk(null);
         const res = await fetch('/api/crm/staff', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, password }) });
@@ -114,12 +114,12 @@ export default function SettingsClient() {
                             value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                         <input placeholder="Username e.g. umma" autoCapitalize="none" autoCorrect="off" className="border border-stone-300 rounded-md px-2.5 py-2 text-sm"
                             value={form.username} onChange={e => setForm({ ...form, username: e.target.value.toLowerCase().replace(/\s+/g, '') })} />
-                        <input placeholder="Password (min 8)" type="password" className="border border-stone-300 rounded-md px-2.5 py-2 text-sm"
+                        <input placeholder="Password (min 12)" type="password" className="border border-stone-300 rounded-md px-2.5 py-2 text-sm"
                             value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
                     </div>
                     <div className="flex justify-end mt-3">
                         <button
-                            disabled={busy || form.username.length < 3 || form.password.length < 8}
+                            disabled={busy || form.username.length < 3 || form.password.length < 12}
                             onClick={createRep}
                             className="px-4 py-2 rounded-md bg-[#008737] text-white text-sm font-semibold disabled:opacity-50">
                             {busy ? 'Creating…' : `Create ${ROLE_LABEL[form.role].toLowerCase()} account`}

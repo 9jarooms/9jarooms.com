@@ -1,6 +1,6 @@
 import { createServerClient, createAdminClient } from '@/lib/supabase/server';
 
-export async function requireAdmin(options: { allowOperator?: boolean } = {}) {
+export async function requireAdmin() {
     const sessionClient = await createServerClient();
     
     // 1. Check if user is authenticated
@@ -13,17 +13,15 @@ export async function requireAdmin(options: { allowOperator?: boolean } = {}) {
     // 2. Check if user has admin role (requires Admin client since RLS is now enforcing policies)
     const adminClient = createAdminClient();
     
-    const allowedRoles = options.allowOperator ? ['admin', 'call_operator'] : ['admin'];
-
     const { data: roleData, error: roleError } = await adminClient
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
-        .in('role', allowedRoles)
+        .eq('role', 'admin')
         .maybeSingle();
         
     if (roleError || !roleData) {
-        return { error: `Forbidden: ${options.allowOperator ? 'Admin or Operator' : 'Admin'} access required`, status: 403 };
+        return { error: 'Forbidden: Admin access required', status: 403 };
     }
     
     return { user, adminClient };

@@ -76,14 +76,16 @@ export async function confirmPaidBooking(supabase: Db, input: {
     let refundNeeded = false;
     let movedTo: string | null = null;
     // the money does not earn the room when: it is the wrong currency, a website guest paid less than
-    // the stay costs, the booking was cancelled, or the link is over a day past its time (old price)
-    const total0 = Number(booking.total_amount);
+    // their link asked for, the booking was cancelled, or the link is over a day past its time (old price).
+    // Judged against the link, not today's total: if staff raised the total while the guest was on
+    // Paystack, the guest still has the room and simply owes the difference.
+    const asked = Number(booking.link_amount ?? booking.total_amount);
     const lateBy = booking.expires_at ? Date.now() - new Date(booking.expires_at).getTime() : 0;
     const refused = !done && (
         (!!input.currency && input.currency !== 'NGN') ||
-        (!booking.created_by && amount + 1 < total0) ||
+        (!booking.created_by && ['pending', 'expired'].includes(booking.status) && amount + 1 < asked) ||
         ['cancelled', 'no_show'].includes(booking.status) ||
-        (booking.status === 'expired' && lateBy > 24 * 60 * 60 * 1000));
+        (['pending', 'expired'].includes(booking.status) && lateBy > 24 * 60 * 60 * 1000));
     if (refused) {
         refundNeeded = true;
         await releaseClaim(supabase, booking.id);
@@ -125,7 +127,7 @@ export async function confirmPaidBooking(supabase: Db, input: {
     const notes: string[] = [];
     if (movedTo) notes.push(`PAID AFTER THE LOCK RAN OUT (${input.reference}): first room was taken, moved to another identical room. Tell the guest their room number.`);
     if (done) notes.push(`PAID ONLINE AGAIN (${input.reference}) on a booking that was already paid / checked in: refund ₦${Math.round(amount).toLocaleString('en-NG')} unless agreed otherwise.`);
-    if (refused) notes.push(`PAYMENT NOT ACCEPTED (₦${Math.round(amount).toLocaleString('en-NG')}, ${input.reference}): the booking was ${booking.status === 'cancelled' ? 'cancelled' : booking.status === 'expired' ? 'long expired' : 'not fully paid'}. Refund or rebook the guest.`);
+    if (refused) notes.push(`PAYMENT NOT ACCEPTED (₦${Math.round(amount).toLocaleString('en-NG')}, ${input.reference}): the booking was ${booking.status === 'cancelled' ? 'cancelled' : ['expired', 'pending'].includes(booking.status) && lateBy > 24 * 60 * 60 * 1000 ? 'long expired' : 'not fully paid'}. Refund or rebook the guest.`);
     if (paidSoFar > total + 1) notes.push(`OVERPAID by ₦${Math.round(paidSoFar - total).toLocaleString('en-NG')} (${input.reference}): refund the difference.`);
     if (paidSoFar + 1 < total) notes.push(`PART-PAID online: ₦${Math.round(amount).toLocaleString('en-NG')} of ₦${Math.round(total).toLocaleString('en-NG')} (${input.reference}).`);
 

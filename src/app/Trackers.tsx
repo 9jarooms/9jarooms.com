@@ -5,18 +5,19 @@ import { usePathname } from 'next/navigation';
 import Script from 'next/script';
 
 // Meta Pixel and Google tag for the public website only. Never on staff pages (next to login cookies
-// and guest data) or the payment page. On the confirmation page they load after the page has removed
+// and guest data) or the payment page. On the confirmation page they wait until the page has removed
 // the payment reference from the address, so it is never sent to them.
-const PRIVATE = ['/crm', '/dashboard', '/owner', '/operator', '/admin', '/login', '/account', '/booking/pay', '/forgot-password'];
+const PRIVATE = ['/crm', '/dashboard', '/owner', '/operator', '/admin', '/login', '/sign-up', '/account', '/booking/pay', '/forgot-password', '/reset-password'];
 
 export default function Trackers() {
     const pathname = usePathname() || '/';
-    const delayed = pathname.startsWith('/booking');
     const [ready, setReady] = useState(false);
     useEffect(() => {
-        const t = setTimeout(() => setReady(true), delayed ? 1500 : 0);
-        return () => clearTimeout(t);
-    }, [delayed]);
+        const clean = () => !/[?&](reference|trxref)=/.test(window.location.search);
+        if (clean()) { setReady(true); return; }
+        const t = setInterval(() => { if (clean()) { clearInterval(t); setReady(true); } }, 250);
+        return () => clearInterval(t);
+    }, []);
     if (!ready || PRIVATE.some(p => pathname.startsWith(p))) return null;
     return (
         <>

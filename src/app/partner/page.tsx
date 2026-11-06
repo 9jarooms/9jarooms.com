@@ -4,7 +4,7 @@ import Footer from '@/components/Footer';
 import { CheckCircle2, DollarSign, Camera, Users, ArrowRight } from 'lucide-react';
 
 export default function PartnerPage() {
-    const whatsappUrl = "https://wa.me/2348000000000"; // Replace with actual number if different
+    const whatsappUrl = "https://wa.me/2349111101012";
 
     return (
         <>

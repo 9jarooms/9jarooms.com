@@ -11,9 +11,11 @@ export function usernameOf(email: string | null | undefined) {
 }
 
 // What to call someone on screen: their name, else username, else email
-export function displayName(u: { email?: string | null; user_metadata?: Record<string, any> | null } | undefined) {
+// (app_metadata only an admin can write; user_metadata anyone can edit about themselves, so a name
+// taken from there could be used to pose as someone else in the activity feed)
+export function displayName(u: { email?: string | null; app_metadata?: Record<string, any> | null } | undefined) {
     if (!u) return 'Unknown';
-    return u.user_metadata?.name || usernameOf(u.email) || u.email || 'Unknown';
+    return u.app_metadata?.name || usernameOf(u.email) || u.email || 'Unknown';
 }
 
 export async function staffDirectory(supabase: Db) {

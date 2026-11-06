@@ -173,7 +173,7 @@ export default function OwnersPage() {
                             {!editingId && (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                                    <input type="password" required minLength={6} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
+                                    <input type="password" required minLength={12} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
                                         className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
                                 </div>
                             )}

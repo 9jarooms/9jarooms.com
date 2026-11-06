@@ -33,7 +33,7 @@ export async function GET() {
 // Staff sign in with a username (no email needed): it becomes {username}@9jarooms.internal in Supabase Auth.
 const createSchema = z.object({
     username: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9._-]{2,29}$/, 'Username: 3–30 letters or numbers (dots, dashes allowed), no spaces'),
-    password: z.string().min(8).max(72),
+    password: z.string().min(12, 'Password must be at least 12 characters').max(72),
     name: z.string().trim().min(2).max(80).optional(),
     role: z.enum(ROLES).default('customer_rep'),
 });
@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
         password,
         email_confirm: true,
         user_metadata: { name: name || username, username },
+        app_metadata: { name: name || username },
     });
     if (createError) {
         const taken = /already|registered|exists/i.test(createError.message);
@@ -75,17 +76,18 @@ export async function POST(request: NextRequest) {
 }
 
 // Admin sets a new password for someone who forgot theirs
-const resetSchema = z.object({ userId: z.string().uuid(), password: z.string().min(8).max(72) });
+const resetSchema = z.object({ userId: z.string().uuid(), password: z.string().min(12).max(72) });
 export async function PATCH(request: NextRequest) {
     const auth = await requireCrm();
     if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
     if (auth.role !== 'admin') return NextResponse.json({ error: 'Only an admin can reset passwords' }, { status: 403 });
     const parsed = resetSchema.safeParse(await request.json());
-    if (!parsed.success) return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Password must be at least 12 characters' }, { status: 400 });
     const { error } = await auth.adminClient!.auth.admin.updateUserById(parsed.data.userId, { password: parsed.data.password });
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     // a new password signs that person out everywhere (for example a stolen phone)
-    await auth.adminClient!.rpc('revoke_user_sessions', { target: parsed.data.userId });
+    const { error: revokeErr } = await auth.adminClient!.rpc('revoke_user_sessions', { target: parsed.data.userId });
+    if (revokeErr) console.error('[staff] could not end sessions after a password reset:', revokeErr.message);
     await audit(auth.adminClient!, auth.user!.id, null, 'password_reset', { userId: parsed.data.userId });
     return NextResponse.json({ success: true });
 }

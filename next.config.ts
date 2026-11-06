@@ -10,7 +10,7 @@ const securityHeaders = [
   // enforced: no plugins, no redirecting the base URL, no framing, forms only to this site
   { key: "Content-Security-Policy", value: "object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'" },
   // watched, not yet enforced: tighten once the reports are clean
-  { key: "Content-Security-Policy-Report-Only", value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' https://zgumxpnsestwzmztagbr.supabase.co; connect-src 'self' https://zgumxpnsestwzmztagbr.supabase.co wss://zgumxpnsestwzmztagbr.supabase.co https://*.google-analytics.com https://www.google.com https://www.facebook.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" },
+  { key: "Content-Security-Policy-Report-Only", value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' https://zgumxpnsestwzmztagbr.supabase.co; connect-src 'self' https://zgumxpnsestwzmztagbr.supabase.co wss://zgumxpnsestwzmztagbr.supabase.co https://*.google-analytics.com https://www.google.com https://www.facebook.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; report-uri /api/csp-report" },
 ];
 
 const nextConfig: NextConfig = {
