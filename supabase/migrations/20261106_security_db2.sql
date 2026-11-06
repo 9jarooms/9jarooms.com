@@ -14,3 +14,5 @@ where raw_payload is not null;
 -- upload limits on the other buckets
 update storage.buckets set file_size_limit = 104857600, allowed_mime_types = array['image/jpeg','image/png','image/webp','video/mp4','video/quicktime','video/webm','application/pdf'] where id = 'public-assets';
 update storage.buckets set file_size_limit = 10485760, allowed_mime_types = array['image/jpeg','image/png','image/webp','image/heic','image/heif','application/pdf'] where id = 'receipts';
+-- bookings: reads go through the server only
+drop policy if exists caretakers_read_bookings on bookings;
