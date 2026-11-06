@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
         const { booking: confirmed, alreadyPaid, refundNeeded } = await confirmPaidBooking(supabase, {
             reference,
             amountKobo: verification.data.amount,
+            currency: verification.data.currency,
             raw: verification.data,
         });
 

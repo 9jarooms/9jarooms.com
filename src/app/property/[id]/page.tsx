@@ -1,3 +1,4 @@
+import { safeJsonLd } from '@/lib/safe-json';
 import { createServerClient } from '@/lib/supabase/server';
 import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
@@ -82,7 +83,7 @@ export default async function PropertyPage({ params }: Props) {
 
     // Strip private fields before passing to the browser: the address, arrival instructions and owner
     // details are only sent to a guest privately once they have paid
-    const { address: _addr, check_in_instructions: _ci, owner: _owner, ...safeProperty } = property as any;
+    const { address: _addr, check_in_instructions: _ci, owner: _owner, owner_id: _oid, caretaker_id: _cid, ...safeProperty } = property as any;
 
     let { data: rooms } = await supabase
         .from('rooms')
@@ -228,7 +229,7 @@ export default async function PropertyPage({ params }: Props) {
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{
-                    __html: JSON.stringify({
+                    __html: safeJsonLd({
                         "@context": "https://schema.org",
                         "@type": "LodgingBusiness",
                         "name": property.name,

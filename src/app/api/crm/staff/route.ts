@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireCrm } from '@/lib/auth/require-crm';
 import { z } from 'zod';
 import { INTERNAL_DOMAIN, usernameOf } from '@/lib/staff-names';
+import { audit } from '@/lib/booking/crm-ops';
+import { pushToAdmins } from '@/lib/push';
 
 // Team access: admins, customer reps and caretakers. Only an admin creates or removes logins (every
 // login earns commission, so nobody else can make one).
@@ -23,7 +25,7 @@ export async function GET() {
     const order: Record<string, number> = { admin: 0, customer_rep: 1, caretaker: 2 };
     const staff = (roles || []).map(r => {
         const u = byId.get(r.user_id);
-        return { userId: r.user_id, role: r.role, email: u?.email || '(unknown)', username: usernameOf(u?.email), name: u?.user_metadata?.name || null, createdAt: u?.created_at, banned: !!(u as any)?.banned_until };
+        return { userId: r.user_id, role: r.role, email: auth.role === 'admin' || usernameOf(u?.email) ? u?.email || '(unknown)' : '(hidden)', username: usernameOf(u?.email), name: u?.user_metadata?.name || null, createdAt: u?.created_at, banned: !!(u as any)?.banned_until };
     }).filter(s => !s.banned).sort((a, b) => (order[a.role] ?? 9) - (order[b.role] ?? 9) || a.email.localeCompare(b.email));
     return NextResponse.json({ staff, myRole: auth.role });
 }
@@ -67,6 +69,8 @@ export async function POST(request: NextRequest) {
         await supabase.from('caretakers').upsert({ id: created.user.id, name: name || username, email });
     }
 
+    await audit(supabase, auth.user!.id, null, 'staff_added', { username, role });
+    await pushToAdmins(supabase, 'New login created', `${username} (${role})`, auth.user!.id);
     return NextResponse.json({ success: true, userId: created.user.id, username });
 }
 
@@ -80,6 +84,9 @@ export async function PATCH(request: NextRequest) {
     if (!parsed.success) return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
     const { error } = await auth.adminClient!.auth.admin.updateUserById(parsed.data.userId, { password: parsed.data.password });
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    // a new password signs that person out everywhere (for example a stolen phone)
+    await auth.adminClient!.rpc('revoke_user_sessions', { target: parsed.data.userId });
+    await audit(auth.adminClient!, auth.user!.id, null, 'password_reset', { userId: parsed.data.userId });
     return NextResponse.json({ success: true });
 }
 
@@ -106,10 +113,12 @@ export async function DELETE(request: NextRequest) {
         .eq('role', role);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    await audit(supabase, auth.user!.id, null, 'staff_removed', { userId, role });
     // no staff role left: the login stops working and they stop getting guest WhatsApp alerts
     const { count } = await supabase.from('user_roles').select('user_id', { count: 'exact', head: true }).eq('user_id', userId);
     if (!count) {
         await supabase.auth.admin.updateUserById(userId, { ban_duration: '876000h' });
+        await supabase.rpc('revoke_user_sessions', { target: userId });
         await supabase.from('properties').update({ caretaker_id: null }).eq('caretaker_id', userId);
         await supabase.from('caretakers').update({ phone: null }).eq('id', userId);
     }

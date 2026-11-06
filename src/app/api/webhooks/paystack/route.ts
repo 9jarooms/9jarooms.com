@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
             reference,
             bookingId: metadata?.booking_id || null,
             amountKobo: amount,
+            currency: event.data?.currency,
             raw: event.data,
         });
 

@@ -25,6 +25,9 @@ export async function PATCH(request: NextRequest) {
     const { key, value } = body;
 
     if (!key) return NextResponse.json({ error: 'key required' }, { status: 400 });
+    if (key === 'bank_transfer') {
+        return NextResponse.json({ error: 'The bank account is changed in Settings → Bank account' }, { status: 400 });
+    }
 
     const { data, error } = await supabase
         .from('site_settings')

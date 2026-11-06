@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireCrm } from '@/lib/auth/require-crm';
+import { audit } from '@/lib/booking/crm-ops';
+import { pushToAdmins } from '@/lib/push';
 
 // The account guests pay into by bank transfer, quoted in the "room locked for 15 minutes" message.
 // Everyone in the console can read it; only an admin can change it.
@@ -25,5 +27,7 @@ export async function PUT(request: NextRequest) {
     const { error } = await auth.adminClient!.from('site_settings')
         .upsert({ key: 'bank_transfer', value: parsed.data, updated_at: new Date().toISOString() }, { onConflict: 'key' });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await audit(auth.adminClient!, auth.user!.id, null, 'bank_changed', { accountEnding: parsed.data.accountNumber.slice(-4), bank: parsed.data.bankName });
+    await pushToAdmins(auth.adminClient!, 'Bank account changed', `${parsed.data.bankName} ending ${parsed.data.accountNumber.slice(-4)}. If this was not you, change it back now.`);
     return NextResponse.json({ success: true });
 }

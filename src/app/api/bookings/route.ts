@@ -6,7 +6,7 @@ import { computeOptions, groupDuplexes, freeDuplexes, type ApartmentLite, type R
 import { findFreeUnits, priceRoomTypeStay, isBlockedSlot } from '@/lib/booking/room-types';
 import { claimDates, releaseClaim, reclaim, holdExpiry, stayDates, lagosToday, overstayRooms, HOLD_MINUTES, MAX_LOCK_MINUTES, WEBSITE_HOLD_MINUTES } from '@/lib/booking/hold';
 import { notifyCaretakersHold } from '@/lib/booking/notify-caretakers';
-import { pushBooking } from '@/lib/push';
+import { pushBooking, pushToAdmins } from '@/lib/push';
 
 const bookingSchema = z.object({
     roomId: z.string().uuid().optional(),
@@ -91,6 +91,8 @@ async function transferHoldResponse(supabase: AdminClient, bookingId: string, ex
     });
 }
 
+const shiftDate = (iso: string, days: number) => { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10); };
+
 const rateLimitStore = new Map<string, { count: number, resetAt: number }>();
 
 // Create a new booking
@@ -130,7 +132,8 @@ export async function POST(request: NextRequest) {
         }
         
         const body = validation.data;
-        const { propertyId, mode, guestName, guestEmail, guestPhone, whatsappUserPhone, checkIn, checkOut, userId, isManualBooking, bookingSource } = body;
+        const { propertyId, mode, guestName, guestEmail, guestPhone, checkIn, checkOut, userId, isManualBooking } = body;
+        let { whatsappUserPhone, bookingSource } = body;
         const isHold = !!(isManualBooking && body.hold);
         const clientIp = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null;
         // staff locks are paid by bank transfer and confirmed when the money is seen in the account.
@@ -183,6 +186,13 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // the public cannot label their own booking: source, type and notes are staff fields
+        // (a website guest sending "maintenance" could otherwise get ₦0 or hide from staff screens)
+        if (!isInternalBooking) {
+            bookingSource = null; whatsappUserPhone = null;
+            body.bookingType = null; body.notes = null; body.totalAmount = null; body.deposit = null;
+        }
+
         // the same request arriving twice (signal dropped, button tapped again) returns the first booking
         if (isInternalBooking && body.requestId) {
             const { data: same } = await supabase.from('bookings').select('id, status, expires_at, room_id, total_amount, guest_name, check_in, check_out, nights').eq('client_request_id', body.requestId).maybeSingle();
@@ -199,6 +209,9 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ success: true, bookingId: same.id, ...first });
             }
         }
+        if (isInternalBooking && body.deposit && !['Cash', 'Bank Transfer', 'Transfer', 'POS', 'Moniepoint', 'Other'].includes(body.deposit.method || '')) {
+            return NextResponse.json({ error: 'Pick how it was paid' }, { status: 400 });
+        }
         if (isInternalBooking && body.deposit && body.totalAmount != null && body.deposit.amount > body.totalAmount + 1) {
             return NextResponse.json({ error: 'The amount paid is more than the price of the stay. Check both.' }, { status: 400 });
         }
@@ -210,21 +223,41 @@ export async function POST(request: NextRequest) {
         }
         if (!isInternalBooking) {
             if (checkIn < lagosToday()) return NextResponse.json({ error: 'Check-in date is in the past' }, { status: 400 });
-            // one guest cannot keep many rooms locked without paying
-            const who = [guestEmail ? `guest_email.eq.${guestEmail.replace(/[,()]/g, '')}` : '', guestPhone ? `guest_phone.eq.${guestPhone.replace(/[,()]/g, '')}` : '',
-                user ? `user_id.eq.${user.id}` : ''].filter(Boolean);
-            // one network address cannot hold more than 3 unpaid website checkouts at once (kept in the
-            // database, so it holds across servers; one person can never block a whole property)
+            const stayNights = stayDates(checkIn, checkOut).length;
+            if (stayNights > 90) return NextResponse.json({ error: 'For stays longer than 90 nights, please contact us on WhatsApp.' }, { status: 400 });
+            if (checkIn > shiftDate(lagosToday(), 365)) return NextResponse.json({ error: 'Bookings open up to one year ahead.' }, { status: 400 });
+
+            // limits kept in the database (they hold across all servers):
+            // one network: at most 6 unpaid checkouts, 1 whole flat, 20 attempts in 15 minutes
+            // (generous: Nigerian mobile networks put many real guests behind one address)
             if (clientIp) {
-                const { count: open } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
-                    .eq('client_ip', clientIp).eq('status', 'pending').gt('expires_at', new Date().toISOString());
-                if ((open || 0) >= 6) return NextResponse.json({ error: 'You already have rooms waiting for payment. Finish or wait for those first.' }, { status: 429 });
+                const nowIso = new Date().toISOString();
+                const ipKey = clientIp.includes(':') ? clientIp.split(':').slice(0, 4).join(':') : clientIp;   // IPv6: the /64, not one address
+                const { data: mine } = await supabase.from('bookings').select('status, expires_at, booking_mode, created_at')
+                    .ilike('client_ip', `${ipKey}%`).gte('created_at', new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()).limit(200);
+                const open = (mine || []).filter(b => b.status === 'pending' && (b.expires_at || '') > nowIso);
+                const recentTries = (mine || []).filter(b => Date.now() - new Date(b.created_at).getTime() < 15 * 60 * 1000);
+                if (recentTries.length >= 20 || open.length >= 6 || (mode !== 'single' && open.some(b => b.booking_mode !== 'single'))) {
+                    return NextResponse.json({ error: 'You already have rooms waiting for payment. Finish or wait for those first.' }, { status: 429 });
+                }
             }
+            // one guest: at most 2 unpaid checkouts (same email in any capitals, same phone in any format)
+            const phone10 = (guestPhone || '').replace(/\D/g, '').slice(-10);
+            const who = [guestEmail ? `guest_email.ilike.${guestEmail.trim().toLowerCase().replace(/[,()%_*]/g, '')}` : '', phone10.length === 10 ? `guest_phone.ilike.%${phone10}` : '',
+                user ? `user_id.eq.${user.id}` : ''].filter(Boolean);
             if (who.length) {
                 const { count } = await supabase.from('bookings').select('id', { count: 'exact', head: true })
                     .eq('status', 'pending').gt('expires_at', new Date().toISOString()).or(who.join(','));
                 if ((count || 0) >= 2) return NextResponse.json({ error: 'You already have rooms waiting for payment. Finish or wait for those first.' }, { status: 429 });
             }
+            // only live listings can be booked by the public
+            const { data: listing } = await supabase.from('properties').select('is_active, is_deleted').eq('id', propertyId).maybeSingle();
+            if (!listing || !listing.is_active || listing.is_deleted) return NextResponse.json({ error: 'This property is not available.' }, { status: 404 });
+        }
+        if (isInternalBooking && checkIn < shiftDate(lagosToday(), -2)) {
+            // staff cannot quietly backdate a stay (an admin can, for corrections)
+            const { data: mine } = await supabase.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
+            if (!mine) return NextResponse.json({ error: 'A stay that started more than 2 days ago can only be entered by an admin.' }, { status: 403 });
         }
 
         // guestEmail is required for guest bookings, unless they are logged in OR manual
@@ -464,7 +497,7 @@ export async function POST(request: NextRequest) {
                 ? (bookingType === 'maintenance' ? 'Blocked for Maintenance' : 'Manual Booking (Caretaker/Agent)')
                 : null);
 
-            const finalGuestEmail = guestEmail || (user?.email ? user.email : null);
+            const finalGuestEmail = (guestEmail || (user?.email ? user.email : null))?.trim().toLowerCase() || null;
 
             const { data: booking, error: bookingError } = await supabase
                 .from('bookings')
@@ -609,6 +642,14 @@ export async function POST(request: NextRequest) {
             .single();
 
         if (!room || room.is_active === false) return NextResponse.json({ error: 'That room is no longer in use. Refresh and pick another.' }, { status: 404 });
+        if (room.property_id !== propertyId) return NextResponse.json({ error: 'That room is not in this property.' }, { status: 400 });
+        // the public books a listing, never a cheaper unit behind it: a unit in a group pays the group's price
+        if (!isInternalBooking && !roomTypePricing && room.room_type_id) {
+            const { data: group } = await supabase.from('room_types').select('id, price_per_night, is_active').eq('id', room.room_type_id).single();
+            if (!group || group.is_active === false) return NextResponse.json({ error: 'That room is not available online.' }, { status: 404 });
+            roomTypePricing = await priceRoomTypeStay(supabase, group, dates);
+            resolvedRoomTypeId = group.id;
+        }
 
         // a guest still checked in past their check-out date is still in the room tonight
         const today = lagosToday();
@@ -685,7 +726,7 @@ export async function POST(request: NextRequest) {
         // If it's a manual booking from an operator, we WANT to use the guestEmail they entered
         // Only fallback to user.email if it's a maintenance block or caretaker booking themselves
         // For standard guests, use the provided guestEmail, or fallback to their session user email
-        const finalGuestEmail = guestEmail || (user?.email ? user.email : null);
+        const finalGuestEmail = (guestEmail || (user?.email ? user.email : null))?.trim().toLowerCase() || null;
 
         const { data: booking, error: bookingError } = await supabase
             .from('bookings')
@@ -769,6 +810,10 @@ export async function POST(request: NextRequest) {
 
         if (isInternalBooking && body.totalAmount != null && Math.round(body.totalAmount) !== standardTotal) {
             await supabase.from('audit_log').insert({ actor: user.id, booking_id: booking.id, action: 'agreed_price', detail: { standard: standardTotal, agreed: Math.round(body.totalAmount) } });
+            // far from the listed price, in either direction: the owner sees it straight away
+            if (standardTotal > 0 && (body.totalAmount < standardTotal * 0.7 || body.totalAmount > standardTotal * 1.5)) {
+                await pushToAdmins(supabase, 'Unusual price on a booking', `${guestName}: agreed ₦${Math.round(body.totalAmount).toLocaleString('en-NG')}, listed ₦${Math.round(standardTotal).toLocaleString('en-NG')}`, user.id);
+            }
         }
         if (isInternalBooking && !isHold && body.deposit && bookingType !== 'maintenance') {
             const { error: depErr } = await supabase.from('booking_payments').insert({

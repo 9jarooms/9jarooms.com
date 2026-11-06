@@ -18,7 +18,7 @@ export async function requirePropertyAccess(propertyId: string) {
         .in('role', ['admin', 'call_operator'])
         .single();
         
-    if (roleData) return { authorized: true, adminClient };
+    if (roleData) return { authorized: true, adminClient, isAdmin: true };
 
     // Fetch property to check ownership/caretaker
     const { data: property } = await adminClient

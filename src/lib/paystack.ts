@@ -116,12 +116,13 @@ export function validateWebhookSignature(
         .update(body)
         .digest('hex');
 
-    return hash === signature;
+    const a = Buffer.from(hash), b = Buffer.from(String(signature || ''));
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 // Generate a unique payment reference
 export function generateReference(): string {
     const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 8);
+    const random = require('crypto').randomBytes(8).toString('hex');   // cannot be guessed: it opens the guest's confirmation
     return `9JR-${timestamp}-${random}`.toUpperCase();
 }

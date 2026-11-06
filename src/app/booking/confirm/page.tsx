@@ -26,7 +26,18 @@ export default function BookingConfirmPage() {
 
 function BookingConfirmContent() {
     const searchParams = useSearchParams();
-    const reference = searchParams.get('reference');
+    // the reference opens this guest's confirmation: keep it, then take it out of the address so it is
+    // not shared with analytics or copied along with the link (a refresh still works in this tab)
+    const [reference] = useState<string | null>(() => {
+        const fromUrl = searchParams.get('reference');
+        if (fromUrl) return fromUrl;
+        try { return typeof window !== 'undefined' ? sessionStorage.getItem('confirm-ref') : null; } catch { return null; }
+    });
+    useEffect(() => {
+        if (!reference || !window.location.search) return;
+        try { sessionStorage.setItem('confirm-ref', reference); } catch { /* ignore */ }
+        window.history.replaceState(window.history.state, '', window.location.pathname);
+    }, [reference]);
 
     const [status, setStatus] = useState<'loading' | 'success' | 'failed' | 'error' | 'refund'>('loading');
     const [booking, setBooking] = useState<any>(null);

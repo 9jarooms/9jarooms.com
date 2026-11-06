@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { requireCrm } from '@/lib/auth/require-crm';
 
 // This device wants phone notifications (or no longer does).
-const schema = z.object({ endpoint: z.string().url().max(1000), keys: z.object({ p256dh: z.string().max(300), auth: z.string().max(100) }) });
+// only the browsers' own push services (the server sends to this address, so it must never be arbitrary)
+const PUSH_HOST = /^https:\/\/([a-z0-9.-]+\.)?(googleapis\.com|mozilla\.com|push\.apple\.com|notify\.windows\.com|windows\.com)(:\d+)?\//i;
+const schema = z.object({ endpoint: z.string().url().max(1000).regex(PUSH_HOST), keys: z.object({ p256dh: z.string().max(300), auth: z.string().max(100) }) });
 
 export async function POST(request: NextRequest) {
     const auth = await requireCrm();

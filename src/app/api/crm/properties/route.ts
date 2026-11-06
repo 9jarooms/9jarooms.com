@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireCrm } from '@/lib/auth/require-crm';
+import { audit } from '@/lib/booking/crm-ops';
+import { pushToAdmins } from '@/lib/push';
 import { z } from 'zod';
 
 // List all live properties with room types + unit counts
@@ -170,6 +172,22 @@ export async function PATCH(request: NextRequest) {
     const parsed = patchSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
     const body = parsed.data;
+
+    // price and live-on-the-website changes leave a trail and tell the owner
+    const { data: before } = await supabase.from('properties').select('name, is_active, price_per_night, whole_apartment_price, two_bed_price').eq('id', body.propertyId).single();
+    if (before) {
+        const money: [string, unknown, unknown][] = [['nightly price', before.price_per_night, body.pricePerNight], ['whole-flat price', before.whole_apartment_price, body.wholeApartmentPrice], ['2-bed price', before.two_bed_price, body.twoBedPrice]];
+        for (const [label, from, to] of money) {
+            if (to !== undefined && Number(from ?? 0) !== Number(to ?? 0)) {
+                await audit(supabase, auth.user!.id, null, 'price_changed', { what: `${before.name} ${label}`, from: Number(from ?? 0), to: Number(to ?? 0) });
+                await pushToAdmins(supabase, 'Price changed', `${before.name} ${label}: ₦${Math.round(Number(from ?? 0)).toLocaleString('en-NG')} → ₦${Math.round(Number(to ?? 0)).toLocaleString('en-NG')}`, auth.user!.id);
+            }
+        }
+        if (body.isActive !== undefined && before.is_active !== body.isActive) {
+            await audit(supabase, auth.user!.id, null, 'listing_changed', { what: before.name, live: body.isActive });
+            await pushToAdmins(supabase, body.isActive ? 'Property put on the website' : 'Property taken off the website', before.name, auth.user!.id);
+        }
+    }
 
     const update: Record<string, unknown> = {};
     if (body.isActive !== undefined) update.is_active = body.isActive;

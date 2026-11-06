@@ -67,3 +67,16 @@ export async function pushPayment(supabase: Db, bookingId: string, amount: numbe
         url: '/dashboard?tab=bookings', tag: `pay-${bookingId}-${Date.now()}`, exceptUserId: recordedBy,
     });
 }
+
+// A notification to admins only: the things the owner should know about straight away
+export async function pushToAdmins(supabase: Db, title: string, body: string, exceptUserId?: string | null) {
+    try {
+        if (!setup()) return;
+        const { data: admins } = await supabase.from('user_roles').select('user_id').eq('role', 'admin');
+        const ids = (admins || []).map(a => a.user_id).filter(id => id !== exceptUserId);
+        if (!ids.length) return;
+        const { data: subs } = await supabase.from('push_subscriptions').select('id, endpoint, p256dh, auth').in('user_id', ids);
+        const payload = JSON.stringify({ title, body, url: '/crm/activity', tag: `admin-${Date.now()}` });
+        await Promise.all((subs || []).map(s => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 3600 }).catch(() => null)));
+    } catch (e: any) { console.error('[push]', e?.message); }
+}

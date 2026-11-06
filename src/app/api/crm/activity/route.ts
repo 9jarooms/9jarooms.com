@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
         supabase.from('bookings').select(BOOKING).gte('created_at', since).order('created_at', { ascending: false }).limit(400),
         supabase.from('bookings').select(BOOKING).gte('checked_in_at', since).limit(400),
         supabase.from('bookings').select(BOOKING).gte('checked_out_at', since).limit(400),
-        supabase.from('booking_payments').select(`id, amount, method, reference, created_at, recorded_by, note, booking:bookings(${BOOKING})`).gte('created_at', since).limit(600),
+        supabase.from('booking_payments').select(`id, amount, method, reference, paystack_reference, created_at, recorded_by, note, booking:bookings(${BOOKING})`).gte('created_at', since).limit(600),
         supabase.from('audit_log').select(`id, at, actor, action, detail, booking:bookings(${BOOKING})`).gte('at', since).limit(600),
         supabase.from('bookings').select(BOOKING).eq('status', 'expired').gte('expires_at', since).limit(200),
         staffDirectory(supabase),
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     for (const b of (ins.data || []) as any[]) ev.push({ id: `in-${b.id}`, at: b.checked_in_at, kind: 'checkin', who: '', text: `${b.guest_name} checked in to ${where(b)}`, detail: stay(b), bookingId: b.id });
     for (const b of (outs.data || []) as any[]) ev.push({ id: `out-${b.id}`, at: b.checked_out_at, kind: 'checkout', who: '', text: `${b.guest_name} checked out of ${where(b)}`, detail: stay(b), bookingId: b.id });
     for (const p of (pays.data || []) as any[]) {
-        const b = p.booking, refund = Number(p.amount) < 0, online = (p.method || '').toLowerCase() === 'paystack';
+        const b = p.booking, refund = Number(p.amount) < 0, online = !!p.paystack_reference;
         ev.push({ id: `pay-${p.id}`, at: p.created_at, by: p.recorded_by, kind: refund ? 'refund' : 'payment', who: online ? 'Paystack' : who(p.recorded_by, 'Someone'),
             text: refund ? `refunded ${b?.guest_name || 'a guest'}` : online ? `${b?.guest_name || 'A guest'} paid online` : `recorded ${p.method || 'a payment'} from ${b?.guest_name || 'a guest'}`,
             detail: [where(b), p.reference ? `ref ${p.reference}` : ''].filter(Boolean).join(' · '), amount: Math.abs(Number(p.amount)), bookingId: b?.id });
@@ -58,11 +58,30 @@ export async function GET(request: NextRequest) {
     const LABEL: Record<string, string> = {
         cancelled: 'cancelled', no_show: 'marked as no-show', total_changed: 'changed the price for', agreed_price: 'set an agreed price for',
         payment_removed: 'removed a payment from', commission_reassigned: 'changed who took the booking of', lost_room_after_payment: 'lost the room right after payment for',
+        stay_changed: 'changed the dates or room of',
     };
+    // changes that are not about one booking (prices, listings, rooms off sale; staff and bank for admins only)
+    const n2 = (x: unknown) => `₦${n(x)}`;
+    const GENERAL: Record<string, (d: any) => string> = {
+        price_changed: d => `changed the price of ${d.what}: ${n2(d.from)} → ${n2(d.to)}`,
+        listing_changed: d => `${d.live ? 'put' : 'took'} ${d.what} ${d.live ? 'on' : 'off'} the website`,
+        room_renamed: d => `renamed room ${d.what} to ${d.to}`,
+        room_blocked: d => `took ${d.room} off sale (${d.status}) for ${d.nights} night${d.nights === 1 ? '' : 's'} from ${fmt(d.from)}`,
+        room_unblocked: d => `put ${d.room} back on sale from ${fmt(d.from)}`,
+        ...(auth.role === 'admin' ? {
+            staff_added: (d: any) => `created the login ${d.username} (${d.role})`,
+            staff_removed: () => 'removed a team member',
+            password_reset: () => 'set a new password for a team member',
+            bank_changed: (d: any) => `changed the bank account to ${d.bank} ending ${d.accountEnding}`,
+        } : {}),
+    };
+    for (const l of (log.data || []) as any[]) {
+        if (GENERAL[l.action]) ev.push({ id: `gen-${l.id}`, at: l.at, by: l.actor, kind: 'change', who: who(l.actor, 'System'), text: GENERAL[l.action](l.detail || {}) });
+    }
     for (const l of (log.data || []) as any[]) {
         if (!LABEL[l.action]) continue;   // refunds already show as payments, commission checks stay on the Commission page
         const b = l.booking, d = l.detail || {};
-        const money = l.action === 'total_changed' ? `₦${n(d.from)} → ₦${n(d.to)}` : l.action === 'agreed_price' ? `standard ₦${n(d.standard)}, agreed ₦${n(d.agreed)}` : l.action === 'payment_removed' ? `₦${n(d.amount)} ${d.method || ''}` : '';
+        const money = l.action === 'stay_changed' ? `${d.from} → ${d.to}` : l.action === 'total_changed' ? `₦${n(d.from)} → ₦${n(d.to)}` : l.action === 'agreed_price' ? `standard ₦${n(d.standard)}, agreed ₦${n(d.agreed)}` : l.action === 'payment_removed' ? `₦${n(d.amount)} ${d.method || ''}` : '';
         ev.push({ id: `log-${l.id}`, at: l.at, by: l.actor, kind: ['cancelled', 'no_show'].includes(l.action) ? 'cancel' : 'change', who: who(l.actor, 'System'),
             text: `${LABEL[l.action]} ${b?.guest_name || 'a booking'}`, detail: [where(b), money].filter(Boolean).join(' · '), bookingId: b?.id });
     }

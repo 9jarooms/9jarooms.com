@@ -20,5 +20,5 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Forbidden: not your property' }, { status: 403 });
     }
 
-    return opsResponse(await setBlock(auth.adminClient, parsed.data));
+    return opsResponse(await setBlock(auth.adminClient, parsed.data, auth.user.id));
 }

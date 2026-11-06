@@ -8,6 +8,7 @@ export interface CommissionLine {
     bookingId: string; guest: string; unit: string; property: string;
     checkIn: string; checkOut: string; nights: number; takenAt: string;
     total: number; paid: number; commission: number; state: 'awaiting_payment' | 'to_verify' | 'verified' | 'rejected';
+    money?: { method: string | null; amount: number; by: string | null; proof: boolean }[];
 }
 export interface CommissionSummary {
     userId: string; month: string; lines: CommissionLine[]; bookings: number;

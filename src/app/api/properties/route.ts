@@ -308,6 +308,8 @@ export async function GET(request: NextRequest) {
         // and the arrival instructions and owner / payout details (only for paid guests and the team)
         const stripAddress = (p: any) => {
             const { address: _a, check_in_instructions: _ci, owner: _o, owner_id: _oi, caretaker_id: _c, ...rest } = p;
+            // the dates of each unit's bookings stay on the server (they show when a flat is empty)
+            if (Array.isArray(rest.rooms)) rest.rooms = rest.rooms.map(({ bookings: _b, ...room }: any) => room);
             return rest;
         };
 

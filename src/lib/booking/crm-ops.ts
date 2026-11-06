@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { createAdminClient } from '@/lib/supabase/server';
 import { reclaim, roomsOfBooking, stayDates, lagosToday, overstayRooms } from '@/lib/booking/hold';
+import { pushToAdmins } from '@/lib/push';
 
 // Booking operations shared by the CRM (/api/crm/*) and the mobile
 // operations surface (/api/ops/*). Routes handle auth + scoping and
@@ -272,10 +273,23 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
         update.price_per_night = Math.round(Number(update.total_amount ?? booking.total_amount) / nights);
     }
     // anything that changes the money resets management's commission check
-    if (booking.created_by && booking.commission_status && (update.total_amount !== undefined || ['cancelled', 'no_show'].includes(String(update.status)))) {
+    // (a line management rejected stays rejected: only a verified one goes back for a new check)
+    if (booking.created_by && booking.commission_status === 'verified' && (update.total_amount !== undefined || ['cancelled', 'no_show'].includes(String(update.status)))) {
         update.commission_status = null; update.commission_checked_by = null; update.commission_checked_at = null; update.commission_amount = null;
     }
-    if (update.total_amount !== undefined) await audit(supabase, actorId, id, 'total_changed', { from: Number(booking.total_amount), to: update.total_amount });
+    if (update.total_amount !== undefined) {
+        await audit(supabase, actorId, id, 'total_changed', { from: Number(booking.total_amount), to: update.total_amount });
+        if (Number(update.total_amount) < Number(booking.total_amount)) {
+            await pushToAdmins(supabase, 'Price lowered', `${booking.guest_name}: ₦${Math.round(Number(booking.total_amount)).toLocaleString('en-NG')} → ₦${Math.round(Number(update.total_amount)).toLocaleString('en-NG')}`, actorId);
+        }
+    }
+    if (moving) {
+        await audit(supabase, actorId, id, 'stay_changed', { from: `${booking.check_in} → ${booking.check_out}`, to: `${checkIn} → ${checkOut}`, roomChanged: roomId !== booking.room_id });
+        // more nights for the same money is a discount by another name: the owner sees it
+        if (update.total_amount === undefined && Number(update.nights ?? booking.nights) > Number(booking.nights)) {
+            await pushToAdmins(supabase, 'Stay extended at no extra cost', `${booking.guest_name}: now ${update.nights} nights, total unchanged`, actorId);
+        }
+    }
 
     if (Object.keys(update).length === 0) {
         return ok({ success: true, unchanged: true });
@@ -295,6 +309,8 @@ export async function updateBooking(supabase: Db, id: string, body: BookingUpdat
 // ------------------------------------------------------------------
 // Payments ledger
 // ------------------------------------------------------------------
+const MANUAL_METHODS = ['Cash', 'Bank Transfer', 'Transfer', 'POS', 'Moniepoint', 'Other', 'Refund'];
+
 export const paymentSchema = z.object({
     amount: z.number().refine(n => n !== 0, 'Amount cannot be 0'),
     method: z.string().max(40).optional().nullable(),
@@ -325,17 +341,21 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
         const { data: same } = await supabase.from('booking_payments').select('*').eq('client_request_id', input.requestId).maybeSingle();
         if (same) return ok({ success: true, payment: same, paid: await ledgerSum(supabase, id) });
     }
-    const isTransfer = /transfer|moniepoint|pos/i.test(input.method || '');
     const isRefund = input.method === 'Refund';
     const typed = (input.reference || '').trim();
     if (!input.method) return fail('Pick how it was paid', 400);
-    void isTransfer;
+    // "Paystack" is only ever written by the server when Paystack itself confirms a payment
+    if (!MANUAL_METHODS.includes(input.method)) return fail('Pick how it was paid: Cash, Bank Transfer, POS, Moniepoint or Other', 400);
+    // a receipt can only be attached to the booking it was uploaded for
+    if (input.receiptPath && !input.receiptPath.startsWith(`${id}/`)) return fail('That receipt belongs to another booking', 400);
     // the reference and the receipt photo are optional. A real reference (some length, with digits)
-    // is checked so the same transfer cannot be recorded twice; anything else is kept as a note.
-    const realRef = typed.length >= 6 && /\d/.test(typed);
+    // is checked so the same transfer cannot be recorded twice, however it is typed ("123-456" = "123456");
+    // anything else is kept as a note.
+    const plainRef = typed.replace(/[^a-z0-9]/gi, '').toUpperCase();
+    const realRef = plainRef.length >= 6 && /\d/.test(plainRef);
     if (typed && !realRef) input = { ...input, note: [input.note, `Ref: ${typed}`].filter(Boolean).join(' · ') };
     // a refund quotes a reference in its note; only incoming money is checked for repeats
-    const reference = isRefund || !realRef ? null : typed;
+    const reference = isRefund || !realRef ? null : plainRef;
     if (isRefund && typed) input = { ...input, note: [input.note, `Refund ref: ${typed}`].filter(Boolean).join(' · ') };
     if (reference) {
         const { data: used } = await supabase.from('booking_payments').select('booking_id, amount, booking:bookings(guest_name)')
@@ -431,8 +451,9 @@ export async function deletePayment(supabase: Db, bookingId: string, paymentId: 
     if (error) return fail(error.message, 500);
     // the money line is gone but never untraceable
     await audit(supabase, actorId, bookingId, 'payment_removed', row);
+    await pushToAdmins(supabase, 'Payment removed', `₦${Math.round(Number(row.amount)).toLocaleString('en-NG')} ${row.method || ''} was removed from a booking`, actorId);
     const { data: b } = await supabase.from('bookings').select('created_by, commission_status').eq('id', bookingId).single();
-    if (b?.created_by && b.commission_status) {
+    if (b?.created_by && b.commission_status === 'verified') {
         await supabase.from('bookings').update({ commission_status: null, commission_checked_by: null, commission_checked_at: null, commission_amount: null }).eq('id', bookingId);
     }
     return ok({ success: true });
@@ -451,7 +472,7 @@ export type BlockInput = z.infer<typeof blockSchema>;
 
 // Block (or clear) a range of dates on a unit. Never touches dates a
 // booking holds.
-export async function setBlock(supabase: Db, input: BlockInput): Promise<OpsResult<{ success: true; dates: number }>> {
+export async function setBlock(supabase: Db, input: BlockInput, actorId?: string | null): Promise<OpsResult<{ success: true; dates: number }>> {
     const { roomId, from, to, status } = input;
     const dates = dateRange(from, to);
     if (dates.length === 0) return fail('Empty date range', 400);
@@ -496,5 +517,12 @@ export async function setBlock(supabase: Db, input: BlockInput): Promise<OpsResu
         if (error) return fail(error.message, 500);
     }
 
+    // blocks leave a trail: a room taken off sale for days is also how a stay could be hidden
+    const { data: unit } = await supabase.from('rooms').select('unit_code, name, property:properties(name)').eq('id', roomId).single();
+    const label = `${unit?.unit_code || unit?.name || 'A room'}${(unit as any)?.property?.name ? `, ${(unit as any).property.name}` : ''}`;
+    await audit(supabase, actorId, null, status === 'available' ? 'room_unblocked' : 'room_blocked', { room: label, status, from, to, nights: dates.length });
+    if (status !== 'available' && (status === 'maintenance' || dates.length >= 3)) {
+        await pushToAdmins(supabase, 'Room taken off sale', `${label}: ${status} for ${dates.length} night${dates.length === 1 ? '' : 's'}`, actorId);
+    }
     return ok({ success: true, dates: dates.length });
 }

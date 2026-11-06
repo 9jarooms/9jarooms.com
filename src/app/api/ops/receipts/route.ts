@@ -10,7 +10,9 @@ export async function POST(request: NextRequest) {
     const file = form.get('file');
     const bookingId = String(form.get('bookingId') || '');
     if (!(file instanceof File) || !/^[0-9a-f-]{36}$/i.test(bookingId)) return NextResponse.json({ error: 'Pick a photo' }, { status: 400 });
-    if (!/^image\//.test(file.type) && file.type !== 'application/pdf') return NextResponse.json({ error: 'A photo or PDF, please' }, { status: 400 });
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'].includes(file.type)) return NextResponse.json({ error: 'A photo or PDF, please' }, { status: 400 });
+    const { data: exists } = await auth.adminClient.from('bookings').select('id').eq('id', bookingId).maybeSingle();
+    if (!exists) return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     if (file.size > 6 * 1024 * 1024) return NextResponse.json({ error: 'That file is too big (6 MB max)' }, { status: 400 });
     const ext = file.type === 'application/pdf' ? 'pdf' : file.type === 'image/png' ? 'png' : 'jpg';
     const path = `${bookingId}/${crypto.randomUUID()}.${ext}`;

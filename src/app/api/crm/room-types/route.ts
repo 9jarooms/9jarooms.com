@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireCrm } from '@/lib/auth/require-crm';
+import { audit } from '@/lib/booking/crm-ops';
+import { pushToAdmins } from '@/lib/push';
 import { z } from 'zod';
 
 const patchSchema = z.object({
@@ -28,8 +30,16 @@ export async function PATCH(request: NextRequest) {
     if (body.images !== undefined) update.images = body.images;
     if (body.isActive !== undefined) update.is_active = body.isActive;
 
+    const { data: before } = await supabase.from('room_types').select('name, price_per_night, is_active').eq('id', body.roomTypeId).single();
     const { error } = await supabase.from('room_types').update(update).eq('id', body.roomTypeId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (before && body.pricePerNight !== undefined && Number(before.price_per_night) !== body.pricePerNight) {
+        await audit(supabase, auth.user!.id, null, 'price_changed', { what: before.name, from: Number(before.price_per_night), to: body.pricePerNight });
+        await pushToAdmins(supabase, 'Price changed', `${before.name}: ₦${Math.round(Number(before.price_per_night)).toLocaleString('en-NG')} → ₦${Math.round(body.pricePerNight).toLocaleString('en-NG')} a night`, auth.user!.id);
+    }
+    if (before && body.isActive !== undefined && before.is_active !== body.isActive) {
+        await audit(supabase, auth.user!.id, null, 'listing_changed', { what: before.name, live: body.isActive });
+    }
 
     // keep unit prices in sync when the type price changes
     if (body.pricePerNight !== undefined) {

@@ -10,7 +10,9 @@ interface Props {
 
 export default async function BookingPayPage({ params }: Props) {
     const { id } = await params;
-    const supabase = await createServerClient();
+    // the id is the secret here: guests are not signed in, so the server reads it (private fields are never rendered)
+    const { createAdminClient } = await import('@/lib/supabase/server');
+    const supabase = createAdminClient();
 
     const { data: booking } = await supabase
         .from('bookings')

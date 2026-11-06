@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireCrm } from '@/lib/auth/require-crm';
+import { audit } from '@/lib/booking/crm-ops';
+import { pushToAdmins } from '@/lib/push';
 import { z } from 'zod';
 
 // Edit a single physical unit (e.g. Kaura "6A") straight from the calendar:
@@ -7,7 +9,7 @@ import { z } from 'zod';
 const patchSchema = z.object({
     unitCode: z.string().trim().min(1).max(20).optional().nullable(),
     name: z.string().trim().min(1).max(80).optional(),
-    pricePerNight: z.number().min(0).optional(),
+    pricePerNight: z.number().positive().optional(),
     isActive: z.boolean().optional(),
 });
 
@@ -38,7 +40,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     if (Object.keys(update).length === 0) return NextResponse.json({ success: true, unchanged: true });
 
+    const { data: before } = await supabase.from('rooms').select('unit_code, name, price_per_night').eq('id', id).single();
     const { data, error } = await supabase.from('rooms').update(update).eq('id', id).select('id, unit_code, name, price_per_night, is_active').single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (before && body.pricePerNight !== undefined && Number(before.price_per_night) !== body.pricePerNight) {
+        await audit(supabase, auth.user!.id, null, 'price_changed', { what: before.unit_code || before.name, from: Number(before.price_per_night), to: body.pricePerNight });
+        await pushToAdmins(supabase, 'Price changed', `${before.unit_code || before.name}: ₦${Math.round(Number(before.price_per_night)).toLocaleString('en-NG')} → ₦${Math.round(body.pricePerNight).toLocaleString('en-NG')} a night`, auth.user!.id);
+    }
+    if (before && body.unitCode && before.unit_code !== body.unitCode) await audit(supabase, auth.user!.id, null, 'room_renamed', { what: before.unit_code, to: body.unitCode });
     return NextResponse.json({ success: true, unit: data });
 }

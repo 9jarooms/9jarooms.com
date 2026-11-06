@@ -10,5 +10,5 @@ export async function POST(request: NextRequest) {
     const parsed = blockSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
 
-    return opsResponse(await setBlock(auth.adminClient!, parsed.data));
+    return opsResponse(await setBlock(auth.adminClient!, parsed.data, auth.user!.id));
 }

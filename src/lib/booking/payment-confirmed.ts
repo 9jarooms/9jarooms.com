@@ -24,6 +24,13 @@ function esc(s: unknown) {
     return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 }
 
+// from Paystack's message: only what is needed to reconcile. Card, customer and IP details are not kept.
+function trimPayload(raw: any) {
+    if (!raw || typeof raw !== 'object') return null;
+    const { reference, amount, currency, status, channel, paid_at, gateway_response } = raw;
+    return { reference, amount, currency, status, channel, paid_at, gateway_response };
+}
+
 export class BookingNotFound extends Error {
     constructor(ref: string) { super(`Booking not found for ${ref}`); }
 }
@@ -44,6 +51,7 @@ export async function confirmPaidBooking(supabase: Db, input: {
     reference: string;
     bookingId?: string | null;
     amountKobo?: number | null;
+    currency?: string | null;
     raw?: unknown;
 }): Promise<PaidBookingResult> {
     const select = '*, room:rooms(id, name, unit_code, room_type_id), room_type:room_types(name), property:properties(*, owner:owners(name, email))';
@@ -51,12 +59,7 @@ export async function confirmPaidBooking(supabase: Db, input: {
     // a database error is not "not found": throw, so Paystack retries
     const first = await supabase.from('bookings').select(select).eq('paystack_reference', input.reference).maybeSingle();
     if (first.error) throw new Error(`Booking lookup failed: ${first.error.message}`);
-    let booking = first.data;
-    if (!booking && input.bookingId) {
-        const { data: byId, error: idErr } = await supabase.from('bookings').select(select).eq('id', input.bookingId).maybeSingle();
-        if (idErr) throw new Error(`Booking lookup failed: ${idErr.message}`);
-        if (byId && (!byId.paystack_reference || byId.paystack_reference === input.reference)) booking = byId;
-    }
+    const booking = first.data;   // a payment only ever belongs to the booking its reference was made for
     if (!booking) throw new BookingNotFound(input.reference);
 
     // each Paystack payment is processed once: a replay (webhook retry, the guest reopening the
@@ -72,7 +75,20 @@ export async function confirmPaidBooking(supabase: Db, input: {
     // the guest is on Paystack and the room can be taken.
     let refundNeeded = false;
     let movedTo: string | null = null;
-    if (!done) {
+    // the money does not earn the room when: it is the wrong currency, a website guest paid less than
+    // the stay costs, the booking was cancelled, or the link is over a day past its time (old price)
+    const total0 = Number(booking.total_amount);
+    const lateBy = booking.expires_at ? Date.now() - new Date(booking.expires_at).getTime() : 0;
+    const refused = !done && (
+        (!!input.currency && input.currency !== 'NGN') ||
+        (!booking.created_by && amount + 1 < total0) ||
+        ['cancelled', 'no_show'].includes(booking.status) ||
+        (booking.status === 'expired' && lateBy > 24 * 60 * 60 * 1000));
+    if (refused) {
+        refundNeeded = true;
+        await releaseClaim(supabase, booking.id);
+    }
+    if (!done && !refused) {
         const roomIds = await roomsOfBooking(supabase, booking);
         const dates = stayDates(booking.check_in, booking.check_out);
         const conflicts = await reclaim(supabase, booking.id, roomIds, dates, 'booked');
@@ -109,7 +125,7 @@ export async function confirmPaidBooking(supabase: Db, input: {
     const notes: string[] = [];
     if (movedTo) notes.push(`PAID AFTER THE LOCK RAN OUT (${input.reference}): first room was taken, moved to another identical room. Tell the guest their room number.`);
     if (done) notes.push(`PAID ONLINE AGAIN (${input.reference}) on a booking that was already paid / checked in: refund ₦${Math.round(amount).toLocaleString('en-NG')} unless agreed otherwise.`);
-    if (booking.status === 'cancelled') notes.push(`PAID ONLINE AFTER THE BOOKING WAS CANCELLED (${input.reference}): check with the guest.`);
+    if (refused) notes.push(`PAYMENT NOT ACCEPTED (₦${Math.round(amount).toLocaleString('en-NG')}, ${input.reference}): the booking was ${booking.status === 'cancelled' ? 'cancelled' : booking.status === 'expired' ? 'long expired' : 'not fully paid'}. Refund or rebook the guest.`);
     if (paidSoFar > total + 1) notes.push(`OVERPAID by ₦${Math.round(paidSoFar - total).toLocaleString('en-NG')} (${input.reference}): refund the difference.`);
     if (paidSoFar + 1 < total) notes.push(`PART-PAID online: ₦${Math.round(amount).toLocaleString('en-NG')} of ₦${Math.round(total).toLocaleString('en-NG')} (${input.reference}).`);
 
@@ -132,7 +148,7 @@ export async function confirmPaidBooking(supabase: Db, input: {
         if (again.length) {
             await releaseClaim(supabase, booking.id);
             await supabase.from('bookings').update({ status: 'cancelled', notes: [booking.notes, ...notes, `ROOM LOST WHILE CONFIRMING (${input.reference}): refund or move the guest.`].filter(Boolean).join('\n') }).eq('id', booking.id);
-            await supabase.from('transactions').insert({ paystack_reference: input.reference, paystack_event: 'charge.success', amount, currency: 'NGN', status: 'success', booking_id: booking.id, raw_payload: input.raw ?? null });
+            await supabase.from('transactions').insert({ paystack_reference: input.reference, paystack_event: 'charge.success', amount, currency: 'NGN', status: 'success', booking_id: booking.id, raw_payload: trimPayload(input.raw) });
             return { booking: { ...booking, status: 'cancelled' }, alreadyPaid: false, refundNeeded: true };
         }
     }
@@ -141,7 +157,7 @@ export async function confirmPaidBooking(supabase: Db, input: {
     // reference: if two confirmations raced, only the one that logs it sends the messages.
     const { error: txErr } = await supabase.from('transactions').insert({
         paystack_reference: input.reference, paystack_event: 'charge.success', amount, currency: 'NGN',
-        status: 'success', booking_id: booking.id, raw_payload: input.raw ?? null,
+        status: 'success', booking_id: booking.id, raw_payload: trimPayload(input.raw),
     });
     if (txErr && /duplicate|unique/i.test(txErr.message)) return { booking, alreadyPaid: true };
 

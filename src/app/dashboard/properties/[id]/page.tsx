@@ -33,7 +33,8 @@ export default async function PropertyManagePage({ params }: Props) {
         .select('id, room_id, date, status')
         .in('room_id', roomIds);
 
-    const { data: bookings } = await supabase
+    const { createAdminClient } = await import('@/lib/supabase/server');
+    const { data: bookings } = await createAdminClient()
         .from('bookings')
         .select('*, room:rooms(name)')
         .eq('property_id', id)

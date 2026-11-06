@@ -23,6 +23,7 @@ export interface CommissionLine {
     bookingId: string; guest: string; unit: string; property: string;
     checkIn: string; checkOut: string; nights: number; takenAt: string;
     total: number; paid: number; commission: number; state: LineState;
+    money: { method: string | null; amount: number; by: string | null; proof: boolean }[];   // how it was paid, for the check
 }
 export interface CommissionSummary {
     userId: string; month: string;
@@ -67,6 +68,9 @@ export async function commissionMonth(supabase: Db, month: string, userId?: stri
     const { data: rows } = await q;
     const list = (rows || []) as any[];
     const paid = await paidByBooking(supabase, list);
+    const { data: ledger } = list.length
+        ? await supabase.from('booking_payments').select('booking_id, method, amount, recorded_by, reference, receipt_path, paystack_reference').in('booking_id', list.map(b => b.id))
+        : { data: [] as any[] };
 
     let pq = supabase.from('commission_payouts').select('user_id, amount, paid_at').eq('month', month);
     if (userId) pq = pq.eq('user_id', userId);
@@ -83,6 +87,7 @@ export async function commissionMonth(supabase: Db, month: string, userId?: stri
             checkIn: b.check_in, checkOut: b.check_out, nights: b.nights, takenAt: b.created_at,
             // a verified line pays the amount management checked
             total, paid: p, commission: b.commission_status === 'verified' && b.commission_amount != null ? Number(b.commission_amount) : round(total * COMMISSION_RATE), state,
+            money: (ledger || []).filter((m: any) => m.booking_id === b.id).map((m: any) => ({ method: m.method, amount: Number(m.amount), by: m.recorded_by, proof: !!(m.reference || m.receipt_path || m.paystack_reference) })),
         };
         byUser.set(b.created_by, [...(byUser.get(b.created_by) || []), line]);
     }

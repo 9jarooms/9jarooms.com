@@ -124,6 +124,11 @@ export default function CommissionDesk() {
                                 <div className="divide-y divide-stone-100">
                                     {s.lines.map(l => (
                                         <LineRow key={l.bookingId} l={l}>
+                                            {(l.money || []).length > 0 && (
+                                                <p className="mt-1 text-[12px] text-stone-500">
+                                                    {(l.money || []).map(m => `${naira(m.amount)} ${m.method || ''}${m.proof ? '' : ' (no reference or receipt)'}`).join(' + ')}
+                                                </p>
+                                            )}
                                             <div className="mt-2 flex flex-wrap items-center gap-2">
                                                 {l.state === 'to_verify' && <button disabled={busy} onClick={() => check([l.bookingId], 'verified')} className="text-[12px] font-semibold text-green-700 flex items-center gap-1"><Check size={13} /> Verify</button>}
                                                 {l.state !== 'rejected' && <button disabled={busy} onClick={() => check([l.bookingId], 'rejected')} className="text-[12px] font-semibold text-red-600 flex items-center gap-1"><X size={13} /> Don’t count</button>}
