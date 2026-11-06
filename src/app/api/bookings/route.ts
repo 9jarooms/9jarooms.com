@@ -4,7 +4,7 @@ import { initializePayment, generateReference } from '@/lib/paystack';
 import { z } from 'zod';
 import { computeOptions, groupDuplexes, freeDuplexes, type ApartmentLite, type RoomLite, type BookingOption } from '@/lib/booking/options';
 import { findFreeUnits, priceRoomTypeStay, isBlockedSlot } from '@/lib/booking/room-types';
-import { claimDates, releaseClaim, reclaim, holdExpiry, stayDates, lagosToday, overstayRooms, HOLD_MINUTES } from '@/lib/booking/hold';
+import { claimDates, releaseClaim, reclaim, holdExpiry, stayDates, lagosToday, overstayRooms, HOLD_MINUTES, MAX_LOCK_MINUTES, WEBSITE_HOLD_MINUTES } from '@/lib/booking/hold';
 import { notifyCaretakersHold } from '@/lib/booking/notify-caretakers';
 import { pushBooking } from '@/lib/push';
 
@@ -26,6 +26,8 @@ const bookingSchema = z.object({
     hold: z.boolean().optional(),
     // staff hold paid by bank transfer: lock the unit for HOLD_MINUTES, no Paystack link
     payBy: z.enum(['paystack', 'transfer']).optional(),
+    // staff: how long to lock the room for, in minutes (the longest is an hour)
+    lockMinutes: z.number().int().min(5).max(MAX_LOCK_MINUTES).optional().nullable(),
     // staff only: the price agreed with the guest (whole stay), money taken now, and a retry id
     totalAmount: z.number().min(0).optional().nullable(),
     deposit: z.object({ amount: z.number().positive(), method: z.string().max(40).optional().nullable(), reference: z.string().trim().max(80).optional().nullable() }).optional().nullable(),
@@ -65,7 +67,7 @@ async function paystackFailed(
             paystackUrl: null,
             payUrl: `${origin}/booking/pay/${bookingId}`,
             expiresAt: expiresAt.toISOString(),
-            holdMinutes: HOLD_MINUTES,
+            holdMinutes: Math.max(Math.round((expiresAt.getTime() - Date.now()) / 60000), 1),
             warning: 'Payment link could not be generated right now. The unit is still held: send the booking page link below (it retries the payment), or record a transfer on the booking.',
         });
     }
@@ -85,7 +87,7 @@ async function transferHoldResponse(supabase: AdminClient, bookingId: string, ex
         ...extra,
         success: true, bookingId, paystackUrl: null, payUrl: null, transfer: true,
         bank: (data?.value as { bankName?: string; accountNumber?: string; accountName?: string } | null) || null,
-        expiresAt: expiresAt.toISOString(), holdMinutes: HOLD_MINUTES,
+        expiresAt: expiresAt.toISOString(), holdMinutes: Math.max(Math.round((expiresAt.getTime() - Date.now()) / 60000), 1),
     });
 }
 
@@ -449,7 +451,7 @@ export async function POST(request: NextRequest) {
             // 4. Create the booking (representative room = first sold room).
             const initialStatus = isInternalBooking && !isHold ? 'confirmed' : 'pending';
             const reference = generateReference();
-            const expiresAt = holdExpiry();
+            const expiresAt = holdExpiry(Date.now(), isHold ? (body.lockMinutes ?? HOLD_MINUTES) : WEBSITE_HOLD_MINUTES);
 
             let source = bookingSource || 'website';
             if (!bookingSource) {
@@ -563,7 +565,7 @@ export async function POST(request: NextRequest) {
                         payUrl: `${origin}/booking/pay/${booking.id}`,
                         reference: reference,
                         expiresAt: expiresAt.toISOString(),
-                        holdMinutes: HOLD_MINUTES,
+                        holdMinutes: Math.max(Math.round((expiresAt.getTime() - Date.now()) / 60000), 1),
                     });
                 } catch (payError) {
                     console.error('Paystack Init Error:', payError);
@@ -666,7 +668,7 @@ export async function POST(request: NextRequest) {
         // 3. Create Booking
         const initialStatus = isInternalBooking && !isHold ? 'confirmed' : 'pending';
         const reference = generateReference();
-        const expiresAt = holdExpiry();
+        const expiresAt = holdExpiry(Date.now(), isHold ? (body.lockMinutes ?? HOLD_MINUTES) : WEBSITE_HOLD_MINUTES);
 
         // Determine booking source for CRM tracking
         let source = bookingSource || 'website';
@@ -825,7 +827,7 @@ export async function POST(request: NextRequest) {
                     payUrl: `${origin}/booking/pay/${booking.id}`,
                     reference: reference,
                     expiresAt: expiresAt.toISOString(),
-                    holdMinutes: HOLD_MINUTES,
+                    holdMinutes: Math.max(Math.round((expiresAt.getTime() - Date.now()) / 60000), 1),
                 });
 
             } catch (payError: any) {

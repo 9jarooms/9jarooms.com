@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { LogIn, LogOut, Banknote, CalendarDays, Pencil, ChevronDown, ChevronUp, Trash2, Ban, UserX, Share2, Unlock } from 'lucide-react';
 import {
-    Sheet, StatusPill, BigButton, Field, Stepper, Chips, ContactButtons, inputCls,
+    Sheet, StatusPill, BigButton, Field, StayPicker, Chips, ContactButtons, inputCls,
     naira, balanceOf, owes, fmtDay, shiftIso, unitLabel, waLink, holdCountdown, useLiveUpdates, serverNow, ReceiptPicker, receiptLink, type OpsRole,
 } from './shared';
 
@@ -293,7 +293,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
 
             {panel === 'pay' && (
                 <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 space-y-3">
-                    {lapsedLock && <p className="text-[13px] text-amber-800">The 15-minute lock ran out. Saving checks the room is still free; if another guest took it, you will be told before anything is recorded.</p>}
+                    {lapsedLock && <p className="text-[13px] text-amber-800">The lock ran out. Saving checks the room is still free; if another guest took it, you will be told before anything is recorded.</p>}
                     <Field label={pay.method === 'Refund' ? 'Amount given back (₦)' : 'Amount received (₦)'}>
                         <input type="number" inputMode="numeric" min={0} className={inputCls} value={pay.amount}
                             onChange={e => { payRequest.current = ''; setPay({ ...pay, amount: e.target.value }); }} autoFocus />
@@ -322,19 +322,7 @@ export default function BookingSheet({ bookingId, role, today, onClose, onChange
                                     {data.units.map((u: any) => <option key={u.id} value={u.id}>{unitLabel(u)}</option>)}
                                 </select>
                             </Field>
-                            <Field label="Check-in">
-                                <input type="date" className={inputCls} value={stay.checkIn} onChange={e => setStay({ ...stay, checkIn: e.target.value })} />
-                            </Field>
-                            <Field label="Nights">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <Stepper value={stayNights} onChange={n => setStay({ ...stay, nights: n })} />
-                                    <button type="button" onClick={() => setStay(s => ({ ...s, nights: (Number(s.nights) || 0) + 7 }))}
-                                        className="h-11 px-3 rounded-xl border border-gray-300 bg-white text-[13px] font-semibold">+7</button>
-                                </div>
-                            </Field>
-                            <p className="text-[13px] text-gray-600">
-                                Check-out <b>{stayCheckOut ? fmtDay(stayCheckOut) : '—'}</b>
-                            </p>
+                            <StayPicker checkIn={stay.checkIn} nights={stayNights} onCheckIn={d => setStay({ ...stay, checkIn: d })} onNights={n => setStay({ ...stay, nights: n })} />
                             <Field label="Price for the whole stay">
                                 <Chips value={stay.price} onChange={v => setStay({ ...stay, price: v as typeof stay.price })} options={[
                                     { value: 'standard', label: `Same rate ${naira(autoTotal)}` },

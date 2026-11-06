@@ -360,13 +360,13 @@ export async function recordPayment(supabase: Db, id: string, input: PaymentInpu
         }
     }
 
-    // Money for a hold: the nights must still be ours. If the 15 minutes ran out and someone else took
+    // Money for a hold: the nights must still be ours. If the lock ran out and someone else took
     // the room, say so before any money is written against it.
     if (['pending', 'expired'].includes(booking.status) && input.amount > 0) {
         const rooms = await roomsOfBooking(supabase, booking);
         const conflicts = await reclaim(supabase, id, rooms, dateRange(booking.check_in, booking.check_out), 'booked');
         if (conflicts.length > 0) {
-            return fail(`The 15-minute lock ran out and another guest has booked this room for ${conflicts[0].date}. Do not confirm this guest for this room: offer another room, or refund them.`, 409, { warning: 'lost_room' });
+            return fail(`The lock ran out and another guest has booked this room for ${conflicts[0].date}. Do not confirm this guest for this room: offer another room, or refund them.`, 409, { warning: 'lost_room' });
         }
     }
 

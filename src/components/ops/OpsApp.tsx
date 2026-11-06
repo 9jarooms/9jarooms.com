@@ -104,10 +104,12 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
 
     const lists = useMemo(() => {
         const bs = data?.bookings || [];
-        const expected = (b: OpsBooking) => ['pending', 'confirmed', 'paid'].includes(b.status);
+        const expected = (b: OpsBooking) => ['confirmed', 'paid'].includes(b.status);
         const byIn = (a: OpsBooking, b: OpsBooking) => a.check_in.localeCompare(b.check_in);
         const byOut = (a: OpsBooking, b: OpsBooking) => a.check_out.localeCompare(b.check_out);
         return {
+            // rooms held right now while someone pays: staff locks and website checkouts
+            locks: bs.filter(b => b.status === 'pending').sort((a, b) => (a.expires_at || '').localeCompare(b.expires_at || '')),
             // due to arrive (today, or earlier and still not checked in)
             arrivals: bs.filter(b => expected(b) && b.check_in <= today && b.check_out > today).sort(byIn),
             // leaving today, or should already have left
@@ -258,6 +260,14 @@ export default function OpsApp({ initialTab = 'today', bottomBar = false }: { in
                             </button>
                         ))}
                     </div>
+
+                    {lists.locks.length > 0 && (
+                        <Section title="Locked right now · waiting for payment" count={lists.locks.length} empty="">
+                            {lists.locks.map(b => (
+                                <BookingCard key={b.id} b={b} today={today} unit={unitNameOf(b)} onOpen={() => setOpenBooking(b.id)} />
+                            ))}
+                        </Section>
+                    )}
 
                     <Section title="Arriving today" count={lists.arrivals.length} empty="No arrivals today">
                         {lists.arrivals.map(b => (

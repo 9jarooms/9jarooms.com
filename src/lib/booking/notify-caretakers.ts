@@ -1,6 +1,6 @@
 import type { createAdminClient } from '@/lib/supabase/server';
 import { whatsapp } from '@/lib/whatsapp/client';
-import { HOLD_MINUTES } from '@/lib/booking/hold';
+import { WEBSITE_HOLD_MINUTES } from '@/lib/booking/hold';
 
 // WhatsApp alerts for the people on the ground. Caretaker logins use
 // internal emails, so email never reaches them; a WhatsApp message does.
@@ -99,7 +99,7 @@ export async function notifyCaretakersHold(supabase: Db, bookingId: string) {
     const text =
         `9jaRooms: ${b.property?.name || 'Property'} ${unitOf(b)} is being paid for on the website ` +
         `(${fmtDate(b.check_in)} to ${fmtDate(b.check_out)}, ${b.nights} night${b.nights === 1 ? '' : 's'}). ` +
-        `Please do not give this unit to anyone else for the next ${HOLD_MINUTES} minutes. ` +
+        `Please do not give this unit to anyone else for the next ${WEBSITE_HOLD_MINUTES} minutes. ` +
         `You will get another message if the payment goes through.`;
     return send(await recipientsFor(supabase, b.property_id), text);
 }

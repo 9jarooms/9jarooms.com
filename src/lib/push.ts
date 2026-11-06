@@ -39,7 +39,7 @@ const naira = (n: unknown) => `₦${Math.round(Number(n || 0)).toLocaleString('e
 // "New booking" / "Room locked" notification for a booking, worded from the saved booking itself
 export async function pushBooking(supabase: Db, bookingId: string) {
     const { data: b } = await supabase.from('bookings')
-        .select('id, guest_name, status, total_amount, check_in, nights, created_by, booking_source, room:rooms(unit_code, name), property:properties(name)')
+        .select('id, guest_name, status, total_amount, check_in, nights, created_by, booking_source, expires_at, room:rooms(unit_code, name), property:properties(name)')
         .eq('id', bookingId).single();
     if (!b || b.booking_source === 'maintenance') return;
     const room = (b as any).room, prop = (b as any).property;
@@ -51,7 +51,7 @@ export async function pushBooking(supabase: Db, bookingId: string) {
     }
     const lock = b.status === 'pending';
     await pushToStaff(supabase, {
-        title: lock ? 'Room locked (15 min)' : b.created_by ? 'New booking' : 'New website booking (paid)',
+        title: lock ? `Room locked (${Math.max(Math.round((new Date(b.expires_at || Date.now()).getTime() - Date.now()) / 60000), 1)} min)` : b.created_by ? 'New booking' : 'New website booking (paid)',
         body: `${b.created_by ? `${who}: ` : ''}${b.guest_name} · ${where} · ${b.nights} night${b.nights === 1 ? '' : 's'} from ${b.check_in} · ${naira(b.total_amount)}`,
         url: '/dashboard?tab=bookings', tag: `booking-${b.id}`, exceptUserId: b.created_by,
     });

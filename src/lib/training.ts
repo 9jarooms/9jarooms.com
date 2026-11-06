@@ -59,15 +59,15 @@ export const LESSONS: Lesson[] = [
     },
     {
         n: '03', slug: 'hold', title: 'Lock a unit while the guest pays', minutes: '0:52',
-        what: 'Keep a room for a WhatsApp guest for 15 minutes while they pay.',
+        what: 'Keep a room for a WhatsApp guest while they pay (you choose how long, up to an hour).',
         when: 'The moment a guest says "yes, I will take it".',
         steps: [
-            'In Find, tap Lock 15 min on the room they chose (the button was called Hold a unit in the video).',
+            'In Find, tap Lock room on the room they chose (the button was called Hold a unit in the video).',
             'The unit and dates are filled in. Add the guest name and WhatsApp number.',
-            'Tap Lock unit for 15 minutes, then Tell them on WhatsApp. The message has the account number and the time the lock ends.',
+            'Choose how long (15 min, 30 min, 1 hour or type the minutes), tap Lock unit, then Tell them on WhatsApp. The message has the account number and the time the lock ends.',
             'When the money shows in the account, check the amount and tap Payment received. Adding the bank reference or a photo of the receipt is optional. The booking is confirmed and counts for your commission.',
             'Card instead? Pick Paystack link: the guest pays the link and the booking confirms itself.',
-            'Guest changed their mind? Open the booking and tap Release hold. If nobody pays, the room frees itself after 15 minutes.',
+            'Guest changed their mind? Open the booking and tap Release hold. If nobody pays, the room frees itself when the time is up.',
         ],
         tips: ['Only tap Payment received when you can SEE the money in the account. A screenshot from the guest is not proof.'],
         links: [{ label: 'Open Find', href: '/dashboard?tab=find' }],
@@ -150,7 +150,7 @@ export const LESSONS: Lesson[] = [
 ];
 
 export const FAQ = [
-    { q: 'The guest paid after the 15 minutes ran out.', a: 'If the room is still free, the booking confirms itself. If someone else took it, you get a message: call the guest and offer another room or a refund.' },
+    { q: 'The guest paid after the lock ran out.', a: 'If the room is still free, the booking confirms itself. If someone else took it, you get a message: call the guest and offer another room or a refund.' },
     { q: 'A room shows taken, but it is empty.', a: 'Someone did not check the last guest out. Open the booking and tap Check out.' },
     { q: 'The guest wants to pay part now and the rest later.', a: 'Book or hold as normal, then Record payment for what they paid. The balance shows on their card and in the daily log until it is paid.' },
     { q: 'I need to move a guest to another room.', a: 'Open their booking, Extend stay or change unit, pick the new unit, Save.' },

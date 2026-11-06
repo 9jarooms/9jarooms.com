@@ -5,7 +5,7 @@ import { staffDirectory, displayName } from '@/lib/staff-names';
 // Everything that happened, newest first: bookings and locks made, money in and out, check-ins and
 // check-outs, cancellations, price changes, payments removed and locks that ran out, with who did it.
 export interface ActivityEvent {
-    id: string; at: string; kind: 'booking' | 'lock' | 'payment' | 'refund' | 'checkin' | 'checkout' | 'cancel' | 'change' | 'lapsed' | 'online';
+    id: string; at: string; kind: 'booking' | 'lock' | 'hold' | 'payment' | 'refund' | 'checkin' | 'checkout' | 'cancel' | 'change' | 'lapsed' | 'online';
     who: string; text: string; detail?: string; amount?: number; bookingId?: string;
     by?: string | null;   // the staff user who did it (so their own phone does not alert them)
 }
@@ -36,8 +36,12 @@ export async function GET(request: NextRequest) {
 
     for (const b of (made.data || []) as any[]) {
         if (b.booking_source === 'maintenance') continue;
-        // website checkouts that were never paid are noise: only real website bookings are shown
-        if (!b.created_by && ['pending', 'expired', 'cancelled'].includes(b.status)) continue;
+        // a website guest paying right now holds the room: show it. One who left without paying is noise.
+        if (!b.created_by && b.status === 'pending') {
+            ev.push({ id: `hold-${b.id}`, at: b.created_at, kind: 'hold', who: '', text: `${b.guest_name} is paying on the website: ${where(b)} is held for them`, detail: stay(b), amount: Number(b.total_amount), bookingId: b.id });
+            continue;
+        }
+        if (!b.created_by && ['expired', 'cancelled'].includes(b.status)) continue;
         const lock = b.status === 'pending' || (b.expires_at && b.status === 'expired');
         ev.push({ id: `new-${b.id}`, at: b.created_at, by: b.created_by, kind: b.created_by ? (lock ? 'lock' : 'booking') : 'online', who: b.created_by ? who(b.created_by) : '',
             text: b.created_by ? `${lock ? 'locked' : 'booked'} ${where(b)} for ${b.guest_name}` : `${b.guest_name} booked ${where(b)} on the website`,
@@ -64,7 +68,7 @@ export async function GET(request: NextRequest) {
     }
     for (const b of (lapsed.data || []) as any[]) {
         if (!b.created_by) continue;   // only staff locks (website checkouts left unpaid are not news)
-        ev.push({ id: `lapse-${b.id}`, at: b.expires_at, kind: 'lapsed', who: '', text: `15-minute lock for ${b.guest_name} on ${where(b)} ran out unpaid`, detail: stay(b), bookingId: b.id });
+        ev.push({ id: `lapse-${b.id}`, at: b.expires_at, kind: 'lapsed', who: '', text: `Lock for ${b.guest_name} on ${where(b)} ran out unpaid`, detail: stay(b), bookingId: b.id });
     }
 
     ev.sort((a, b) => (a.at < b.at ? 1 : -1));

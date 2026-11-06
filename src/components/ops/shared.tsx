@@ -256,6 +256,31 @@ export function Field({ label, hint, children }: { label: ReactNode; hint?: Reac
     );
 }
 
+// A stay: pick the exact check-in and check-out on the calendar (easiest for long stays), or tap
+// nights up and down. All three stay in step.
+export function StayPicker({ checkIn, nights, onCheckIn, onNights, minDate }: {
+    checkIn: string; nights: number; onCheckIn: (d: string) => void; onNights: (n: number) => void; minDate?: string;
+}) {
+    const checkOut = checkIn ? shiftIso(checkIn, Math.max(nights, 1)) : '';
+    return (
+        <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+                <Field label="Check-in">
+                    <input type="date" className={inputCls} value={checkIn} min={minDate} onChange={e => { if (e.target.value) onCheckIn(e.target.value); }} />
+                </Field>
+                <Field label="Check-out">
+                    <input type="date" className={inputCls} value={checkOut} min={checkIn ? shiftIso(checkIn, 1) : undefined}
+                        onChange={e => { if (e.target.value && checkIn) onNights(Math.max(nightsBetween(checkIn, e.target.value), 1)); }} />
+                </Field>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+                <span className="text-[13px] font-semibold text-gray-600">Nights</span>
+                <Stepper value={Math.max(nights, 1)} onChange={onNights} max={365} />
+            </div>
+        </div>
+    );
+}
+
 export function Stepper({ value, onChange, min = 1, max = 90 }: { value: number; onChange: (n: number) => void; min?: number; max?: number }) {
     return (
         <div className="inline-flex items-center rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
@@ -398,7 +423,7 @@ export function BookingCard({ b, today, unit, onOpen, onCheckIn, onCheckOut, bus
                                 : <span className="text-gray-400">Paid in full</span>}
                         </div>
                         {holdCountdown(b) && (
-                            <p className="mt-1.5 text-[12px] font-semibold text-purple-700">Held · {holdCountdown(b)}</p>
+                            <p className="mt-1.5 text-[12px] font-semibold text-purple-700">{b.booking_source === 'website' ? 'Guest is paying on the website' : 'Locked'} · {holdCountdown(b)}</p>
                         )}
                         {(late || overdue) && (
                             <p className="mt-1.5 text-[12px] font-semibold text-red-600 flex items-center gap-1">

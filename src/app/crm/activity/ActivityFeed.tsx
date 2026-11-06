@@ -12,6 +12,7 @@ const KIND: Record<string, { icon: typeof Clock; cls: string }> = {
     booking: { icon: CalendarPlus, cls: 'bg-[#7ed957]/20 text-[#02572a]' },
     online: { icon: Globe, cls: 'bg-[#7ed957]/20 text-[#02572a]' },
     lock: { icon: Lock, cls: 'bg-purple-100 text-purple-700' },
+    hold: { icon: Globe, cls: 'bg-purple-100 text-purple-700' },
     payment: { icon: Banknote, cls: 'bg-emerald-100 text-emerald-700' },
     refund: { icon: Undo2, cls: 'bg-amber-100 text-amber-800' },
     checkin: { icon: LogIn, cls: 'bg-sky-100 text-sky-700' },
@@ -22,7 +23,7 @@ const KIND: Record<string, { icon: typeof Clock; cls: string }> = {
 };
 const FILTERS = [
     { key: 'all', label: 'Everything', kinds: [] as string[] },
-    { key: 'bookings', label: 'Bookings', kinds: ['booking', 'online', 'lock', 'lapsed', 'cancel'] },
+    { key: 'bookings', label: 'Bookings', kinds: ['booking', 'online', 'lock', 'hold', 'lapsed', 'cancel'] },
     { key: 'money', label: 'Money', kinds: ['payment', 'refund'] },
     { key: 'guests', label: 'Check-ins & outs', kinds: ['checkin', 'checkout'] },
     { key: 'changes', label: 'Changes', kinds: ['change', 'cancel'] },

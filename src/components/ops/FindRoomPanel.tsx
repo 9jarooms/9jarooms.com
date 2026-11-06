@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Search, Share2, Lock, Copy, Check, MapPin } from 'lucide-react';
-import { Field, Stepper, inputCls, naira, fmtDay, shiftIso, isoToday, cacheGet, fetchCached, openWhatsApp, type OpsToday } from './shared';
+import { StayPicker, naira, fmtDay, shiftIso, isoToday, cacheGet, fetchCached, openWhatsApp, type OpsToday } from './shared';
 import type { NewBookingPreset } from './NewBookingSheet';
 
 interface FreeUnit { id: string; label: string; perNight: number | null; total: number | null }
@@ -83,19 +83,8 @@ export default function FindRoomPanel({ data, onHold }: {
     return (
         <div className="space-y-4">
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                    <Field label="Check-in">
-                        <input type="date" className={inputCls} value={checkIn} min={data.today}
-                            onChange={e => { if (e.target.value) setCheckIn(e.target.value); }} />
-                    </Field>
-                    <Field label="Nights">
-                        <Stepper value={nights} onChange={setNights} />
-                    </Field>
-                </div>
-                <p className="text-[13px] text-gray-600">
-                    Check-out <b>{fmtDay(checkOut)}</b>
-                    {loading && !groups && <span className="text-gray-400"> · checking…</span>}
-                </p>
+                <StayPicker checkIn={checkIn} nights={nights} onCheckIn={setCheckIn} onNights={setNights} minDate={data.today} />
+                {loading && !groups && <p className="text-[13px] text-gray-400">Checking…</p>}
             </div>
 
             {shareable.length > 1 && (
@@ -154,7 +143,7 @@ export default function FindRoomPanel({ data, onHold }: {
                         <button type="button"
                             onClick={() => onHold({ unitId: g.units[0].id, date: checkIn, nights, mode: 'hold' })}
                             className="h-11 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-sm btn-press">
-                            <Lock size={16} /> Lock 15 min
+                            <Lock size={16} /> Lock room
                         </button>
                     </div>
                     <button type="button" disabled={g.hidden} onClick={() => copy(g.link, g.key)}

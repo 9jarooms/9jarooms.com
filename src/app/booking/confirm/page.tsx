@@ -172,7 +172,7 @@ function BookingConfirmContent() {
                     {status === 'refund' && (
                         <div className="text-center py-10 px-6">
                             <h2 className="text-2xl font-bold text-gray-900 mb-3">We received your payment, but the room is no longer free</h2>
-                            <p className="text-gray-600 max-w-md mx-auto">Your payment came in after the 15 minutes to pay had ended, and the room had already been booked. We are sorry. Our team has been alerted and will contact you on WhatsApp today to offer another room or refund you in full. You do not need to do anything.</p>
+                            <p className="text-gray-600 max-w-md mx-auto">Your payment came in after the time to pay had ended, and the room had already been booked. We are sorry. Our team has been alerted and will contact you on WhatsApp today to offer another room or refund you in full. You do not need to do anything.</p>
                         </div>
                     )}
                     {(status === 'failed' || status === 'error') && (

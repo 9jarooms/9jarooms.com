@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Share2, Copy, Check, Lock } from 'lucide-react';
 import {
-    Sheet, BigButton, Field, Stepper, Chips, inputCls,
+    Sheet, BigButton, Field, StayPicker, Chips, inputCls,
     naira, shiftIso, fmtDay, unitLabel, unitPrice, groupAllUnits, openWhatsApp, serverNow, newRequestId, ReceiptPicker, LIVE_STATUSES, type OpsToday,
 } from './shared';
 
@@ -52,6 +52,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
     const [depositRef, setDepositRef] = useState('');
     const payAttempt = useRef('');
     const [lockMethod, setLockMethod] = useState('Bank Transfer');
+    const [lockMins, setLockMins] = useState('15');
     const [lockReceipt, setLockReceipt] = useState<{ path: string; name: string } | null>(null);
     const [copied, setCopied] = useState(false);
     const [guestName, setGuestName] = useState('');
@@ -156,6 +157,8 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             }
 
             if (guestName.trim().length < 2) throw new Error('Enter the guest name');
+            const lockFor = Number(lockMins);
+            if (mode === 'hold' && (!Number.isInteger(lockFor) || lockFor < 5 || lockFor > 60)) throw new Error('Lock for between 5 and 60 minutes');
             if (!unknownAttempt.current && mode === 'booking' && deposit > 0 && !payMethod) throw new Error('Pick how they paid');
                 const send = () => fetch('/api/bookings', {
                 method: 'POST', headers,
@@ -163,7 +166,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                     roomId: unit.id, propertyId: unit.property_id || data.propertyId, mode: 'single',
                     guestName: guestName.trim(), guestPhone: phone.trim() || null,
                     checkIn, checkOut,
-                    isManualBooking: true, hold: mode === 'hold', bookingSource: source, notes: notes.trim() || null,
+                    isManualBooking: true, hold: mode === 'hold', lockMinutes: mode === 'hold' ? lockFor : null, bookingSource: source, notes: notes.trim() || null,
                     // price, deposit and booking are saved together, so none of them can be half-done. The
                     // price sent is the one on this screen, so the screen, the message and the booking agree.
                     totalAmount: price !== '' && Number(price) >= 0 ? Number(price) : autoTotal,
@@ -192,7 +195,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             if (!res.ok) { onRefresh?.(); throw new Error(json.error || 'Could not create the booking'); }
             const id = json.bookingId as string;
             if (json.duplicate && json.status === 'pending' && mode !== 'hold') {
-                // the first tap made a 15-minute lock: open it (Payment received is there)
+                // the first tap made a lock: open it (Payment received is there)
                 const lockedUnit = data.units.find(u => u.id === json.roomId) || unit;
                 setHold({ bookingId: json.bookingId, paystackUrl: null, payUrl: null, expiresAt: json.expiresAt, holdMinutes: json.holdMinutes || 15, warning: 'Your first tap had already locked this room. Record the money here.',
                     transfer: true, bank: json.bank || null, unitLabel: unitLabel(lockedUnit), total: Number(json.total || 0),
@@ -235,7 +238,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
         return (
             <Sheet title="Your first tap went through" subtitle="Nothing new was created" onClose={onCreated}>
                 <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-[13.5px] text-amber-900 space-y-1">
-                    <p className="font-bold">{lock ? 'A 15-minute lock' : 'A booking'} for {firstTap.guest} on <b>{firstTap.unit}</b>, {naira(firstTap.total)}.</p>
+                    <p className="font-bold">{lock ? 'A lock' : 'A booking'} for {firstTap.guest} on <b>{firstTap.unit}</b>, {naira(firstTap.total)}.</p>
                     <p>Money recorded on it: <b>{naira(firstTap.paid)}</b>.</p>
                     <p>If anything you changed since (room, price, money taken, booking instead of lock) is not shown above, open the booking from Today or Bookings and change it there. Give the guest the room shown above.</p>
                 </div>
@@ -333,13 +336,13 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
 
     return (
         <Sheet
-            title={mode === 'booking' ? 'New booking' : mode === 'hold' ? 'Lock a unit for 15 minutes' : 'Block a unit'}
+            title={mode === 'booking' ? 'New booking' : mode === 'hold' ? 'Lock a unit' : 'Block a unit'}
             subtitle={`${freeCount} of ${data.units.length} units free for these dates`}
             onClose={onClose}
         >
             <Chips
                 options={[
-                    { value: 'hold', label: 'Lock for 15 min' },
+                    { value: 'hold', label: 'Lock' },
                     { value: 'booking', label: 'Book now' },
                     { value: 'block', label: 'Cleaning / maintenance' },
                 ]}
@@ -355,7 +358,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                                 ? <>An earlier lock for <b>{e.guestName}</b> on <b>{e.unit}</b> <b>ran out</b>: nothing is held for them now. Lock or book again if they still want it{Number(e.paid) > 0 ? ` (₦${Math.round(Number(e.paid)).toLocaleString('en-NG')} is recorded on it: open it from Bookings)` : ''}.</>
                                 : ['cancelled', 'no_show'].includes(e.status || '')
                                     ? <>An earlier tap for <b>{e.guestName}</b> on <b>{e.unit}</b> was <b>cancelled</b> (for example the room was taken at that moment): nothing is held. Book again if they still want a room.</>
-                                    : <>An earlier tap with no signal <b>did go through</b>: {e.status === 'pending' ? 'a 15-minute lock (still running)' : 'a booking'} for <b>{e.guestName}</b> on <b>{e.unit}</b>, {naira(e.total)} ({naira(e.paid)} recorded). Don&apos;t book them again; open it from Today or Bookings to change anything.</>}</p>
+                                    : <>An earlier tap with no signal <b>did go through</b>: {e.status === 'pending' ? 'a lock (still running)' : 'a booking'} for <b>{e.guestName}</b> on <b>{e.unit}</b>, {naira(e.total)} ({naira(e.paid)} recorded). Don&apos;t book them again; open it from Today or Bookings to change anything.</>}</p>
                     ))}
                     {earlierWaiting > 0 && <p>Still checking {earlierWaiting} earlier tap{earlierWaiting === 1 ? '' : 's'} made with no signal. Check Today before booking the same guest again.</p>}
                     <button type="button" onClick={() => { setEarlier(null); setEarlierWaiting(0); }} className="underline">OK</button>
@@ -363,7 +366,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
             ) : null}
             {mode === 'hold' && (
                 <p className="text-[12.5px] text-gray-500 -mt-1">
-                    Nobody else can book the unit for 15 minutes while the guest sends a bank transfer. You confirm when you see the money.
+                    Nobody else can book the unit while the guest sends the money. You confirm when you see it.
                 </p>
             )}
 
@@ -382,15 +385,20 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
                 {unit && !unitFree && <p className="text-[12px] text-red-600 mt-1 font-semibold">{unitLabel(unit)} is not free for these dates.</p>}
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
-                <Field label="Check-in">
-                    <input type="date" className={inputCls} value={checkIn} onChange={e => { if (e.target.value) setCheckIn(e.target.value); }} />
+            <StayPicker checkIn={checkIn} nights={nights} onCheckIn={setCheckIn} onNights={setNights} />
+
+            {mode === 'hold' && (
+                <Field label="Lock for how long?" hint="Up to 60 minutes. The room frees itself when the time is up.">
+                    <div className="flex items-center gap-2">
+                        {[15, 30, 60].map(m => (
+                            <button key={m} type="button" onClick={() => setLockMins(String(m))}
+                                className={`h-11 flex-1 rounded-xl border text-[14px] font-semibold ${lockMins === String(m) ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>{m === 60 ? '1 hour' : `${m} min`}</button>
+                        ))}
+                        <input type="number" inputMode="numeric" min={5} max={60} aria-label="Minutes" placeholder="Other" value={[15, 30, 60].includes(Number(lockMins)) ? '' : lockMins}
+                            onChange={e => setLockMins(e.target.value)} className="h-11 w-20 rounded-xl border border-gray-200 bg-white px-2 text-center text-[16px]" />
+                    </div>
                 </Field>
-                <Field label="Nights">
-                    <Stepper value={nights} onChange={setNights} />
-                </Field>
-            </div>
-            <p className="text-[13px] text-gray-600 -mt-2">Check-out <b>{fmtDay(checkOut)}</b></p>
+            )}
 
             {mode !== 'block' ? (
                 <>
@@ -451,7 +459,7 @@ export default function NewBookingSheet({ data, preset, onClose, onCreated, onRe
 
                     <BigButton onClick={submit} busy={busy} disabled={!unit || !unitFree || guestName.trim().length < 2}
                         icon={mode === 'hold' ? <Lock size={18} /> : undefined}>
-                        {mode === 'hold' ? 'Lock unit for 15 minutes' : 'Create booking'}
+                        {mode === 'hold' ? `Lock unit for ${lockMins || '…'} minutes` : 'Create booking'}
                     </BigButton>
                 </>
             ) : (

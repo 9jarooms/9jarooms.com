@@ -16,10 +16,12 @@ type Db = ReturnType<typeof createAdminClient>;
 
 // How long an unpaid hold (website checkout or a caretaker's WhatsApp hold)
 // blocks the unit before it releases itself.
-export const HOLD_MINUTES = 15;
+export const HOLD_MINUTES = 15;            // a staff lock unless they choose otherwise
+export const MAX_LOCK_MINUTES = 60;        // the longest staff can lock a room
+export const WEBSITE_HOLD_MINUTES = 30;    // a website guest's checkout
 
-export function holdExpiry(now = Date.now()) {
-    return new Date(now + HOLD_MINUTES * 60 * 1000);
+export function holdExpiry(now = Date.now(), minutes = HOLD_MINUTES) {
+    return new Date(now + minutes * 60 * 1000);
 }
 
 // Nights of a stay as YYYY-MM-DD strings, check-in through the night
